@@ -9,6 +9,7 @@ import {
 
 import type { ExportModel } from "./model.js";
 import {
+  boundedPathComponent,
   compareStable,
   escapeHtml,
   safeJson,
@@ -48,9 +49,14 @@ function uniqueNames(
   const names = new Map<string, string>();
   for (const item of items) {
     const base = `${identifier(item.name, "Item")}${suffix}`;
-    let candidate = base;
+    let candidate = boundedPathComponent(base, ".tsx").slice(0, -4);
     let sequence = 2;
-    while (used.has(candidate)) candidate = `${base}${sequence++}`;
+    while (used.has(candidate)) {
+      candidate = boundedPathComponent(`${base}${sequence++}`, ".tsx").slice(
+        0,
+        -4,
+      );
+    }
     used.add(candidate);
     names.set(item.id, candidate);
   }

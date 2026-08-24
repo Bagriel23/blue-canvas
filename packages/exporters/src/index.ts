@@ -124,7 +124,7 @@ export async function generateExport(
 ): Promise<ExportResult> {
   const normalized = normalizeRequest(request);
   if ("files" in normalized) return normalized;
-  const prepared = createExportModel(normalized);
+  const prepared = await createExportModel(normalized);
   if (prepared.model === undefined) {
     return {
       files: [],

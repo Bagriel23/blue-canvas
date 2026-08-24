@@ -20,6 +20,12 @@ function request(asset?: ExportAsset): ExportRequest {
   };
 }
 
+function fixturePng(): ExportAsset {
+  const asset = fixtureAssets[fixtureId(100)];
+  if (asset === undefined) throw new Error("Fixture asset changed");
+  return asset;
+}
+
 describe("export hardening", () => {
   test.each([
     'image-set("https://example.com/a.png" 1x)',
@@ -76,10 +82,94 @@ describe("export hardening", () => {
 
       expect(result.files).toEqual([]);
       expect(
-        result.diagnostics.some(({ code }) => code.startsWith("ASSET_")),
+        result.diagnostics.some(
+          ({ code }) => code === "BROKEN_ASSET" || code.startsWith("ASSET_"),
+        ),
       ).toBe(true);
     },
   );
+
+  test.each([
+    {
+      fileName: "invalid-crc.png",
+      mimeType: "image/png",
+      bytes: (() => {
+        const bytes = fixturePng().bytes.slice();
+        bytes[29] = (bytes[29] ?? 0) ^ 0xff;
+        return bytes;
+      })(),
+    },
+    {
+      fileName: "missing-image-data.png",
+      mimeType: "image/png",
+      bytes: (() => {
+        const bytes = fixturePng().bytes;
+        return new Uint8Array([...bytes.slice(0, 33), ...bytes.slice(56)]);
+      })(),
+    },
+    {
+      fileName: "markers-only.jpg",
+      mimeType: "image/jpeg",
+      bytes: new Uint8Array([
+        0xff, 0xd8, 0xff, 0xc0, 0, 2, 0, 0, 0, 0, 0, 0, 0xff, 0xda, 0, 2, 0, 0,
+        0, 0, 0, 0, 0xff, 0xd9,
+      ]),
+    },
+    {
+      fileName: "empty-chunk.webp",
+      mimeType: "image/webp",
+      bytes: new Uint8Array([
+        82, 73, 70, 70, 12, 0, 0, 0, 87, 69, 66, 80, 86, 80, 56, 32, 0, 0, 0, 0,
+      ]),
+    },
+  ] satisfies ExportAsset[])(
+    "rejects undecodable raster asset $fileName",
+    async (asset) => {
+      const result = await generateExport(request(asset));
+
+      expect(result.files).toEqual([]);
+      expect(result.diagnostics).toContainEqual(
+        expect.objectContaining({ code: "BROKEN_ASSET", severity: "error" }),
+      );
+    },
+  );
+
+  test("rejects escaped CSS references in SVG presentation attributes", async () => {
+    const result = await generateExport(
+      request({
+        fileName: "escaped.svg",
+        mimeType: "image/svg+xml",
+        bytes: new TextEncoder().encode(
+          '<svg xmlns="http://www.w3.org/2000/svg"><path fill="\\75 rl(#paint)" d="M0 0h1v1z"/></svg>',
+        ),
+      }),
+    );
+
+    expect(result.files).toEqual([]);
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({ code: "BROKEN_ASSET", severity: "error" }),
+    );
+  });
+
+  test("bounds normalized asset path components to 120 UTF-8 bytes", async () => {
+    const asset = fixturePng();
+    const longName = `${"é".repeat(180)} preview.png`;
+    const first = await generateExport(
+      request({ ...asset, fileName: longName }),
+    );
+    const second = await generateExport(
+      request({ ...asset, fileName: longName }),
+    );
+    const generatedAsset = first.files.find(({ path }) =>
+      path.startsWith("assets/"),
+    );
+
+    expect(first).toEqual(second);
+    expect(generatedAsset?.path.endsWith(".png")).toBe(true);
+    expect(
+      Buffer.byteLength(generatedAsset?.path.split("/").at(-1) ?? "", "utf8"),
+    ).toBeLessThanOrEqual(120);
+  });
 
   test.each([
     {

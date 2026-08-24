@@ -218,4 +218,40 @@ describe.each(["react", "preact"] as const)("%s export", (target) => {
     );
     await installAndBuild(directory);
   }, 30_000);
+
+  test("bounds generated source path components and remains buildable", async () => {
+    const document = exporterDocumentFixture();
+    const component = document.components[0];
+    const page = document.pages[0];
+    if (component === undefined || page === undefined) {
+      throw new Error("Fixture structure changed");
+    }
+    component.name = `Component ${"é".repeat(180)}`;
+    page.name = `Page ${"é".repeat(180)}`;
+    const result = await generateExport({
+      document,
+      target,
+      scope: { type: "project" },
+      assets: fixtureAssets,
+    });
+    const sourceComponents = result.files
+      .map(({ path }) => path)
+      .filter(
+        (path) =>
+          path.startsWith("src/components/") || path.startsWith("src/pages/"),
+      )
+      .flatMap((path) => path.split("/"));
+
+    expect(sourceComponents.length).toBeGreaterThan(0);
+    expect(
+      sourceComponents.every(
+        (componentName) => Buffer.byteLength(componentName, "utf8") <= 120,
+      ),
+    ).toBe(true);
+    const directory = await writeGeneratedFixture(
+      `${target}-long-names`,
+      result.files,
+    );
+    await installAndBuild(directory);
+  }, 30_000);
 });

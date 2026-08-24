@@ -1,4 +1,5 @@
 import { parseFragment, serialize, type DefaultTreeAdapterMap } from "parse5";
+import sharp from "sharp";
 
 import { assetOutputName, hasExternalReference } from "./safety.js";
 import type { ExportAsset } from "./types.js";
@@ -12,7 +13,11 @@ export interface ValidatedAsset {
 }
 
 export interface AssetValidationError {
-  code: "ASSET_INVALID" | "ASSET_MIME_UNSUPPORTED" | "ASSET_PATH_UNSAFE";
+  code:
+    | "ASSET_INVALID"
+    | "ASSET_MIME_UNSUPPORTED"
+    | "ASSET_PATH_UNSAFE"
+    | "BROKEN_ASSET";
   message: string;
 }
 
@@ -25,78 +30,32 @@ const supportedExtensions: Readonly<Record<string, readonly string[]>> = {
 
 const windowsDeviceName = /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])$/iu;
 
-function ascii(bytes: Uint8Array, start: number, length: number): string {
-  return String.fromCharCode(...bytes.slice(start, start + length));
-}
+type RasterFormat = "jpeg" | "png" | "webp";
 
-function uint32(
+async function validRaster(
   bytes: Uint8Array,
-  offset: number,
-  littleEndian = false,
-): number {
-  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  return view.getUint32(offset, littleEndian);
-}
-
-function validPng(bytes: Uint8Array): boolean {
-  const signature = [137, 80, 78, 71, 13, 10, 26, 10];
-  if (
-    bytes.length < 45 ||
-    !signature.every((value, index) => bytes[index] === value)
-  ) {
-    return false;
-  }
-  let offset = 8;
-  let chunkIndex = 0;
-  while (offset + 12 <= bytes.length) {
-    const length = uint32(bytes, offset);
-    const end = offset + 12 + length;
-    if (end > bytes.length) return false;
-    const type = ascii(bytes, offset + 4, 4);
-    if (chunkIndex === 0) {
-      if (type !== "IHDR" || length !== 13) return false;
-      if (uint32(bytes, offset + 8) === 0 || uint32(bytes, offset + 12) === 0) {
-        return false;
-      }
+  expectedFormat: RasterFormat,
+): Promise<boolean> {
+  try {
+    const image = sharp(bytes, {
+      failOn: "error",
+      limitInputPixels: 100_000_000,
+    });
+    const metadata = await image.metadata();
+    if (
+      metadata.format !== expectedFormat ||
+      metadata.width === undefined ||
+      metadata.height === undefined ||
+      metadata.width === 0 ||
+      metadata.height === 0
+    ) {
+      return false;
     }
-    if (type === "IEND") return length === 0 && end === bytes.length;
-    offset = end;
-    chunkIndex += 1;
-  }
-  return false;
-}
-
-function validJpeg(bytes: Uint8Array): boolean {
-  if (
-    bytes.length < 24 ||
-    bytes[0] !== 0xff ||
-    bytes[1] !== 0xd8 ||
-    bytes.at(-2) !== 0xff ||
-    bytes.at(-1) !== 0xd9
-  ) {
+    const decoded = await image.clone().raw().toBuffer();
+    return decoded.byteLength > 0;
+  } catch {
     return false;
   }
-  const lowered = new TextDecoder().decode(bytes).toLowerCase();
-  if (lowered.includes("<html") || lowered.includes("<script")) return false;
-  let hasFrame = false;
-  let hasScan = false;
-  for (let index = 2; index < bytes.length - 1; index += 1) {
-    if (bytes[index] !== 0xff) continue;
-    const marker = bytes[index + 1];
-    if (marker === 0xc0 || marker === 0xc1 || marker === 0xc2) hasFrame = true;
-    if (marker === 0xda) hasScan = true;
-  }
-  return hasFrame && hasScan;
-}
-
-function validWebp(bytes: Uint8Array): boolean {
-  return (
-    bytes.length >= 20 &&
-    ascii(bytes, 0, 4) === "RIFF" &&
-    uint32(bytes, 4, true) === bytes.length - 8 &&
-    ascii(bytes, 8, 4) === "WEBP" &&
-    ["VP8 ", "VP8L", "VP8X"].includes(ascii(bytes, 12, 4))
-  );
 }
 
 const svgTags = new Set([
@@ -181,7 +140,10 @@ function safeSvgNode(node: ChildNode, parentTag?: string): boolean {
         return false;
       if (name === "xmlns") {
         if (attribute.value !== "http://www.w3.org/2000/svg") return false;
-      } else if (hasExternalReference(attribute.value)) {
+      } else if (
+        attribute.value.includes("\\") ||
+        hasExternalReference(attribute.value)
+      ) {
         return false;
       }
     }
@@ -219,9 +181,9 @@ function sanitizeSvg(bytes: Uint8Array): Uint8Array | undefined {
   return new TextEncoder().encode(`${serialize(fragment)}\n`);
 }
 
-export function validateAsset(
+export async function validateAsset(
   asset: ExportAsset,
-): ValidatedAsset | AssetValidationError {
+): Promise<ValidatedAsset | AssetValidationError> {
   const outputName = assetOutputName(asset.fileName);
   if (outputName === undefined) {
     return {
@@ -236,11 +198,10 @@ export function validateAsset(
       message: `Asset path uses a reserved device name: ${asset.fileName}`,
     };
   }
+  const mimeType = asset.mimeType?.toLowerCase();
   const allowedExtensions =
-    asset.mimeType === undefined
-      ? undefined
-      : supportedExtensions[asset.mimeType.toLowerCase()];
-  if (allowedExtensions === undefined) {
+    mimeType === undefined ? undefined : supportedExtensions[mimeType];
+  if (mimeType === undefined || allowedExtensions === undefined) {
     return {
       code: "ASSET_MIME_UNSUPPORTED",
       message: `Asset MIME type is unsupported: ${asset.mimeType ?? "missing"}`,
@@ -255,23 +216,23 @@ export function validateAsset(
   }
   if (!(asset.bytes instanceof Uint8Array) || asset.bytes.byteLength === 0) {
     return {
-      code: "ASSET_INVALID",
+      code: "BROKEN_ASSET",
       message: `Asset bytes are empty or invalid: ${asset.fileName}`,
     };
   }
 
   let bytes = asset.bytes;
   const valid =
-    asset.mimeType === "image/png"
-      ? validPng(bytes)
-      : asset.mimeType === "image/jpeg"
-        ? validJpeg(bytes)
-        : asset.mimeType === "image/webp"
-          ? validWebp(bytes)
+    mimeType === "image/png"
+      ? await validRaster(bytes, "png")
+      : mimeType === "image/jpeg"
+        ? await validRaster(bytes, "jpeg")
+        : mimeType === "image/webp"
+          ? await validRaster(bytes, "webp")
           : (bytes = sanitizeSvg(bytes) ?? new Uint8Array()).byteLength > 0;
   if (!valid) {
     return {
-      code: "ASSET_INVALID",
+      code: "BROKEN_ASSET",
       message: `Asset content is invalid for ${asset.mimeType}: ${asset.fileName}`,
     };
   }

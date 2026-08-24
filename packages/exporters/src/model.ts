@@ -280,12 +280,12 @@ function validateScopeReferences(
   }
 }
 
-function validateNodes(
+async function validateNodes(
   document: DesignDocument,
   pages: DesignPage[],
   providedAssets: Readonly<Record<string, ExportAsset>>,
   diagnostics: ExportDiagnostic[],
-): Map<string, ResolvedAsset> {
+): Promise<Map<string, ResolvedAsset>> {
   const resolved = new Map<string, ResolvedAsset>();
   const paths = new Set<string>();
   const componentById = new Map(
@@ -293,7 +293,10 @@ function validateNodes(
   );
   const activeComponents = new Set<string>();
 
-  const addAsset = (sourceKey: string, node: DesignNode): void => {
+  const addAsset = async (
+    sourceKey: string,
+    node: DesignNode,
+  ): Promise<void> => {
     if (resolved.has(sourceKey)) return;
     const asset = providedAssets[sourceKey];
     if (asset === undefined) {
@@ -309,7 +312,7 @@ function validateNodes(
       });
       return;
     }
-    const validated = validateAsset(asset);
+    const validated = await validateAsset(asset);
     if ("code" in validated) {
       diagnostics.push({
         severity: "error",
@@ -338,7 +341,7 @@ function validateNodes(
     });
   };
 
-  const inspect = (node: DesignNode): void => {
+  const inspect = async (node: DesignNode): Promise<void> => {
     if (node.kind === "image") {
       if (node.alt.trim().length === 0) {
         diagnostics.push({
@@ -348,7 +351,7 @@ function validateNodes(
           message: `Image "${node.name}" needs alternative text`,
         });
       }
-      addAsset(
+      await addAsset(
         node.source.type === "asset" ? node.source.assetId : node.source.url,
         node,
       );
@@ -357,20 +360,21 @@ function validateNodes(
       const component = componentById.get(node.componentId);
       if (component === undefined || activeComponents.has(component.id)) return;
       activeComponents.add(component.id);
-      visitNodes(component.root, inspect);
+      await inspect(component.root);
       activeComponents.delete(component.id);
     }
+    for (const child of getNodeChildren(node)) await inspect(child);
   };
   for (const page of pages) {
-    for (const artboard of page.artboards) visitNodes(artboard.root, inspect);
+    for (const artboard of page.artboards) await inspect(artboard.root);
   }
   return resolved;
 }
 
-export function createExportModel(request: ExportRequest): {
+export async function createExportModel(request: ExportRequest): Promise<{
   model?: ExportModel;
   diagnostics: ExportDiagnostic[];
-} {
+}> {
   const diagnostics: ExportDiagnostic[] = [];
   const unsafeNavigation = rawUnsafeNavigation(request.document);
   if (unsafeNavigation !== undefined) {
@@ -397,7 +401,12 @@ export function createExportModel(request: ExportRequest): {
   validateCss(document, diagnostics);
   const pages = scopedPages(document, request.scope, diagnostics);
   validateScopeReferences(document, pages, request.scope, diagnostics);
-  const assets = validateNodes(document, pages, request.assets, diagnostics);
+  const assets = await validateNodes(
+    document,
+    pages,
+    request.assets,
+    diagnostics,
+  );
   if (diagnostics.some(({ severity }) => severity === "error"))
     return { diagnostics };
   return { model: { document, pages, assets }, diagnostics };

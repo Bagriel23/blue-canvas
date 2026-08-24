@@ -1,3 +1,7 @@
+import { createHash } from "node:crypto";
+
+const maxPathComponentBytes = 120;
+
 export function escapeHtml(value: string): string {
   return value
     .replaceAll("&", "&amp;")
@@ -23,6 +27,35 @@ export function slug(value: string, fallback = "item"): string {
 
 export function compareStable(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0;
+}
+
+function truncateUtf8(value: string, maxBytes: number): string {
+  let output = "";
+  let bytes = 0;
+  for (const character of value) {
+    const characterBytes = Buffer.byteLength(character, "utf8");
+    if (bytes + characterBytes > maxBytes) break;
+    output += character;
+    bytes += characterBytes;
+  }
+  return output;
+}
+
+export function boundedPathComponent(stem: string, extension: string): string {
+  const component = `${stem}${extension}`;
+  if (Buffer.byteLength(component, "utf8") <= maxPathComponentBytes) {
+    return component;
+  }
+  const hash = createHash("sha256")
+    .update(component)
+    .digest("hex")
+    .slice(0, 12);
+  const suffix = `_${hash}${extension}`;
+  const prefix = truncateUtf8(
+    stem,
+    maxPathComponentBytes - Buffer.byteLength(suffix, "utf8"),
+  );
+  return `${prefix}${suffix}`;
 }
 
 export function uniqueSlugs(values: string[], fallback = "item"): string[] {
@@ -58,7 +91,10 @@ export function assetOutputName(fileName: string): string | undefined {
   const dot = fileName.lastIndexOf(".");
   const base = dot > 0 ? fileName.slice(0, dot) : fileName;
   const extension = dot > 0 ? fileName.slice(dot + 1) : "bin";
-  return `${slug(base, "asset")}.${slug(extension, "bin")}`;
+  return boundedPathComponent(
+    slug(base, "asset"),
+    `.${slug(extension, "bin")}`,
+  );
 }
 
 export function hasExternalReference(value: string): boolean {
