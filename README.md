@@ -1,83 +1,63 @@
 # Blue Canvas
 
-Internal, on-premise collaborative web prototyping platform.
+Plataforma web interna e on-premise para criar protótipos semânticos,
+compartilhar projetos e exportar código determinístico. O produto é inspirado no
+Pen e no Claude Design, mas foi desenhado para operar sem tokens de serviços
+externos, telemetria, CDNs ou serviços de IA externos.
 
-The repository uses npm workspaces, TypeScript, and Node.js 24 LTS. Product
-implementation lives on feature branches; approved design and execution plans
-live under `docs/superpowers/`.
+> Estado atual: o modelo de documento, o motor de comandos, os exportadores e a
+> fundação da API estão implementados. Editor web, colaboração em tempo real,
+> kits/templates e MCP ainda estão em desenvolvimento. Consulte
+> [Status e roadmap](docs/status-e-roadmap.md).
 
-## Prerequisites
+## Início rápido
 
-- Node.js 24 LTS with npm 11.19.0
-- Docker with Docker Compose
-- `nvm` for the setup commands below
-
-## Setup
-
-Run these commands from the repository root:
+Requisitos: Node.js 24, npm 11.19.0 e Docker com Compose.
 
 ```bash
 nvm install
 nvm use
 npm install --global npm@11.19.0
-test "$(npm --version)" = "11.19.0"
 npm ci
 cp .env.example .env
-docker compose up -d
+set -a
+source .env
+set +a
+docker compose up -d --wait mariadb
 npm run db:migrate
 npm run check
-```
-
-Stop the development database without deleting its data:
-
-```bash
-docker compose down
-```
-
-The values in `.env.example` are local development defaults. Production
-deployments must provide unique secrets through the deployment environment and
-must not reuse or expose these credentials.
-
-## Repository Commands
-
-```bash
-npm test
-npm run typecheck
-npm run lint
-npm run format:check
-npm run build
-npm run check
-npm run db:generate
-npm run db:migrate
-npm run test:integration
-```
-
-`npm run check` is deterministic and does not require Docker. Start MariaDB with
-`docker compose up -d --wait mariadb` before `npm run test:integration`; that
-command deploys checked-in migrations and exercises the Prisma repositories.
-
-## Application Server
-
-The Fastify API is rooted at `/api/v1`. Configure all variables documented in
-`.env.example`, deploy migrations, build, and start the server:
-
-```bash
-npm run db:migrate
-npm run build
 npm run start -w @blue-canvas/server
 ```
 
-The initial administrator is created with `POST /api/v1/auth/bootstrap-admin`.
-That endpoint works only while the user table is empty and requires
-`SETUP_SECRET`. Invitations and personal access tokens return their raw token
-once; only SHA-256 digests are stored. Uploaded image assets are limited to 25
-MiB and stored beneath the absolute `ASSET_STORAGE_ROOT` configured at startup.
+A API escuta em `http://127.0.0.1:3000/api/v1` com a configuração de
+desenvolvimento. Ainda não há um servidor de frontend utilizável.
 
-Use `npm install` only when changing dependencies so npm updates
-`package-lock.json`. Use `npm ci` for clean, reproducible installs and in CI.
+## Documentação
 
-## Workspaces
+- [Arquitetura e mapa do monorepo](docs/arquitetura.md)
+- [Desenvolvimento local, npm, Docker e Laragon](docs/desenvolvimento.md)
+- [Configuração e variáveis de ambiente](docs/configuracao.md)
+- [API, autenticação, autorização e segurança](docs/api-e-seguranca.md)
+- [Documento semântico e motor de comandos](docs/documento-e-comandos.md)
+- [Exportadores HTML, React e Preact](docs/exportadores.md)
+- [Testes e qualidade](docs/testes-e-qualidade.md)
+- [Implantação e operação](docs/implantacao-e-operacao.md)
+- [Status e roadmap](docs/status-e-roadmap.md)
+- [Especificação de produto aprovada](docs/superpowers/specs/2026-08-24-blue-canvas-design.md)
+- [Plano de implementação aprovado](docs/superpowers/plans/2026-08-24-blue-canvas-v1.md)
 
-Applications live under `apps/`: `web`, `server`, `mcp-server`, and `mcp-stdio`.
-Shared packages live under `packages/`: `contracts`, `document`, `commands`,
-`renderer`, `exporters`, `ui`, and `testing`.
+## Comandos principais
+
+| Comando                                | Finalidade                                 |
+| -------------------------------------- | ------------------------------------------ |
+| `npm run check`                        | Formatação, lint, tipos, build e testes    |
+| `npm test`                             | Smoke tests e testes Vitest                |
+| `npm run test:integration`             | Migrações e integração real com MariaDB    |
+| `npm run test:export-fixtures`         | Compila fixtures React e Preact exportadas |
+| `npm run db:generate`                  | Gera o Prisma Client                       |
+| `npm run db:migrate`                   | Aplica as migrations versionadas           |
+| `npm run build`                        | Gera Prisma e compila todos os workspaces  |
+| `npm run start -w @blue-canvas/server` | Inicia a API compilada                     |
+
+Use `npm install` apenas ao alterar dependências. Use `npm ci` para instalações
+limpas e reproduzíveis.
