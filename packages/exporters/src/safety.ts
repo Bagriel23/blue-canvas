@@ -61,9 +61,54 @@ export function assetOutputName(fileName: string): string | undefined {
   return `${slug(base, "asset")}.${slug(extension, "bin")}`;
 }
 
+export function hasExternalReference(value: string): boolean {
+  const normalized = value.trim().toLowerCase();
+  return (
+    /(?:^|[^a-z-])(?:url|image-set|-webkit-image-set)\s*\(/u.test(normalized) ||
+    /@import\b|(?:https?:|data:|javascript:)|\/\//u.test(normalized)
+  );
+}
+
+export function isSafeCssColor(value: string): boolean {
+  const normalized = value.trim();
+  if (
+    hasExternalReference(normalized) ||
+    /[{};\\]|\/\*|\*\//u.test(normalized)
+  ) {
+    return false;
+  }
+  return (
+    /^#[a-f0-9]{3,8}$/iu.test(normalized) ||
+    /^(?:transparent|currentcolor|[a-z]+)$/iu.test(normalized) ||
+    /^(?:rgb|rgba|hsl|hsla)\([0-9+,.% /-]+\)$/iu.test(normalized)
+  );
+}
+
+export function isSafeFontFamily(value: string): boolean {
+  if (hasExternalReference(value) || /[{};\\()]|\/\*|\*\//u.test(value))
+    return false;
+  return value.split(",").every((family) => {
+    const normalized = family.trim();
+    return (
+      /^[a-z][a-z0-9 -]*$/iu.test(normalized) ||
+      /^"[a-z0-9 -]+"$/iu.test(normalized) ||
+      /^'[a-z0-9 -]+'$/iu.test(normalized)
+    );
+  });
+}
+
+export function isSafeCssString(value: string): boolean {
+  return (
+    !hasControlCharacter(value) &&
+    !hasExternalReference(value) &&
+    /^[a-z0-9 _.,#%+-]*$/iu.test(value)
+  );
+}
+
 export function isUnsafeCssValue(value: string): boolean {
   return (
     hasControlCharacter(value) ||
+    hasExternalReference(value) ||
     /[{};\\]|\/\*|\*\/|<\/?style|@import|expression\s*\(|url\s*\(/iu.test(value)
   );
 }

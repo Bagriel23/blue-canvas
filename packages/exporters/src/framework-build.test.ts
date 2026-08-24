@@ -1,5 +1,6 @@
 import { execFile } from "node:child_process";
 import { mkdir, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { promisify } from "node:util";
 
@@ -14,7 +15,10 @@ import {
 
 const execute = promisify(execFile);
 const repositoryRoot = resolve(import.meta.dirname, "../../..");
-const fixtureRoot = resolve(repositoryRoot, ".cache/export-fixtures");
+const fixtureRoot = resolve(
+  tmpdir(),
+  `blue-canvas-export-fixtures-${process.pid}`,
+);
 
 async function run(
   command: string,
@@ -45,6 +49,12 @@ async function writeGeneratedFixture(
     await writeFile(destination, "content" in file ? file.content : file.bytes);
   }
   return directory;
+}
+
+async function installAndBuild(directory: string): Promise<void> {
+  expect(directory.startsWith(repositoryRoot)).toBe(false);
+  await run("npm", ["ci", "--offline", "--ignore-scripts"], directory);
+  await run("npm", ["run", "build", "--offline"], directory);
 }
 
 afterAll(async () => {
@@ -103,6 +113,7 @@ describe.each(["react", "preact"] as const)("%s export", (target) => {
     expect(first.diagnostics).toEqual([]);
     expect(first.files.map(({ path }) => path)).toEqual([
       "package.json",
+      "package-lock.json",
       "index.html",
       "tsconfig.json",
       "vite.config.ts",
@@ -140,6 +151,15 @@ describe.each(["react", "preact"] as const)("%s export", (target) => {
       ),
     ).toBe(true);
     expect(packageJson.dependencies[target]).toBeDefined();
+    const lockFile = first.files.find(
+      ({ path }) => path === "package-lock.json",
+    );
+    if (lockFile === undefined || !("content" in lockFile))
+      throw new Error("package-lock.json missing");
+    expect(JSON.parse(lockFile.content)).toMatchObject({
+      name: "blue-canvas-export",
+      lockfileVersion: 3,
+    });
 
     const app = first.files.find(({ path }) => path === "src/App.tsx");
     const page = first.files.find(
@@ -172,16 +192,7 @@ describe.each(["react", "preact"] as const)("%s export", (target) => {
     expect(runtime.content).toContain('interaction.action.type === "navigate"');
 
     const directory = await writeGeneratedFixture(target, first.files);
-    await run(resolve(repositoryRoot, "node_modules/.bin/tsc"), [
-      "--noEmit",
-      "-p",
-      resolve(directory, "tsconfig.json"),
-    ]);
-    await run(
-      resolve(repositoryRoot, "node_modules/.bin/vite"),
-      ["build"],
-      directory,
-    );
+    await installAndBuild(directory);
   }, 30_000);
 
   test("keeps page and component identifiers distinct and buildable", async () => {
@@ -205,10 +216,6 @@ describe.each(["react", "preact"] as const)("%s export", (target) => {
       `${target}-names`,
       result.files,
     );
-    await run(resolve(repositoryRoot, "node_modules/.bin/tsc"), [
-      "--noEmit",
-      "-p",
-      resolve(directory, "tsconfig.json"),
-    ]);
+    await installAndBuild(directory);
   }, 30_000);
 });

@@ -21,11 +21,14 @@ function mediaType(path: string): string {
       html: "text/html",
       js: "text/javascript",
       json: "application/json",
+      jpeg: "image/jpeg",
+      jpg: "image/jpeg",
       jsx: "text/javascript",
       png: "image/png",
       svg: "image/svg+xml",
       ts: "text/typescript",
       tsx: "text/typescript",
+      webp: "image/webp",
     }[extension ?? ""] ?? "application/octet-stream"
   );
 }

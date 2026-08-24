@@ -39,8 +39,8 @@ export interface ExportManifestFile {
 
 export interface ExportManifest {
   schemaVersion: 1;
-  target: ExportTarget;
-  scope: ExportScope;
+  target: ExportTarget | null;
+  scope: ExportScope | null;
   files: ExportManifestFile[];
 }
 

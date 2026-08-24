@@ -5,11 +5,15 @@ import {
   type DesignDocument,
   type DesignNode,
   type DesignPage,
+  type TokenDefinition,
 } from "@blue-canvas/document";
 
+import { validateAsset } from "./assets.js";
 import {
-  assetOutputName,
   compareStable,
+  isSafeCssColor,
+  isSafeCssString,
+  isSafeFontFamily,
   isUnsafeCssValue,
   isUnsafeNavigation,
   slug,
@@ -30,6 +34,16 @@ export interface ExportModel {
   document: DesignDocument;
   pages: DesignPage[];
   assets: Map<string, ResolvedAsset>;
+}
+
+function sortedRecord<Value>(
+  record: Readonly<Record<string, Value>>,
+): Record<string, Value> {
+  return Object.fromEntries(
+    Object.entries(record).sort(([left], [right]) =>
+      compareStable(left, right),
+    ),
+  );
 }
 
 function visitNodes(node: DesignNode, visit: (node: DesignNode) => void): void {
@@ -168,7 +182,18 @@ function validateCss(
     } else {
       normalizedNames.set(normalized, name);
     }
-    if (typeof token.value === "string" && isUnsafeCssValue(token.value)) {
+    const tokenIsSafe = (candidate: TokenDefinition): boolean => {
+      if (typeof candidate.value !== "string") return true;
+      if (candidate.type === "color") return isSafeCssColor(candidate.value);
+      if (candidate.type === "font-family") {
+        return isSafeFontFamily(candidate.value);
+      }
+      if (candidate.type === "font-weight") {
+        return /^(?:normal|bold|bolder|lighter)$/u.test(candidate.value);
+      }
+      return isSafeCssString(candidate.value);
+    };
+    if (!tokenIsSafe(token)) {
       diagnostics.push({
         severity: "error",
         code: "CSS_UNSAFE",
@@ -177,8 +202,15 @@ function validateCss(
     }
   }
   const inspect = (node: DesignNode): void => {
-    for (const value of Object.values(node.style)) {
-      if (typeof value === "string" && isUnsafeCssValue(value)) {
+    for (const [property, value] of Object.entries(node.style)) {
+      const safe =
+        typeof value !== "string" ||
+        (["background", "borderColor", "color"].includes(property)
+          ? isSafeCssColor(value)
+          : property === "fontFamily"
+            ? isSafeFontFamily(value)
+            : !isUnsafeCssValue(value));
+      if (!safe) {
         diagnostics.push({
           severity: "error",
           code: "CSS_UNSAFE",
@@ -277,17 +309,17 @@ function validateNodes(
       });
       return;
     }
-    const outputName = assetOutputName(asset.fileName);
-    if (outputName === undefined) {
+    const validated = validateAsset(asset);
+    if ("code" in validated) {
       diagnostics.push({
         severity: "error",
-        code: "ASSET_PATH_UNSAFE",
+        code: validated.code,
         nodeId: node.id,
-        message: `Asset path is unsafe: ${asset.fileName}`,
+        message: validated.message,
       });
       return;
     }
-    const outputPath = `assets/${outputName}`;
+    const outputPath = `assets/${validated.outputName}`;
     if (paths.has(outputPath)) {
       diagnostics.push({
         severity: "error",
@@ -298,7 +330,12 @@ function validateNodes(
       return;
     }
     paths.add(outputPath);
-    resolved.set(sourceKey, { ...asset, sourceKey, outputPath });
+    resolved.set(sourceKey, {
+      ...asset,
+      bytes: validated.bytes,
+      sourceKey,
+      outputPath,
+    });
   };
 
   const inspect = (node: DesignNode): void => {
@@ -352,11 +389,16 @@ export function createExportModel(request: ExportRequest): {
     });
     return { diagnostics };
   }
-  validateCss(parsed.data, diagnostics);
-  const pages = scopedPages(parsed.data, request.scope, diagnostics);
-  validateScopeReferences(parsed.data, pages, request.scope, diagnostics);
-  const assets = validateNodes(parsed.data, pages, request.assets, diagnostics);
+  const document: DesignDocument = {
+    ...parsed.data,
+    tokens: sortedRecord(parsed.data.tokens),
+    variables: sortedRecord(parsed.data.variables),
+  };
+  validateCss(document, diagnostics);
+  const pages = scopedPages(document, request.scope, diagnostics);
+  validateScopeReferences(document, pages, request.scope, diagnostics);
+  const assets = validateNodes(document, pages, request.assets, diagnostics);
   if (diagnostics.some(({ severity }) => severity === "error"))
     return { diagnostics };
-  return { model: { document: parsed.data, pages, assets }, diagnostics };
+  return { model: { document, pages, assets }, diagnostics };
 }

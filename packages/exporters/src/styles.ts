@@ -23,7 +23,7 @@ function tokenValue(token: TokenDefinition): string {
       ? `${token.value}px`
       : String(token.value);
   }
-  return token.value;
+  return token.type === "string" ? `"${token.value}"` : token.value;
 }
 
 function dimension(value: Dimension): string {

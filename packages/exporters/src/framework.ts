@@ -1,3 +1,5 @@
+import { readFile } from "node:fs/promises";
+
 import {
   getNodeChildren,
   type DesignComponent,
@@ -367,21 +369,26 @@ render(<App />, document.getElementById("root")!);
 `;
 }
 
-export function generateFrameworkFiles(
+export async function generateFrameworkFiles(
   model: ExportModel,
   target: Exclude<ExportTarget, "html">,
   runtime: string,
   tokenCss: string,
   baseCss: string,
-): GeneratedFile[] {
+): Promise<GeneratedFile[]> {
   const components = reachableComponents(model);
   const names = buildNames(model, components);
   const routes = uniqueSlugs(
     model.pages.map(({ name }) => name),
     "page",
   );
+  const lockFile = await readFile(
+    new URL(`../templates/${target}/package-lock.json`, import.meta.url),
+    "utf8",
+  );
   return [
     { path: "package.json", content: packageJson(target) },
+    { path: "package-lock.json", content: lockFile },
     {
       path: "index.html",
       content: `<!doctype html>\n<html lang="en">\n<head>\n  <meta charset="UTF-8">\n  <meta name="viewport" content="width=device-width, initial-scale=1.0">\n  <title>${escapeHtml(model.document.name)}</title>\n</head>\n<body>\n  <div id="root"></div>\n  <script type="module" src="/src/main.tsx"></script>\n</body>\n</html>\n`,

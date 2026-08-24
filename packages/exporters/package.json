@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "files": [
-    "dist"
+    "dist",
+    "templates"
   ],
   "exports": {
     ".": {
@@ -16,6 +17,7 @@
     "build": "tsc --build --pretty false"
   },
   "dependencies": {
-    "@blue-canvas/document": "^0.0.0"
+    "@blue-canvas/document": "^0.0.0",
+    "parse5": "8.0.1"
   }
 }
