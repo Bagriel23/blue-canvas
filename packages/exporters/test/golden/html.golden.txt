@@ -1,0 +1,228 @@
+=== index.html ===
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Storefront &lt;demo&gt;</title>
+  <link rel="stylesheet" href="styles/tokens.css">
+  <link rel="stylesheet" href="styles/base.css">
+  <script type="application/json" id="bc-initial-state">{"query":"","subscribed":false}</script>
+  <script src="scripts/runtime.js" defer></script>
+</head>
+<body>
+<main><section data-bc-page data-bc-page-id="30000000-0000-4000-8000-000000000002" data-bc-route="home-shop"><div data-bc-artboard data-bc-artboard-id="30000000-0000-4000-8000-000000000003" data-bc-breakpoint="desktop"><div class="bc-node bc-stack" data-bc-node-id="30000000-0000-4000-8000-000000000004" data-bc-kind="stack" data-bc-name="Home layout"><p class="bc-node bc-text" data-bc-node-id="30000000-0000-4000-8000-000000000005" data-bc-kind="text" data-bc-name="Blue Canvas &amp; Store">Blue Canvas &amp; Store</p>
+<div class="bc-node bc-grid" data-bc-node-id="30000000-0000-4000-8000-000000000006" data-bc-kind="grid" data-bc-name="Product grid"><img class="bc-node bc-image" data-bc-node-id="30000000-0000-4000-8000-000000000007" data-bc-kind="image" data-bc-name="Canvas preview" src="assets/canvas-preview.png" alt="Blue canvas product preview">
+<span class="bc-node bc-icon" data-bc-node-id="30000000-0000-4000-8000-000000000008" data-bc-kind="icon" data-bc-name="Spark icon" role="img" aria-label="Featured" data-bc-icon="sparkles">sparkles</span>
+<a class="bc-node bc-link" data-bc-node-id="30000000-0000-4000-8000-000000000009" data-bc-kind="link" data-bc-name="About link" data-bc-interactions="[{&quot;trigger&quot;:&quot;click&quot;,&quot;action&quot;:{&quot;type&quot;:&quot;navigate&quot;,&quot;pageId&quot;:&quot;30000000-0000-4000-8000-000000000081&quot;}}]" href="#about"><p class="bc-node bc-text" data-bc-node-id="30000000-0000-4000-8000-000000000010" data-bc-kind="text" data-bc-name="About">About</p></a>
+<button class="bc-node bc-button" data-bc-node-id="30000000-0000-4000-8000-000000000011" data-bc-kind="button" data-bc-name="Subscribe" data-bc-interactions="[{&quot;trigger&quot;:&quot;click&quot;,&quot;action&quot;:{&quot;type&quot;:&quot;set-variable&quot;,&quot;variable&quot;:&quot;subscribed&quot;,&quot;value&quot;:true}},{&quot;trigger&quot;:&quot;click&quot;,&quot;action&quot;:{&quot;type&quot;:&quot;open-overlay&quot;,&quot;overlayId&quot;:&quot;30000000-0000-4000-8000-000000000029&quot;}}]" type="button"><p class="bc-node bc-text" data-bc-node-id="30000000-0000-4000-8000-000000000012" data-bc-kind="text" data-bc-name="Subscribe">Subscribe</p></button>
+<form class="bc-node bc-form" data-bc-node-id="30000000-0000-4000-8000-000000000013" data-bc-kind="form" data-bc-name="Search form" data-bc-interactions="[{&quot;trigger&quot;:&quot;submit&quot;,&quot;action&quot;:{&quot;type&quot;:&quot;filter-collection&quot;,&quot;collection&quot;:&quot;products&quot;,&quot;variable&quot;:&quot;query&quot;}}]"><label class="bc-input-label"><span>Search products</span><input class="bc-node bc-input" data-bc-node-id="30000000-0000-4000-8000-000000000014" data-bc-kind="input" data-bc-name="Search products" data-bc-interactions="[{&quot;trigger&quot;:&quot;change&quot;,&quot;action&quot;:{&quot;type&quot;:&quot;set-variable&quot;,&quot;variable&quot;:&quot;query&quot;,&quot;value&quot;:&quot;&quot;}}]" type="search" aria-label="Search products" data-bc-variable="query" placeholder="Search"></label></form>
+<div class="bc-node bc-repeater" data-bc-node-id="30000000-0000-4000-8000-000000000015" data-bc-kind="repeater" data-bc-name="Products" data-bc-repeater="products"><p class="bc-node bc-text" data-bc-node-id="30000000-0000-4000-8000-000000000016" data-bc-kind="text" data-bc-name="Canvas Pro">Canvas Pro</p></div>
+<div class="bc-node bc-conditional" data-bc-node-id="30000000-0000-4000-8000-000000000017" data-bc-kind="conditional" data-bc-name="Subscribed message" data-bc-conditional="subscribed">
+<div data-bc-branch="true" data-bc-equals="true"><p class="bc-node bc-text" data-bc-node-id="30000000-0000-4000-8000-000000000018" data-bc-kind="text" data-bc-name="Subscribed">Subscribed</p></div>
+<div data-bc-branch="false" data-bc-equals="true"><p class="bc-node bc-text" data-bc-node-id="30000000-0000-4000-8000-000000000019" data-bc-kind="text" data-bc-name="Join the list">Join the list</p></div>
+</div>
+<dialog class="bc-node bc-overlay" data-bc-node-id="30000000-0000-4000-8000-000000000029" data-bc-kind="overlay" data-bc-name="Success dialog" hidden data-bc-interactions="[{&quot;trigger&quot;:&quot;click&quot;,&quot;action&quot;:{&quot;type&quot;:&quot;close-overlay&quot;}}]" data-bc-overlay="30000000-0000-4000-8000-000000000029"><p class="bc-node bc-text" data-bc-node-id="30000000-0000-4000-8000-000000000030" data-bc-kind="text" data-bc-name="Thank you">Thank you</p></dialog>
+<div class="bc-node bc-component-instance" data-bc-node-id="30000000-0000-4000-8000-000000000031" data-bc-kind="component-instance" data-bc-name="Badge instance" data-bc-component-id="30000000-0000-4000-8000-000000000090" data-bc-component-name="Product badge"><div class="bc-node bc-stack" data-bc-node-id="30000000-0000-4000-8000-000000000091" data-bc-kind="stack" data-bc-name="Badge layout"><p class="bc-node bc-text" data-bc-node-id="30000000-0000-4000-8000-000000000092" data-bc-kind="text" data-bc-name="Featured">Featured</p></div></div></div></div></div>
+<div data-bc-artboard data-bc-artboard-id="30000000-0000-4000-8000-000000000040" data-bc-breakpoint="mobile"><div class="bc-node bc-stack" data-bc-node-id="30000000-0000-4000-8000-000000000041" data-bc-kind="stack" data-bc-name="Mobile home"><p class="bc-node bc-text" data-bc-node-id="30000000-0000-4000-8000-000000000042" data-bc-kind="text" data-bc-name="Mobile store">Mobile store</p></div></div></section>
+<section data-bc-page data-bc-page-id="30000000-0000-4000-8000-000000000081" data-bc-route="about" hidden><div data-bc-artboard data-bc-artboard-id="30000000-0000-4000-8000-000000000082" data-bc-breakpoint="desktop"><div class="bc-node bc-stack" data-bc-node-id="30000000-0000-4000-8000-000000000083" data-bc-kind="stack" data-bc-name="About layout"><p class="bc-node bc-text" data-bc-node-id="30000000-0000-4000-8000-000000000084" data-bc-kind="text" data-bc-name="About Blue Canvas">About Blue Canvas</p></div></div></section></main>
+</body>
+</html>
+
+
+=== styles/tokens.css ===
+:root {
+  --bc-accent: #1428a0;
+  --bc-gutter: 16px;
+  --bc-headingfont: Arial, sans-serif;
+}
+
+
+=== styles/base.css ===
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body { margin: 0; min-height: 100%; }
+
+body { font-family: system-ui, sans-serif; }
+
+[hidden] { display: none !important; }
+
+img { display: block; max-width: 100%; }
+
+[data-bc-page] { min-height: 100vh; }
+
+[data-bc-artboard] { display: none; width: 100%; min-height: 100vh; }
+
+[data-bc-overlay] { border: 0; padding: 0; }
+
+[data-bc-node-id="30000000-0000-4000-8000-000000000004"] {
+  color: var(--bc-accent);
+  display: flex;
+  flex-direction: column;
+  gap: var(--bc-gutter);
+  align-items: stretch;
+  justify-content: start;
+  flex-wrap: nowrap;
+}
+
+[data-bc-node-id="30000000-0000-4000-8000-000000000006"] {
+  display: grid;
+  grid-template-columns: 1fr 240px;
+  grid-template-rows: auto;
+  gap: 12px;
+  align-items: stretch;
+  justify-items: start;
+}
+
+[data-bc-node-id="30000000-0000-4000-8000-000000000007"] {
+  border-radius: 8px;
+}
+
+[data-bc-node-id="30000000-0000-4000-8000-000000000091"] {
+  background: var(--bc-accent);
+  padding: var(--bc-gutter);
+  display: flex;
+  flex-direction: row;
+  gap: 4px;
+  align-items: center;
+  justify-content: start;
+  flex-wrap: nowrap;
+}
+
+[data-bc-node-id="30000000-0000-4000-8000-000000000041"] {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: stretch;
+  justify-content: start;
+  flex-wrap: nowrap;
+}
+
+[data-bc-node-id="30000000-0000-4000-8000-000000000083"] {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: stretch;
+  justify-content: start;
+  flex-wrap: nowrap;
+}
+
+@media (min-width: 768px) {
+  [data-bc-artboard-id="30000000-0000-4000-8000-000000000003"] { display: block; }
+}
+
+@media (min-width: 0px) and (max-width: 767px) {
+  [data-bc-artboard-id="30000000-0000-4000-8000-000000000040"] { display: block; }
+}
+
+@media (min-width: 0px) {
+  [data-bc-artboard-id="30000000-0000-4000-8000-000000000082"] { display: block; }
+}
+
+
+=== scripts/runtime.js ===
+(() => {
+  "use strict";
+  const stateElement = document.querySelector("#bc-initial-state");
+  const state = stateElement ? JSON.parse(stateElement.textContent || "{}") : {};
+
+  const parseValue = (value) => {
+    try { return JSON.parse(value); } catch { return null; }
+  };
+
+  const refresh = () => {
+    document.querySelectorAll("[data-bc-conditional]").forEach((conditional) => {
+      const variable = conditional.dataset.bcConditional;
+      conditional.querySelectorAll(":scope > [data-bc-branch]").forEach((branch) => {
+        const matches = state[variable] === parseValue(branch.dataset.bcEquals || "null");
+        branch.hidden = branch.dataset.bcBranch === "true" ? !matches : matches;
+      });
+    });
+    document.querySelectorAll("[data-bc-variable]").forEach((input) => {
+      const variable = input.dataset.bcVariable;
+      if (variable && document.activeElement !== input && state[variable] != null) {
+        input.value = String(state[variable]);
+      }
+    });
+  };
+
+  const route = () => {
+    const requested = decodeURIComponent(location.hash.slice(1));
+    const pages = [...document.querySelectorAll("[data-bc-page]")];
+    const active = pages.find((page) => page.dataset.bcRoute === requested) || pages[0];
+    pages.forEach((page) => { page.hidden = page !== active; });
+  };
+
+  const filterCollection = (collection, query) => {
+    const normalized = String(query || "").trim().toLocaleLowerCase();
+    document.querySelectorAll('[data-bc-repeater="' + CSS.escape(collection) + '"] > .bc-node').forEach((item) => {
+      item.hidden = normalized.length > 0 && !item.textContent.toLocaleLowerCase().includes(normalized);
+    });
+  };
+
+  const runAction = (action, source) => {
+    switch (action.type) {
+      case "navigate": {
+        if (action.pageId) {
+          const page = document.querySelector('[data-bc-page-id="' + CSS.escape(action.pageId) + '"]');
+          if (page) location.hash = page.dataset.bcRoute || "";
+        } else if (action.url) {
+          location.href = action.url;
+        }
+        break;
+      }
+      case "set-variable":
+        state[action.variable] = action.value;
+        refresh();
+        break;
+      case "open-overlay": {
+        const overlay = document.querySelector('[data-bc-overlay="' + CSS.escape(action.overlayId) + '"]');
+        if (overlay) {
+          overlay.hidden = false;
+          if (typeof overlay.showModal === "function" && !overlay.open) overlay.showModal();
+        }
+        break;
+      }
+      case "close-overlay": {
+        const overlay = source.closest("[data-bc-overlay]");
+        if (overlay && typeof overlay.close === "function") overlay.close();
+        if (overlay) overlay.hidden = true;
+        break;
+      }
+      case "filter-collection": {
+        const input = source.querySelector?.('[data-bc-variable="' + CSS.escape(action.variable) + '"]') ||
+          document.querySelector('[data-bc-variable="' + CSS.escape(action.variable) + '"]');
+        const value = input ? input.value : state[action.variable];
+        state[action.variable] = value;
+        filterCollection(action.collection, value);
+        refresh();
+        break;
+      }
+    }
+  };
+
+  const dispatch = (event) => {
+    const source = event.target.closest("[data-bc-interactions]");
+    if (!source) return;
+    const trigger = event.type === "input" ? "change" : event.type;
+    const interactions = JSON.parse(source.dataset.bcInteractions || "[]");
+    interactions.filter((interaction) => interaction.trigger === trigger).forEach((interaction) => {
+      if (event.type === "submit" || interaction.action.type === "navigate") event.preventDefault();
+      runAction(interaction.action, source);
+    });
+  };
+
+  addEventListener("hashchange", route);
+  document.addEventListener("click", dispatch);
+  document.addEventListener("submit", dispatch);
+  document.addEventListener("input", dispatch);
+  route();
+  refresh();
+})();
+
+
+=== assets/canvas-preview.png ===
+89504e470d0a1a0a
+
+=== export-manifest.json ===
+{"schemaVersion":1,"target":"html","scope":{"type":"project"},"files":[{"path":"index.html","mediaType":"text/html","bytes":6412,"sha256":"dcd0e880ad7706fa03f6b75da42d3adce250e58d06fb462e55e308f03d1fc164"},{"path":"styles/tokens.css","mediaType":"text/css","bytes":94,"sha256":"9a57e6709b5e6aab97b6a8246fd1656c24a7719fe3d82db307b5b71cf2daf1e9"},{"path":"styles/base.css","mediaType":"text/css","bytes":1878,"sha256":"aa58a3271df12e946251a534e8ead417cf08f723d47248c2a0d1186fda3652e1"},{"path":"scripts/runtime.js","mediaType":"text/javascript","bytes":3924,"sha256":"613ba8ab7da8316fa068d14c098b0729c7eb0010a0e0831fc571b1fc334eda21"},{"path":"assets/canvas-preview.png","mediaType":"image/png","bytes":8,"sha256":"4c4b6a3be1314ab86138bef4314dde022e600960d8689a2c8f8631802d20dab6"}]}

@@ -1,0 +1,357 @@
+=== package.json ===
+{
+  "name": "blue-canvas-export",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "build": "tsc --noEmit && vite build"
+  },
+  "dependencies": {
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
+  },
+  "devDependencies": {
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.5",
+    "typescript": "6.0.3",
+    "vite": "8.2.2"
+  }
+}
+
+
+=== index.html ===
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Storefront &lt;demo&gt;</title>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="module" src="/src/main.tsx"></script>
+</body>
+</html>
+
+
+=== tsconfig.json ===
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "useDefineForClassFields": true,
+    "lib": [
+      "ES2022",
+      "DOM",
+      "DOM.Iterable"
+    ],
+    "allowJs": false,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "strict": true,
+    "forceConsistentCasingInFileNames": true,
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noUncheckedSideEffectImports": false,
+    "noEmit": true,
+    "jsx": "react-jsx"
+  },
+  "include": [
+    "src",
+    "vite.config.ts"
+  ]
+}
+
+
+=== vite.config.ts ===
+import { defineConfig } from "vite";
+
+export default defineConfig({ build: { target: "es2022" } });
+
+
+=== src/main.tsx ===
+import { StrictMode } from "react";
+import { createRoot } from "react-dom/client";
+import { App } from "./App.js";
+import "./styles/tokens.css";
+import "./styles/base.css";
+
+createRoot(document.getElementById("root")!).render(<StrictMode><App /></StrictMode>);
+
+
+=== src/App.tsx ===
+import { useEffect } from "react";
+import { HomeShopPage } from "./pages/HomeShopPage.js";
+import { AboutPage } from "./pages/AboutPage.js";
+import { installRuntime } from "./runtime/state.js";
+
+export function App() {
+  useEffect(() => installRuntime(), []);
+  return (
+    <main>
+      <HomeShopPage />
+      <AboutPage />
+    </main>
+  );
+}
+
+
+=== src/components/ProductBadge.tsx ===
+export function ProductBadge() {
+  return (
+    <div className="bc-node bc-stack" data-bc-node-id="30000000-0000-4000-8000-000000000091" data-bc-kind="stack" data-bc-name="Badge layout"><p className="bc-node bc-text" data-bc-node-id="30000000-0000-4000-8000-000000000092" data-bc-kind="text" data-bc-name="Featured">Featured</p></div>
+  );
+}
+
+
+=== src/pages/HomeShopPage.tsx ===
+import { ProductBadge } from "../components/ProductBadge.js";
+
+export function HomeShopPage() {
+  return (
+    <section data-bc-page data-bc-page-id="30000000-0000-4000-8000-000000000002" data-bc-route="home-shop">
+      <div data-bc-artboard data-bc-artboard-id="30000000-0000-4000-8000-000000000003" data-bc-breakpoint="desktop"><div className="bc-node bc-stack" data-bc-node-id="30000000-0000-4000-8000-000000000004" data-bc-kind="stack" data-bc-name="Home layout"><p className="bc-node bc-text" data-bc-node-id="30000000-0000-4000-8000-000000000005" data-bc-kind="text" data-bc-name="Blue Canvas &amp; Store">Blue Canvas &amp; Store</p>
+<div className="bc-node bc-grid" data-bc-node-id="30000000-0000-4000-8000-000000000006" data-bc-kind="grid" data-bc-name="Product grid"><img className="bc-node bc-image" data-bc-node-id="30000000-0000-4000-8000-000000000007" data-bc-kind="image" data-bc-name="Canvas preview" src="/assets/canvas-preview.png" alt="Blue canvas product preview" />
+<span className="bc-node bc-icon" data-bc-node-id="30000000-0000-4000-8000-000000000008" data-bc-kind="icon" data-bc-name="Spark icon" role="img" aria-label="Featured" data-bc-icon="sparkles">sparkles</span>
+<a className="bc-node bc-link" data-bc-node-id="30000000-0000-4000-8000-000000000009" data-bc-kind="link" data-bc-name="About link" data-bc-interactions={JSON.stringify([{"trigger":"click","action":{"type":"navigate","pageId":"30000000-0000-4000-8000-000000000081"}}])} href="#about"><p className="bc-node bc-text" data-bc-node-id="30000000-0000-4000-8000-000000000010" data-bc-kind="text" data-bc-name="About">About</p></a>
+<button className="bc-node bc-button" data-bc-node-id="30000000-0000-4000-8000-000000000011" data-bc-kind="button" data-bc-name="Subscribe" data-bc-interactions={JSON.stringify([{"trigger":"click","action":{"type":"set-variable","variable":"subscribed","value":true}},{"trigger":"click","action":{"type":"open-overlay","overlayId":"30000000-0000-4000-8000-000000000029"}}])} type="button"><p className="bc-node bc-text" data-bc-node-id="30000000-0000-4000-8000-000000000012" data-bc-kind="text" data-bc-name="Subscribe">Subscribe</p></button>
+<form className="bc-node bc-form" data-bc-node-id="30000000-0000-4000-8000-000000000013" data-bc-kind="form" data-bc-name="Search form" data-bc-interactions={JSON.stringify([{"trigger":"submit","action":{"type":"filter-collection","collection":"products","variable":"query"}}])}><label className="bc-input-label"><span>Search products</span><input className="bc-node bc-input" data-bc-node-id="30000000-0000-4000-8000-000000000014" data-bc-kind="input" data-bc-name="Search products" data-bc-interactions={JSON.stringify([{"trigger":"change","action":{"type":"set-variable","variable":"query","value":""}}])} type="search" aria-label="Search products" data-bc-variable="query" placeholder="Search" /></label></form>
+<div className="bc-node bc-repeater" data-bc-node-id="30000000-0000-4000-8000-000000000015" data-bc-kind="repeater" data-bc-name="Products" data-bc-repeater="products"><p className="bc-node bc-text" data-bc-node-id="30000000-0000-4000-8000-000000000016" data-bc-kind="text" data-bc-name="Canvas Pro">Canvas Pro</p></div>
+<div className="bc-node bc-conditional" data-bc-node-id="30000000-0000-4000-8000-000000000017" data-bc-kind="conditional" data-bc-name="Subscribed message" data-bc-conditional="subscribed">
+<div data-bc-branch="true" data-bc-equals="true"><p className="bc-node bc-text" data-bc-node-id="30000000-0000-4000-8000-000000000018" data-bc-kind="text" data-bc-name="Subscribed">Subscribed</p></div>
+<div data-bc-branch="false" data-bc-equals="true"><p className="bc-node bc-text" data-bc-node-id="30000000-0000-4000-8000-000000000019" data-bc-kind="text" data-bc-name="Join the list">Join the list</p></div>
+</div>
+<dialog className="bc-node bc-overlay" data-bc-node-id="30000000-0000-4000-8000-000000000029" data-bc-kind="overlay" data-bc-name="Success dialog" hidden data-bc-interactions={JSON.stringify([{"trigger":"click","action":{"type":"close-overlay"}}])} data-bc-overlay="30000000-0000-4000-8000-000000000029"><p className="bc-node bc-text" data-bc-node-id="30000000-0000-4000-8000-000000000030" data-bc-kind="text" data-bc-name="Thank you">Thank you</p></dialog>
+<div className="bc-node bc-component-instance" data-bc-node-id="30000000-0000-4000-8000-000000000031" data-bc-kind="component-instance" data-bc-name="Badge instance" data-bc-component-id="30000000-0000-4000-8000-000000000090"><ProductBadge /></div></div></div></div>
+<div data-bc-artboard data-bc-artboard-id="30000000-0000-4000-8000-000000000040" data-bc-breakpoint="mobile"><div className="bc-node bc-stack" data-bc-node-id="30000000-0000-4000-8000-000000000041" data-bc-kind="stack" data-bc-name="Mobile home"><p className="bc-node bc-text" data-bc-node-id="30000000-0000-4000-8000-000000000042" data-bc-kind="text" data-bc-name="Mobile store">Mobile store</p></div></div>
+    </section>
+  );
+}
+
+
+=== src/pages/AboutPage.tsx ===
+export function AboutPage() {
+  return (
+    <section data-bc-page data-bc-page-id="30000000-0000-4000-8000-000000000081" data-bc-route="about" hidden>
+      <div data-bc-artboard data-bc-artboard-id="30000000-0000-4000-8000-000000000082" data-bc-breakpoint="desktop"><div className="bc-node bc-stack" data-bc-node-id="30000000-0000-4000-8000-000000000083" data-bc-kind="stack" data-bc-name="About layout"><p className="bc-node bc-text" data-bc-node-id="30000000-0000-4000-8000-000000000084" data-bc-kind="text" data-bc-name="About Blue Canvas">About Blue Canvas</p></div></div>
+    </section>
+  );
+}
+
+
+=== src/runtime/state.ts ===
+type Action =
+  | { type: "navigate"; pageId?: string; url?: string }
+  | { type: "set-variable"; variable: string; value: unknown }
+  | { type: "open-overlay"; overlayId: string }
+  | { type: "close-overlay" }
+  | { type: "filter-collection"; collection: string; variable: string };
+
+interface Interaction { trigger: "click" | "submit" | "change"; action: Action }
+
+const state: Record<string, unknown> = {"query":"","subscribed":false};
+
+function refresh(): void {
+  document.querySelectorAll<HTMLElement>("[data-bc-conditional]").forEach((conditional) => {
+    const variable = conditional.dataset.bcConditional ?? "";
+    conditional.querySelectorAll<HTMLElement>(":scope > [data-bc-branch]").forEach((branch) => {
+      const matches = JSON.stringify(state[variable]) === branch.dataset.bcEquals;
+      branch.hidden = branch.dataset.bcBranch === "true" ? !matches : matches;
+    });
+  });
+  document.querySelectorAll<HTMLInputElement>("[data-bc-variable]").forEach((input) => {
+    const variable = input.dataset.bcVariable;
+    if (variable !== undefined && document.activeElement !== input && state[variable] != null) {
+      input.value = String(state[variable]);
+    }
+  });
+}
+
+function route(): void {
+  const requested = decodeURIComponent(location.hash.slice(1));
+  const pages = [...document.querySelectorAll<HTMLElement>("[data-bc-page]")];
+  const active = pages.find((page) => page.dataset.bcRoute === requested) ?? pages[0];
+  pages.forEach((page) => { page.hidden = page !== active; });
+}
+
+function filterCollection(collection: string, query: unknown): void {
+  const normalized = String(query ?? "").trim().toLocaleLowerCase();
+  document.querySelectorAll<HTMLElement>(
+    '[data-bc-repeater="' + CSS.escape(collection) + '"] > .bc-node',
+  ).forEach((item) => {
+    item.hidden = normalized.length > 0 && !item.textContent.toLocaleLowerCase().includes(normalized);
+  });
+}
+
+function runAction(action: Action, source: HTMLElement): void {
+  switch (action.type) {
+    case "navigate": {
+      if (action.pageId !== undefined) {
+        const page = document.querySelector<HTMLElement>(
+          '[data-bc-page-id="' + CSS.escape(action.pageId) + '"]',
+        );
+        if (page !== null) location.hash = page.dataset.bcRoute ?? "";
+      } else if (action.url !== undefined) location.href = action.url;
+      break;
+    }
+    case "set-variable":
+      state[action.variable] = action.value;
+      refresh();
+      break;
+    case "open-overlay": {
+      const overlay = document.querySelector<HTMLDialogElement>(
+        '[data-bc-overlay="' + CSS.escape(action.overlayId) + '"]',
+      );
+      if (overlay !== null) {
+        overlay.hidden = false;
+        if (!overlay.open) overlay.showModal();
+      }
+      break;
+    }
+    case "close-overlay": {
+      const overlay = source.closest<HTMLDialogElement>("[data-bc-overlay]");
+      if (overlay !== null) { if (overlay.open) overlay.close(); overlay.hidden = true; }
+      break;
+    }
+    case "filter-collection": {
+      const input = source.querySelector<HTMLInputElement>(
+        '[data-bc-variable="' + CSS.escape(action.variable) + '"]',
+      ) ?? document.querySelector<HTMLInputElement>(
+        '[data-bc-variable="' + CSS.escape(action.variable) + '"]',
+      );
+      const value = input?.value ?? state[action.variable];
+      state[action.variable] = value;
+      filterCollection(action.collection, value);
+      refresh();
+      break;
+    }
+  }
+}
+
+function dispatch(event: Event): void {
+  if (!(event.target instanceof Element)) return;
+  const source = event.target.closest<HTMLElement>("[data-bc-interactions]");
+  if (source === null) return;
+  const trigger = event.type === "input" ? "change" : event.type;
+  const interactions = JSON.parse(source.dataset.bcInteractions ?? "[]") as Interaction[];
+  for (const interaction of interactions) {
+    if (interaction.trigger !== trigger) continue;
+    if (event.type === "submit" || interaction.action.type === "navigate") event.preventDefault();
+    runAction(interaction.action, source);
+  }
+}
+
+export function installRuntime(): () => void {
+  addEventListener("hashchange", route);
+  document.addEventListener("click", dispatch);
+  document.addEventListener("submit", dispatch);
+  document.addEventListener("input", dispatch);
+  route();
+  refresh();
+  return () => {
+    removeEventListener("hashchange", route);
+    document.removeEventListener("click", dispatch);
+    document.removeEventListener("submit", dispatch);
+    document.removeEventListener("input", dispatch);
+  };
+}
+
+
+=== src/styles/tokens.css ===
+:root {
+  --bc-accent: #1428a0;
+  --bc-gutter: 16px;
+  --bc-headingfont: Arial, sans-serif;
+}
+
+
+=== src/styles/base.css ===
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body { margin: 0; min-height: 100%; }
+
+body { font-family: system-ui, sans-serif; }
+
+[hidden] { display: none !important; }
+
+img { display: block; max-width: 100%; }
+
+[data-bc-page] { min-height: 100vh; }
+
+[data-bc-artboard] { display: none; width: 100%; min-height: 100vh; }
+
+[data-bc-overlay] { border: 0; padding: 0; }
+
+[data-bc-node-id="30000000-0000-4000-8000-000000000004"] {
+  color: var(--bc-accent);
+  display: flex;
+  flex-direction: column;
+  gap: var(--bc-gutter);
+  align-items: stretch;
+  justify-content: start;
+  flex-wrap: nowrap;
+}
+
+[data-bc-node-id="30000000-0000-4000-8000-000000000006"] {
+  display: grid;
+  grid-template-columns: 1fr 240px;
+  grid-template-rows: auto;
+  gap: 12px;
+  align-items: stretch;
+  justify-items: start;
+}
+
+[data-bc-node-id="30000000-0000-4000-8000-000000000007"] {
+  border-radius: 8px;
+}
+
+[data-bc-node-id="30000000-0000-4000-8000-000000000091"] {
+  background: var(--bc-accent);
+  padding: var(--bc-gutter);
+  display: flex;
+  flex-direction: row;
+  gap: 4px;
+  align-items: center;
+  justify-content: start;
+  flex-wrap: nowrap;
+}
+
+[data-bc-node-id="30000000-0000-4000-8000-000000000041"] {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: stretch;
+  justify-content: start;
+  flex-wrap: nowrap;
+}
+
+[data-bc-node-id="30000000-0000-4000-8000-000000000083"] {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: stretch;
+  justify-content: start;
+  flex-wrap: nowrap;
+}
+
+@media (min-width: 768px) {
+  [data-bc-artboard-id="30000000-0000-4000-8000-000000000003"] { display: block; }
+}
+
+@media (min-width: 0px) and (max-width: 767px) {
+  [data-bc-artboard-id="30000000-0000-4000-8000-000000000040"] { display: block; }
+}
+
+@media (min-width: 0px) {
+  [data-bc-artboard-id="30000000-0000-4000-8000-000000000082"] { display: block; }
+}
+
+
+=== public/assets/canvas-preview.png ===
+89504e470d0a1a0a
+
+=== export-manifest.json ===
+{"schemaVersion":1,"target":"react","scope":{"type":"project"},"files":[{"path":"package.json","mediaType":"application/json","bytes":372,"sha256":"f51b1611e907ef5560a3626d887b8ec1964997954835d4185adf187c1832e8d1"},{"path":"index.html","mediaType":"text/html","bytes":288,"sha256":"db8f9dd54eb9a2e3a3c65ec532991914bdfb789f53a6da6228757fa6b6ad49d6"},{"path":"tsconfig.json","mediaType":"application/json","bytes":604,"sha256":"bd46d52fdad400be4f6588f53963ff7c695b369e77c1311ac296b8e73238fd4f"},{"path":"vite.config.ts","mediaType":"text/typescript","bytes":100,"sha256":"026cc078912b0e43fb9e66dcc0c92e77852d3a47dbd4faffdc2ac9ba2de1e2d2"},{"path":"src/main.tsx","mediaType":"text/typescript","bytes":261,"sha256":"7830731ac449c87f0e609398431d78aeae25002632536b082092bd91307b01ad"},{"path":"src/App.tsx","mediaType":"text/typescript","bytes":344,"sha256":"872dcf3072a3db9f35af62e4ace91027947388cb756c730c1515a6a7da9a45b8"},{"path":"src/components/ProductBadge.tsx","mediaType":"text/typescript","bytes":342,"sha256":"a86d563c6b37a784c6ebbbb86085622ce19702072e4b15213489c96dcb69b05f"},{"path":"src/pages/HomeShopPage.tsx","mediaType":"text/typescript","bytes":4964,"sha256":"6445568200c367dd925681cdaf7c98118628b72ac37b26dd07a85b8997dd451b"},{"path":"src/pages/AboutPage.tsx","mediaType":"text/typescript","bytes":601,"sha256":"c7480fc9fa50d945c2114947d24090ca03565943925be72f8e0aa7ce51d981ac"},{"path":"src/runtime/state.ts","mediaType":"text/typescript","bytes":4535,"sha256":"192871c5f898977f9f6f3ee9c377ea45aea78af889716423745f4751cc285ec5"},{"path":"src/styles/tokens.css","mediaType":"text/css","bytes":94,"sha256":"9a57e6709b5e6aab97b6a8246fd1656c24a7719fe3d82db307b5b71cf2daf1e9"},{"path":"src/styles/base.css","mediaType":"text/css","bytes":1878,"sha256":"aa58a3271df12e946251a534e8ead417cf08f723d47248c2a0d1186fda3652e1"},{"path":"public/assets/canvas-preview.png","mediaType":"image/png","bytes":8,"sha256":"4c4b6a3be1314ab86138bef4314dde022e600960d8689a2c8f8631802d20dab6"}]}

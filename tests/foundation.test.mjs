@@ -66,3 +66,21 @@ test("CI actions are pinned to immutable revisions", async () => {
   assert.match(workflow, /uses: actions\/checkout@[a-f0-9]{40}/u);
   assert.match(workflow, /uses: actions\/setup-node@[a-f0-9]{40}/u);
 });
+
+test("generated React and Preact fixture builds have a root command", async () => {
+  const rootPackage = JSON.parse(await readFile("package.json", "utf8"));
+
+  assert.equal(
+    rootPackage.scripts["test:export-fixtures"],
+    "vitest run --project packages/exporters src/framework-build.test.ts",
+  );
+});
+
+test("the clean check builds workspace entry points before running tests", async () => {
+  const rootPackage = JSON.parse(await readFile("package.json", "utf8"));
+
+  assert.match(
+    rootPackage.scripts.check,
+    /npm run typecheck && npm run build && npm run test$/u,
+  );
+});
