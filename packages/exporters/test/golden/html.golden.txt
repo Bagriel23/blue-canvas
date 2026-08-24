@@ -178,8 +178,16 @@ img { display: block; max-width: 100%; }
         break;
       case "open-overlay": {
         const selector = '[data-bc-overlay="' + CSS.escape(action.overlayId) + '"]';
-        const instance = source.closest("[data-bc-instance-id]");
-        const overlay = instance?.querySelector(selector) ?? document.querySelector(selector);
+        const instanceSelector = "[data-bc-instance-id]";
+        let instance = source.closest(instanceSelector);
+        let overlay = null;
+        while (instance && !overlay) {
+          overlay = [...instance.querySelectorAll(selector)].find(
+            (candidate) => candidate.closest(instanceSelector) === instance,
+          ) ?? null;
+          instance = instance.parentElement?.closest(instanceSelector) ?? null;
+        }
+        overlay ??= document.querySelector(selector);
         if (overlay) {
           overlay.hidden = false;
           if (typeof overlay.showModal === "function" && !overlay.open) overlay.showModal();
@@ -228,4 +236,4 @@ img { display: block; max-width: 100%; }
 89504e470d0a1a0a0000000d4948445200000001000000010804000000b51c0c020000000b4944415478da6364f80f00010501012718e3660000000049454e44ae426082
 
 === export-manifest.json ===
-{"schemaVersion":1,"target":"html","scope":{"type":"project"},"files":[{"path":"index.html","mediaType":"text/html","bytes":6471,"sha256":"1b639987d6033dbac812eddde9e21df67aca105e027ea2d60ea6e91f97655c84"},{"path":"styles/tokens.css","mediaType":"text/css","bytes":94,"sha256":"9a57e6709b5e6aab97b6a8246fd1656c24a7719fe3d82db307b5b71cf2daf1e9"},{"path":"styles/base.css","mediaType":"text/css","bytes":1878,"sha256":"aa58a3271df12e946251a534e8ead417cf08f723d47248c2a0d1186fda3652e1"},{"path":"scripts/runtime.js","mediaType":"text/javascript","bytes":4114,"sha256":"048386f4c5ba1551874d82f9365deb855aaef4e247fdc02569aac677b67df93d"},{"path":"assets/canvas-preview.png","mediaType":"image/png","bytes":68,"sha256":"431ced6916a2a21a156e38701afe55bbd7f88969fbbfc56d7fe099d47f265460"}]}
+{"schemaVersion":1,"target":"html","scope":{"type":"project"},"files":[{"path":"index.html","mediaType":"text/html","bytes":6471,"sha256":"1b639987d6033dbac812eddde9e21df67aca105e027ea2d60ea6e91f97655c84"},{"path":"styles/tokens.css","mediaType":"text/css","bytes":94,"sha256":"9a57e6709b5e6aab97b6a8246fd1656c24a7719fe3d82db307b5b71cf2daf1e9"},{"path":"styles/base.css","mediaType":"text/css","bytes":1878,"sha256":"aa58a3271df12e946251a534e8ead417cf08f723d47248c2a0d1186fda3652e1"},{"path":"scripts/runtime.js","mediaType":"text/javascript","bytes":4444,"sha256":"77a0a5c3ab8fb601ff28d2cf8b3e71b7a5593fe0537fde68a2a98ff07aaec3ca"},{"path":"assets/canvas-preview.png","mediaType":"image/png","bytes":68,"sha256":"431ced6916a2a21a156e38701afe55bbd7f88969fbbfc56d7fe099d47f265460"}]}

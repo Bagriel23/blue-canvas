@@ -37,6 +37,8 @@ export const maxEncodedAssetBytes = 25 * 1024 * 1024;
 export const maxSvgAssetBytes = 1024 * 1024;
 const maxRasterDimension = 8192;
 const maxRasterPixels = 16_000_000;
+const maxSvgDepth = 128;
+const maxSvgNodes = 100_000;
 
 type RasterFormat = "jpeg" | "png" | "webp";
 
@@ -142,77 +144,118 @@ function isElement(node: ChildNode): node is Element {
   return "tagName" in node;
 }
 
-function collectSvgIds(node: ChildNode, ids: Set<string>): boolean {
-  if (!isElement(node)) return true;
-  const id = node.attrs.find(({ name }) => name.toLowerCase() === "id")?.value;
-  if (id !== undefined) {
-    if (ids.has(id)) return false;
-    ids.add(id);
-  }
-  return node.childNodes.every((child) => collectSvgIds(child, ids));
-}
+type SvgValidation =
+  { status: "valid"; bytes: Uint8Array } | { status: "broken" | "limit" };
 
-function safeSvgNode(
-  node: ChildNode,
-  ids: ReadonlySet<string>,
-  parentTag?: string,
-): boolean {
-  if (isElement(node)) {
-    const tag = node.tagName.toLowerCase();
-    if (!svgTags.has(tag)) return false;
-    for (const attribute of node.attrs) {
-      const name = attribute.name.toLowerCase();
-      if (
-        !svgAttributes.has(name) ||
-        (attribute.prefix !== undefined && attribute.prefix !== "")
-      )
-        return false;
-      if (name === "xmlns") {
-        if (attribute.value !== "http://www.w3.org/2000/svg") return false;
-      } else if (attribute.value.includes("\\")) {
-        return false;
-      } else if (hasExternalReference(attribute.value)) {
-        const localReference = /^url\(\s*#([a-z_][a-z0-9_.:-]*)\s*\)$/iu.exec(
-          attribute.value,
-        );
-        if (localReference?.[1] === undefined || !ids.has(localReference[1])) {
-          return false;
-        }
+function inspectSvgTree(
+  root: Element,
+): { status: "valid"; ids: Set<string> } | { status: "broken" | "limit" } {
+  const ids = new Set<string>();
+  const stack: { node: ChildNode; depth: number }[] = [
+    { node: root, depth: 1 },
+  ];
+  let nodeCount = 0;
+  while (stack.length > 0) {
+    const current = stack.pop();
+    if (current === undefined) break;
+    nodeCount += 1;
+    if (current.depth > maxSvgDepth || nodeCount > maxSvgNodes) {
+      return { status: "limit" };
+    }
+    if (!isElement(current.node)) continue;
+    const id = current.node.attrs.find(
+      ({ name }) => name.toLowerCase() === "id",
+    )?.value;
+    if (id !== undefined) {
+      if (ids.has(id)) return { status: "broken" };
+      ids.add(id);
+    }
+    for (let index = current.node.childNodes.length - 1; index >= 0; index--) {
+      const child = current.node.childNodes[index];
+      if (child !== undefined) {
+        stack.push({ node: child, depth: current.depth + 1 });
       }
     }
-    return node.childNodes.every((child) => safeSvgNode(child, ids, tag));
   }
-  if (node.nodeName === "#text") {
-    return (
-      node.value.trim().length === 0 ||
-      parentTag === "title" ||
-      parentTag === "desc"
-    );
-  }
-  return false;
+  return { status: "valid", ids };
 }
 
-function sanitizeSvg(bytes: Uint8Array): Uint8Array | undefined {
-  let source: string;
+function validateSvgTree(root: Element, ids: ReadonlySet<string>): boolean {
+  const stack: { node: ChildNode; parentTag?: string }[] = [{ node: root }];
+  while (stack.length > 0) {
+    const current = stack.pop();
+    if (current === undefined) break;
+    if (isElement(current.node)) {
+      const tag = current.node.tagName.toLowerCase();
+      if (!svgTags.has(tag)) return false;
+      for (const attribute of current.node.attrs) {
+        const name = attribute.name.toLowerCase();
+        if (
+          !svgAttributes.has(name) ||
+          (attribute.prefix !== undefined && attribute.prefix !== "")
+        ) {
+          return false;
+        }
+        if (name === "xmlns") {
+          if (attribute.value !== "http://www.w3.org/2000/svg") return false;
+        } else if (attribute.value.includes("\\")) {
+          return false;
+        } else if (hasExternalReference(attribute.value)) {
+          const localReference = /^url\(\s*#([a-z_][a-z0-9_.:-]*)\s*\)$/iu.exec(
+            attribute.value,
+          );
+          if (
+            localReference?.[1] === undefined ||
+            !ids.has(localReference[1])
+          ) {
+            return false;
+          }
+        }
+      }
+      for (
+        let index = current.node.childNodes.length - 1;
+        index >= 0;
+        index--
+      ) {
+        const child = current.node.childNodes[index];
+        if (child !== undefined) stack.push({ node: child, parentTag: tag });
+      }
+    } else if (
+      current.node.nodeName !== "#text" ||
+      (current.node.value.trim().length > 0 &&
+        current.parentTag !== "title" &&
+        current.parentTag !== "desc")
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function sanitizeSvg(bytes: Uint8Array): SvgValidation {
   try {
-    source = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    const source = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    if (source.includes("\u0000")) return { status: "broken" };
+    const fragment = parseFragment(source);
+    if (fragment.childNodes.length !== 1) return { status: "broken" };
+    const root = fragment.childNodes[0];
+    if (
+      root === undefined ||
+      !isElement(root) ||
+      root.tagName.toLowerCase() !== "svg"
+    ) {
+      return { status: "broken" };
+    }
+    const inspected = inspectSvgTree(root);
+    if (inspected.status !== "valid") return inspected;
+    if (!validateSvgTree(root, inspected.ids)) return { status: "broken" };
+    const sanitized = new TextEncoder().encode(`${serialize(fragment)}\n`);
+    return sanitized.byteLength <= maxSvgAssetBytes
+      ? { status: "valid", bytes: sanitized }
+      : { status: "limit" };
   } catch {
-    return undefined;
+    return { status: "broken" };
   }
-  if (source.includes("\u0000")) return undefined;
-  const fragment = parseFragment(source);
-  if (fragment.childNodes.length !== 1) return undefined;
-  const root = fragment.childNodes[0];
-  if (
-    root === undefined ||
-    !isElement(root) ||
-    root.tagName.toLowerCase() !== "svg"
-  ) {
-    return undefined;
-  }
-  const ids = new Set<string>();
-  if (!collectSvgIds(root, ids) || !safeSvgNode(root, ids)) return undefined;
-  return new TextEncoder().encode(`${serialize(fragment)}\n`);
 }
 
 export async function validateAsset(
@@ -264,17 +307,22 @@ export async function validateAsset(
     };
   }
 
-  let bytes: Uint8Array = asset.bytes.slice();
-  const validation =
-    mimeType === "image/png"
-      ? await validRaster(bytes, "png")
-      : mimeType === "image/jpeg"
-        ? await validRaster(bytes, "jpeg")
-        : mimeType === "image/webp"
-          ? await validRaster(bytes, "webp")
-          : (bytes = sanitizeSvg(bytes) ?? new Uint8Array()).byteLength > 0
-            ? "valid"
-            : "broken";
+  let bytes: Uint8Array = Uint8Array.from(asset.bytes);
+  let validation: "valid" | "broken" | "limit";
+  if (mimeType === "image/svg+xml") {
+    const svg = sanitizeSvg(bytes);
+    validation = svg.status;
+    if (svg.status === "valid") bytes = svg.bytes;
+  } else {
+    validation = await validRaster(
+      bytes,
+      mimeType === "image/png"
+        ? "png"
+        : mimeType === "image/jpeg"
+          ? "jpeg"
+          : "webp",
+    );
+  }
   if (validation === "limit") {
     return {
       code: "ASSET_LIMIT_EXCEEDED",

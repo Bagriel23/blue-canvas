@@ -209,6 +209,34 @@ describe("export hardening", () => {
     );
   });
 
+  test("snapshots Node Buffer assets without retaining slice aliases", async () => {
+    const callerBytes = Buffer.from(fixturePng().bytes);
+    const expectedBytes = Uint8Array.from(callerBytes);
+    const pending = generateExport(
+      request({
+        fileName: "buffer.png",
+        mimeType: "image/png",
+        bytes: callerBytes,
+      }),
+    );
+    callerBytes.fill(0);
+
+    const result = await pending;
+    const generated = result.files.find(
+      ({ path }) => path === "assets/buffer.png",
+    );
+    expect(result.diagnostics).toEqual([]);
+    expect(generated).toEqual({
+      path: "assets/buffer.png",
+      bytes: expectedBytes,
+    });
+    expect(
+      generated !== undefined && "bytes" in generated
+        ? generated.bytes
+        : undefined,
+    ).not.toBe(callerBytes);
+  });
+
   test.each([
     {
       name: "encoded bytes",
@@ -305,6 +333,27 @@ describe("export hardening", () => {
     expect(missing.files).toEqual([]);
     expect(missing.diagnostics).toContainEqual(
       expect.objectContaining({ code: "BROKEN_ASSET" }),
+    );
+  });
+
+  test("rejects deeply nested SVG without recursive traversal failure", async () => {
+    const depth = 5000;
+    const result = await generateExport(
+      request({
+        fileName: "deep.svg",
+        mimeType: "image/svg+xml",
+        bytes: new TextEncoder().encode(
+          `<svg xmlns="http://www.w3.org/2000/svg">${"<g>".repeat(depth)}<path d="M0 0h1v1z"/>${"</g>".repeat(depth)}</svg>`,
+        ),
+      }),
+    );
+
+    expect(result.files).toEqual([]);
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: expect.stringMatching(/^(?:BROKEN_ASSET|ASSET_LIMIT_EXCEEDED)$/u),
+        severity: "error",
+      }),
     );
   });
 

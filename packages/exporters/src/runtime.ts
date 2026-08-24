@@ -55,8 +55,16 @@ export const staticRuntime = `(() => {
         break;
       case "open-overlay": {
         const selector = '[data-bc-overlay="' + CSS.escape(action.overlayId) + '"]';
-        const instance = source.closest("[data-bc-instance-id]");
-        const overlay = instance?.querySelector(selector) ?? document.querySelector(selector);
+        const instanceSelector = "[data-bc-instance-id]";
+        let instance = source.closest(instanceSelector);
+        let overlay = null;
+        while (instance && !overlay) {
+          overlay = [...instance.querySelectorAll(selector)].find(
+            (candidate) => candidate.closest(instanceSelector) === instance,
+          ) ?? null;
+          instance = instance.parentElement?.closest(instanceSelector) ?? null;
+        }
+        overlay ??= document.querySelector(selector);
         if (overlay) {
           overlay.hidden = false;
           if (typeof overlay.showModal === "function" && !overlay.open) overlay.showModal();

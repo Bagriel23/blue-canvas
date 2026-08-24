@@ -130,7 +130,7 @@ function normalizeRequest(input: ExportRequest): ExportRequest | ExportResult {
       {
         fileName: asset.fileName,
         mimeType: asset.mimeType,
-        bytes: asset.bytes.slice(),
+        bytes: Uint8Array.from(asset.bytes),
       },
     ]),
   );

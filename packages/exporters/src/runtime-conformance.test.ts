@@ -32,21 +32,50 @@ function runtimeDocument(): DesignDocument {
   if (component?.root.kind !== "stack") {
     throw new Error("Fixture component changed");
   }
-  component.root.children.push(
-    {
-      id: fixtureId(93),
-      kind: "button",
-      name: "Open instance overlay",
+  const innerComponentId = fixtureId(109);
+  document.components.push({
+    id: innerComponentId,
+    name: "Nested overlay trigger",
+    root: {
+      id: fixtureId(110),
+      kind: "stack",
+      name: "Nested trigger layout",
       visible: true,
       style: {},
-      buttonType: "button",
-      interactions: [
+      layout: {
+        direction: "row",
+        gap: 0,
+        align: "start",
+        justify: "start",
+        wrap: "nowrap",
+      },
+      children: [
         {
-          trigger: "click",
-          action: { type: "open-overlay", overlayId: fixtureId(94) },
+          id: fixtureId(111),
+          kind: "button",
+          name: "Open parent instance overlay",
+          visible: true,
+          style: {},
+          buttonType: "button",
+          interactions: [
+            {
+              trigger: "click",
+              action: { type: "open-overlay", overlayId: fixtureId(94) },
+            },
+          ],
+          children: [text(113, "Open parent")],
         },
       ],
-      children: [text(95, "Open")],
+    },
+  });
+  component.root.children.push(
+    {
+      id: fixtureId(112),
+      kind: "component-instance",
+      name: "Nested trigger instance",
+      visible: true,
+      style: {},
+      componentId: innerComponentId,
     },
     {
       id: fixtureId(94),
@@ -162,29 +191,33 @@ describe.each(["html", "react", "preact"] as const)(
       const falseBranch = document.querySelector<HTMLElement>(
         '[data-bc-conditional="subscribed"] > [data-bc-branch="false"]',
       );
-      const instances = [
-        ...document.querySelectorAll<HTMLElement>("[data-bc-instance-id]"),
-      ];
+      const firstInstance = document.querySelector<HTMLElement>(
+        `[data-bc-instance-id="${fixtureId(31)}"]`,
+      );
+      const secondInstance = document.querySelector<HTMLElement>(
+        `[data-bc-instance-id="${fixtureId(32)}"]`,
+      );
 
       expect(firstPage?.hidden).toBe(false);
       expect(trueBranch?.hidden).toBe(true);
       expect(falseBranch?.hidden).toBe(false);
-      expect(instances).toHaveLength(2);
-      const firstOpen = instances[0]?.querySelector<HTMLElement>(
-        `[data-bc-node-id="${fixtureId(93)}"]`,
+      expect(firstInstance).not.toBeNull();
+      expect(secondInstance).not.toBeNull();
+      const secondOpen = secondInstance?.querySelector<HTMLElement>(
+        `[data-bc-node-id="${fixtureId(111)}"]`,
       );
-      const firstOverlay = instances[0]?.querySelector<HTMLElement>(
+      const firstOverlay = firstInstance?.querySelector<HTMLElement>(
         `[data-bc-overlay="${fixtureId(94)}"]`,
       );
-      const secondOverlay = instances[1]?.querySelector<HTMLElement>(
+      const secondOverlay = secondInstance?.querySelector<HTMLElement>(
         `[data-bc-overlay="${fixtureId(94)}"]`,
       );
-      if (firstOpen === null || firstOpen === undefined) {
+      if (secondOpen === null || secondOpen === undefined) {
         throw new Error("Instance overlay trigger missing");
       }
-      click(window, firstOpen);
-      expect(firstOverlay?.hidden).toBe(false);
-      expect(secondOverlay?.hidden).toBe(true);
+      click(window, secondOpen);
+      expect(firstOverlay?.hidden).toBe(true);
+      expect(secondOverlay?.hidden).toBe(false);
 
       const subscribe = document.querySelector<HTMLElement>(
         `[data-bc-node-id="${fixtureId(11)}"]`,

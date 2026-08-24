@@ -61,9 +61,16 @@ function runAction(action: Action, source: HTMLElement): void {
       break;
     case "open-overlay": {
       const selector = '[data-bc-overlay="' + CSS.escape(action.overlayId) + '"]';
-      const instance = source.closest<HTMLElement>("[data-bc-instance-id]");
-      const overlay = instance?.querySelector<HTMLDialogElement>(selector) ??
-        document.querySelector<HTMLDialogElement>(selector);
+      const instanceSelector = "[data-bc-instance-id]";
+      let instance = source.closest<HTMLElement>(instanceSelector);
+      let overlay: HTMLDialogElement | null = null;
+      while (instance !== null && overlay === null) {
+        overlay = [...instance.querySelectorAll<HTMLDialogElement>(selector)].find(
+          (candidate) => candidate.closest(instanceSelector) === instance,
+        ) ?? null;
+        instance = instance.parentElement?.closest<HTMLElement>(instanceSelector) ?? null;
+      }
+      overlay ??= document.querySelector<HTMLDialogElement>(selector);
       if (overlay !== null) {
         overlay.hidden = false;
         if (typeof overlay.showModal === "function" && !overlay.open) overlay.showModal();
