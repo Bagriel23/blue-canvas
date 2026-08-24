@@ -14,5 +14,9 @@
   },
   "scripts": {
     "build": "tsc --build --pretty false"
+  },
+  "dependencies": {
+    "@blue-canvas/document": "^0.0.0",
+    "zod": "^4.1.11"
   }
 }

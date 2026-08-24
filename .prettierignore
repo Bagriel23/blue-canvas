@@ -4,3 +4,4 @@ node_modules/
 **/dist/
 docs/superpowers/
 package-lock.json
+packages/document/schema/design-document.schema.json

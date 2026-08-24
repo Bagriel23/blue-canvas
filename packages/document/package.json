@@ -4,15 +4,21 @@
   "private": true,
   "type": "module",
   "files": [
-    "dist"
+    "dist",
+    "schema"
   ],
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
-    }
+    },
+    "./schema": "./schema/design-document.schema.json"
   },
   "scripts": {
-    "build": "tsc --build --pretty false"
+    "build": "tsc --build --pretty false && npm run schema:generate",
+    "schema:generate": "node dist/publish-schema.js"
+  },
+  "dependencies": {
+    "zod": "^4.1.11"
   }
 }

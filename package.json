@@ -20,12 +20,13 @@
     "lint": "eslint .",
     "test": "npm run test:smoke && vitest run",
     "test:smoke": "node --test tests/foundation.test.mjs",
-    "typecheck": "tsc --build tsconfig.json --noEmit --pretty false"
+    "typecheck": "tsc --build tsconfig.json --emitDeclarationOnly --pretty false"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
     "@types/node": "24.13.3",
     "eslint": "10.9.0",
+    "fast-check": "^4.3.0",
     "globals": "17.11.0",
     "prettier": "3.9.6",
     "typescript": "6.0.3",
