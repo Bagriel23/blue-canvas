@@ -12,19 +12,6 @@ jobs:
   check:
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    services:
-      mariadb:
-        image: mariadb:11.8.8@sha256:24e76fcec8c003a0362d0dd53f4806e7e79458d7fdeaf47437760e19496f5a9c
-        env:
-          MARIADB_DATABASE: blue_canvas
-          MARIADB_PASSWORD: blue_canvas_dev
-          MARIADB_ROOT_PASSWORD: blue_canvas_root_dev
-          MARIADB_USER: blue_canvas
-        ports:
-          - 3306:3306
-        options: >-
-          --health-cmd="healthcheck.sh --connect --innodb_initialized"
-          --health-interval=5s --health-timeout=5s --health-retries=20
     steps:
       - name: Check out repository
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -41,6 +28,51 @@ jobs:
         run: npm ci
       - name: Run repository checks
         run: npm run check
+
+  database-integration:
+    name: Database integration (${{ matrix.engine }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - engine: MariaDB 10.6.28
+            image: mariadb:10.6.28@sha256:92e50059ea0a5965a33ef751970eab37d421b91ebbd01ac909039cffe159e574
+          - engine: MySQL 8.0.46
+            image: mysql:8.0.46@sha256:7dcddc01f13bab2f15cde676d44d01f61fc9f99fe7785e86196dfc07d358ae2b
+    services:
+      database:
+        image: ${{ matrix.image }}
+        env:
+          MARIADB_DATABASE: blue_canvas
+          MARIADB_PASSWORD: blue_canvas_dev
+          MARIADB_ROOT_PASSWORD: blue_canvas_root_dev
+          MARIADB_USER: blue_canvas
+          MYSQL_DATABASE: blue_canvas
+          MYSQL_PASSWORD: blue_canvas_dev
+          MYSQL_ROOT_PASSWORD: blue_canvas_root_dev
+          MYSQL_USER: blue_canvas
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping --protocol=tcp -h 127.0.0.1 -uroot
+          -pblue_canvas_root_dev" --health-start-period=5m --health-interval=5s
+          --health-timeout=5s --health-retries=30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Install pinned npm
+        run: |
+          npm install --global npm@11.19.0
+          test "$(npm --version)" = "11.19.0"
+      - name: Install dependencies
+        run: npm ci
       - name: Run database integration tests
         env:
           DATABASE_HOST: 127.0.0.1

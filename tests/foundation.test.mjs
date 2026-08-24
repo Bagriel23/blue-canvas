@@ -41,12 +41,18 @@ test("browser workspaces typecheck TypeScript React files", async () => {
   }
 });
 
-test("the development database is immutable and bound to loopback", async () => {
+test("the supported databases are immutable and development is bound to loopback", async () => {
   const compose = await readFile("compose.yaml", "utf8");
+  const workflow = await readFile(".github/workflows/ci.yml", "utf8");
   const developmentEnvironment = await readFile(".env.example", "utf8");
 
-  assert.match(compose, /image: mariadb:11\.8\.8@sha256:[a-f0-9]{64}/u);
+  assert.match(compose, /image: mariadb:10\.6\.28@sha256:[a-f0-9]{64}/u);
   assert.match(compose, /127\.0\.0\.1:\$\{MARIADB_PORT:-3306\}:3306/u);
+  assert.match(compose, /- mariadb106-data:\/var\/lib\/mysql/u);
+  assert.doesNotMatch(compose, /- mariadb-data:\/var\/lib\/mysql/u);
+  assert.match(workflow, /image: mariadb:10\.6\.28@sha256:[a-f0-9]{64}/u);
+  assert.match(workflow, /image: mysql:8\.0\.46@sha256:[a-f0-9]{64}/u);
+  assert.match(workflow, /run: npm run test:integration/u);
   assert.match(developmentEnvironment, /^APP_HOST=127\.0\.0\.1$/mu);
 });
 

@@ -186,14 +186,18 @@ export class LocalAssetStorage implements AssetStorage {
     }
     const directory = join(this.root, prefix);
     const path = join(directory, digest);
-    const directoryStat = await lstat(directory);
-    const fileStat = await lstat(path);
-    if (
-      directoryStat.isSymbolicLink() ||
-      !directoryStat.isDirectory() ||
-      fileStat.isSymbolicLink() ||
-      !fileStat.isFile()
-    ) {
+    const directoryStat = await safeStat(directory);
+    if (!directoryStat) {
+      throw new ApiError("asset_not_found", "Asset not found", 404);
+    }
+    if (directoryStat.isSymbolicLink() || !directoryStat.isDirectory()) {
+      throw new ApiError("unsafe_storage_root", "Unsafe asset entry", 500);
+    }
+    const fileStat = await safeStat(path);
+    if (!fileStat) {
+      throw new ApiError("asset_not_found", "Asset not found", 404);
+    }
+    if (fileStat.isSymbolicLink() || !fileStat.isFile()) {
       throw new ApiError("unsafe_storage_root", "Unsafe asset entry", 500);
     }
     return path;
