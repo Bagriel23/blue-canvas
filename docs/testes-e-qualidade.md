@@ -38,8 +38,9 @@ docker compose up -d --wait mariadb
 npm run test:integration
 ```
 
-`test:integration` aplica migrations e roda de forma não paralela. A suíte
-remove dados das tabelas antes de cada caso: use uma instância descartável.
+`test:integration` compila os contratos, gera o Prisma Client, aplica migrations
+e roda de forma não paralela. A suíte remove dados das tabelas antes de cada
+caso: use uma instância descartável.
 
 ## CI
 

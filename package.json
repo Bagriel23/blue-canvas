@@ -22,7 +22,7 @@
     "lint": "eslint .",
     "test": "npm run test:smoke && vitest run",
     "test:export-fixtures": "vitest run --project packages/exporters src/framework-build.test.ts",
-    "test:integration": "npm run db:migrate && vitest run --config vitest.integration.config.ts",
+    "test:integration": "npm run build -w @blue-canvas/contracts && npm run db:generate && npm run db:migrate && vitest run --config vitest.integration.config.ts",
     "test:smoke": "node --test tests/foundation.test.mjs",
     "typecheck": "npm run db:generate && tsc --build tsconfig.json --emitDeclarationOnly --pretty false"
   },

@@ -1,9 +1,17 @@
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
+import { buildApp } from "../src/app.js";
+import { ApiError } from "../src/core.js";
 import {
   createPrismaClient,
   PrismaRepository,
 } from "../src/prisma-repository.js";
+import { ArgonPasswordHasher } from "../src/security.js";
+import { LocalAssetStorage } from "../src/storage.js";
 
 const database = {
   host: process.env.DATABASE_HOST ?? "127.0.0.1",
@@ -33,6 +41,92 @@ afterAll(async () => {
 });
 
 describe("Prisma repository", () => {
+  it("rolls back a mutation when its audit insert fails", async () => {
+    const owner = await repository.createUser({
+      email: "transaction-owner@example.com",
+      displayName: "Transaction Owner",
+      passwordHash: "$argon2id$test",
+      locale: "en-US",
+      isAdmin: true,
+      now,
+    });
+
+    await expect(
+      repository.transaction(async (transaction) => {
+        const project = await transaction.createProject({
+          name: "Must roll back",
+          ownerId: owner.id,
+          now,
+        });
+        await transaction.createAuditEvent({
+          actorId: "missing-actor",
+          action: "project.create",
+          targetType: "project",
+          targetId: project.id,
+          projectId: project.id,
+          traceId: "rollback-trace",
+          metadata: {},
+          now,
+        });
+      }),
+    ).rejects.toThrow();
+
+    await expect(repository.listProjectsForUser(owner.id)).resolves.toEqual([]);
+    await expect(repository.listAuditEvents({ limit: 10 })).resolves.toEqual(
+      [],
+    );
+  });
+
+  it("rolls back invitation acceptance when its audit insert fails", async () => {
+    const admin = await repository.createUser({
+      email: "acceptance-rollback-admin@example.com",
+      displayName: "Admin",
+      passwordHash: "$argon2id$test",
+      locale: "en-US",
+      isAdmin: true,
+      now,
+    });
+    const invitation = await repository.createInvitation({
+      email: "acceptance-rollback@example.com",
+      tokenHash: "f".repeat(64),
+      invitedById: admin.id,
+      projectId: null,
+      role: null,
+      expiresAt: new Date("2026-08-25T12:00:00.000Z"),
+      now,
+    });
+
+    await expect(
+      repository.transaction(async (transaction) => {
+        const user = await transaction.acceptInvitationAndCreateUser({
+          invitationId: invitation.id,
+          displayName: "Rolled Back",
+          passwordHash: "$argon2id$test",
+          locale: "en-US",
+          now,
+        });
+        if (!user) throw new Error("Invitation acceptance unexpectedly failed");
+        await transaction.createAuditEvent({
+          actorId: "missing-actor",
+          action: "invitation.accept",
+          targetType: "invitation",
+          targetId: invitation.id,
+          projectId: null,
+          traceId: "acceptance-rollback-trace",
+          metadata: {},
+          now,
+        });
+      }),
+    ).rejects.toThrow();
+
+    await expect(
+      repository.findUserByEmail("acceptance-rollback@example.com"),
+    ).resolves.toBeUndefined();
+    await expect(
+      repository.findInvitationByTokenHash(invitation.tokenHash),
+    ).resolves.toMatchObject({ acceptedAt: null });
+  });
+
   it("persists users, projects, memberships, scoped tokens, assets, and audits", async () => {
     expect(await repository.isReady()).toBe(true);
     const owner = await repository.createUser({
@@ -62,8 +156,9 @@ describe("Prisma repository", () => {
       sha256: "b".repeat(64),
       originalName: "pixel.png",
       mediaType: "image/png",
-      size: 9,
+      size: 68,
       storageKey: `bb/${"b".repeat(64)}`,
+      status: "ready",
       now,
     });
     await repository.createAuditEvent({
@@ -91,7 +186,7 @@ describe("Prisma repository", () => {
     ).toMatchObject([{ traceId: "integration-trace" }]);
   });
 
-  it("enforces normalized-email and project-member uniqueness in MariaDB", async () => {
+  it("maps normalized-email and project-member conflicts to stable errors", async () => {
     const user = await repository.createUser({
       email: "unique@example.com",
       displayName: "Unique",
@@ -109,7 +204,10 @@ describe("Prisma repository", () => {
         isAdmin: false,
         now,
       }),
-    ).rejects.toThrow();
+    ).rejects.toMatchObject({
+      code: "email_exists",
+      statusCode: 409,
+    } satisfies Partial<ApiError>);
     const project = await repository.createProject({
       name: "Unique membership",
       ownerId: user.id,
@@ -122,7 +220,10 @@ describe("Prisma repository", () => {
         role: "viewer",
         now,
       }),
-    ).rejects.toThrow();
+    ).rejects.toMatchObject({
+      code: "member_exists",
+      statusCode: 409,
+    } satisfies Partial<ApiError>);
   });
 
   it("serializes bootstrap and invitation consumption", async () => {
@@ -173,5 +274,139 @@ describe("Prisma repository", () => {
     await expect(
       repository.findProjectMember(project.id, acceptedUser.id),
     ).resolves.toMatchObject({ role: "editor" });
+  });
+
+  it("allows only one of multiple invitations for the same email to be accepted", async () => {
+    const admin = await repository.createUser({
+      email: "multiple-invites-admin@example.com",
+      displayName: "Admin",
+      passwordHash: "$argon2id$test",
+      locale: "en-US",
+      isAdmin: true,
+      now,
+    });
+    const invitationInput = (tokenHash: string) => ({
+      email: "same-invitee@example.com",
+      tokenHash,
+      invitedById: admin.id,
+      projectId: null,
+      role: null,
+      expiresAt: new Date("2026-08-25T12:00:00.000Z"),
+      now,
+    });
+    const first = await repository.createInvitation(
+      invitationInput("d".repeat(64)),
+    );
+    const second = await repository.createInvitation(
+      invitationInput("e".repeat(64)),
+    );
+    const acceptance = (invitationId: string) =>
+      repository.acceptInvitationAndCreateUser({
+        invitationId,
+        displayName: "Same Invitee",
+        passwordHash: "$argon2id$test",
+        locale: "en-US",
+        now,
+      });
+
+    const accepted = await Promise.all([
+      acceptance(first.id),
+      acceptance(second.id),
+    ]);
+
+    expect(accepted.filter(Boolean)).toHaveLength(1);
+    expect(
+      await repository.findUserByEmail("same-invitee@example.com"),
+    ).toBeDefined();
+  });
+
+  it("returns stable HTTP conflicts through the real Prisma repository", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "blue-canvas-prisma-http-"));
+    const app = buildApp({
+      repository,
+      passwordHasher: new ArgonPasswordHasher(),
+      storage: await LocalAssetStorage.create(directory),
+      setupSecret: "integration setup secret",
+      production: false,
+      now: () => now,
+    });
+    try {
+      const bootstrap = await app.inject({
+        method: "POST",
+        url: "/api/v1/auth/bootstrap-admin",
+        payload: {
+          email: "http-admin@example.com",
+          displayName: "HTTP Admin",
+          password: "correct horse battery staple",
+          setupSecret: "integration setup secret",
+        },
+      });
+      expect(bootstrap.statusCode).toBe(201);
+      const cookieHeader = bootstrap.headers["set-cookie"];
+      const cookie = (
+        Array.isArray(cookieHeader) ? cookieHeader[0] : cookieHeader
+      )?.split(";", 1)[0];
+      if (!cookie) throw new Error("Bootstrap cookie missing");
+      const headers = {
+        cookie,
+        "x-csrf-token": bootstrap.json().csrfToken as string,
+      };
+      const projectResponse = await app.inject({
+        method: "POST",
+        url: "/api/v1/projects",
+        headers,
+        payload: { name: "HTTP conflicts" },
+      });
+      const projectId = projectResponse.json().project.id as string;
+      await repository.createUser({
+        email: "http-member@example.com",
+        displayName: "HTTP Member",
+        passwordHash: "$argon2id$test",
+        locale: "en-US",
+        isAdmin: false,
+        now,
+      });
+      const memberRequest = {
+        method: "POST" as const,
+        url: `/api/v1/projects/${projectId}/members`,
+        headers,
+        payload: { email: "http-member@example.com", role: "viewer" },
+      };
+      expect((await app.inject(memberRequest)).statusCode).toBe(201);
+      const duplicateMember = await app.inject(memberRequest);
+      expect(duplicateMember.statusCode).toBe(409);
+      expect(duplicateMember.json().error.code).toBe("member_exists");
+
+      const invitationRequest = {
+        method: "POST" as const,
+        url: "/api/v1/invitations",
+        headers,
+        payload: { email: "http-race@example.com" },
+      };
+      const [firstInvitation, secondInvitation] = await Promise.all([
+        app.inject(invitationRequest),
+        app.inject(invitationRequest),
+      ]);
+      const accept = (token: string) =>
+        app.inject({
+          method: "POST",
+          url: "/api/v1/auth/invitations/accept",
+          payload: {
+            token,
+            displayName: "HTTP Race",
+            password: "correct horse battery staple",
+          },
+        });
+      const accepted = await Promise.all([
+        accept(firstInvitation.json().token as string),
+        accept(secondInvitation.json().token as string),
+      ]);
+      expect(accepted.map((response) => response.statusCode).sort()).toEqual([
+        201, 410,
+      ]);
+    } finally {
+      await app.close();
+      await rm(directory, { recursive: true, force: true });
+    }
   });
 });

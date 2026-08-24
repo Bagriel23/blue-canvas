@@ -6,14 +6,20 @@ import {
   readFile,
   realpath,
   rename,
+  rmdir,
   rm,
 } from "node:fs/promises";
 import { extname, join } from "node:path";
+
+import sharp from "sharp";
 
 import { ApiError } from "./core.js";
 import { sha256 } from "./security.js";
 
 export const MAX_ASSET_BYTES = 25 * 1024 * 1024;
+export const MAX_ASSET_DIMENSION = 8192;
+export const MAX_ASSET_PIXELS = 16_777_216;
+export const MAX_ASSET_FRAMES = 1;
 
 export interface AssetStorageInput {
   bytes: Uint8Array;
@@ -27,7 +33,16 @@ export interface StoredAsset {
   storageKey: string;
 }
 
+export interface StagedAsset {
+  asset: StoredAsset;
+  abort(): Promise<void>;
+  commit(): Promise<void>;
+}
+
 export interface AssetStorage {
+  exists(storageKey: string): Promise<boolean>;
+  inspect(input: AssetStorageInput): Promise<StoredAsset>;
+  stage(input: AssetStorageInput): Promise<StagedAsset>;
   put(input: AssetStorageInput): Promise<StoredAsset>;
   read(storageKey: string): Promise<Uint8Array>;
   delete(storageKey: string): Promise<void>;
@@ -38,6 +53,13 @@ const MEDIA_EXTENSIONS: Readonly<Record<string, ReadonlySet<string>>> = {
   "image/jpeg": new Set([".jpeg", ".jpg"]),
   "image/png": new Set([".png"]),
   "image/webp": new Set([".webp"]),
+};
+
+const FORMAT_MEDIA_TYPES: Readonly<Record<string, string>> = {
+  gif: "image/gif",
+  jpeg: "image/jpeg",
+  png: "image/png",
+  webp: "image/webp",
 };
 
 function hasSignature(bytes: Uint8Array, mediaType: string): boolean {
@@ -101,11 +123,22 @@ export class LocalAssetStorage implements AssetStorage {
   ) {}
 
   async put(input: AssetStorageInput): Promise<StoredAsset> {
+    const staged = await this.stage(input);
+    try {
+      await staged.commit();
+      return staged.asset;
+    } catch (error) {
+      await staged.abort();
+      throw error;
+    }
+  }
+
+  async stage(input: AssetStorageInput): Promise<StagedAsset> {
     await this.assertRoot();
-    this.validateInput(input);
-    const digest = sha256(input.bytes);
+    const asset = await this.inspect(input);
+    const stored = asset;
+    const digest = stored.sha256;
     const prefix = digest.slice(0, 2);
-    const storageKey = `${prefix}/${digest}`;
     const directory = join(this.root, prefix);
     const destination = join(directory, digest);
 
@@ -120,7 +153,11 @@ export class LocalAssetStorage implements AssetStorage {
       if (destinationStat.isSymbolicLink() || !destinationStat.isFile()) {
         throw new ApiError("unsafe_storage_root", "Unsafe asset entry", 500);
       }
-      return { sha256: digest, size: input.bytes.byteLength, storageKey };
+      return {
+        asset,
+        abort: async () => undefined,
+        commit: async () => undefined,
+      };
     }
 
     const temporary = join(
@@ -135,12 +172,54 @@ export class LocalAssetStorage implements AssetStorage {
       await handle.close();
     }
 
-    try {
-      await rename(temporary, destination);
-    } finally {
+    let pending = true;
+    const abort = async (): Promise<void> => {
+      if (!pending) return;
       await rm(temporary, { force: true });
-    }
-    return { sha256: digest, size: input.bytes.byteLength, storageKey };
+      try {
+        await rmdir(directory);
+      } catch (error) {
+        const code = (error as NodeJS.ErrnoException).code;
+        if (code !== "ENOENT" && code !== "ENOTEMPTY") throw error;
+      }
+      pending = false;
+    };
+    const commit = async (): Promise<void> => {
+      if (!pending) return;
+      await this.assertRoot();
+      const currentDirectory = await lstat(directory);
+      if (
+        currentDirectory.isSymbolicLink() ||
+        !currentDirectory.isDirectory()
+      ) {
+        throw new ApiError(
+          "unsafe_storage_root",
+          "Unsafe asset directory",
+          500,
+        );
+      }
+      const existing = await safeStat(destination);
+      if (existing) {
+        if (existing.isSymbolicLink() || !existing.isFile()) {
+          throw new ApiError("unsafe_storage_root", "Unsafe asset entry", 500);
+        }
+        await rm(temporary, { force: true });
+      } else {
+        await rename(temporary, destination);
+      }
+      pending = false;
+    };
+    return { asset, abort, commit };
+  }
+
+  async inspect(input: AssetStorageInput): Promise<StoredAsset> {
+    await this.validateInput(input);
+    const digest = sha256(input.bytes);
+    return {
+      sha256: digest,
+      size: input.bytes.byteLength,
+      storageKey: `${digest.slice(0, 2)}/${digest}`,
+    };
   }
 
   async read(storageKey: string): Promise<Uint8Array> {
@@ -148,12 +227,24 @@ export class LocalAssetStorage implements AssetStorage {
     return readFile(path);
   }
 
+  async exists(storageKey: string): Promise<boolean> {
+    try {
+      await this.resolveStorageKey(storageKey);
+      return true;
+    } catch (error) {
+      if (error instanceof ApiError && error.code === "asset_not_found") {
+        return false;
+      }
+      throw error;
+    }
+  }
+
   async delete(storageKey: string): Promise<void> {
     const path = await this.resolveStorageKey(storageKey);
     await rm(path, { force: true });
   }
 
-  private validateInput(input: AssetStorageInput): void {
+  private async validateInput(input: AssetStorageInput): Promise<void> {
     if (input.bytes.byteLength > this.maxBytes) {
       throw new ApiError(
         "asset_too_large",
@@ -170,6 +261,65 @@ export class LocalAssetStorage implements AssetStorage {
       throw new ApiError(
         "invalid_asset",
         "Asset name, media type, and content do not agree",
+        400,
+      );
+    }
+
+    try {
+      const metadata = await sharp(input.bytes, {
+        animated: true,
+        failOn: "error",
+        limitInputPixels: false,
+        sequentialRead: true,
+      }).metadata();
+      const width = metadata.width;
+      const height = metadata.height;
+      const frames = metadata.pages ?? 1;
+
+      if (
+        !metadata.format ||
+        FORMAT_MEDIA_TYPES[metadata.format] !== input.mediaType
+      ) {
+        throw new ApiError(
+          "invalid_asset",
+          "Asset name, media type, and content do not agree",
+          400,
+        );
+      }
+      if (
+        !width ||
+        !height ||
+        width > MAX_ASSET_DIMENSION ||
+        height > MAX_ASSET_DIMENSION ||
+        width * height * frames > MAX_ASSET_PIXELS
+      ) {
+        throw new ApiError(
+          "asset_dimensions",
+          "Asset dimensions exceed the raster limits",
+          413,
+        );
+      }
+      if (frames > MAX_ASSET_FRAMES) {
+        throw new ApiError(
+          "asset_frames",
+          "Animated assets are not supported",
+          400,
+        );
+      }
+
+      await sharp(input.bytes, {
+        failOn: "error",
+        limitInputPixels: MAX_ASSET_PIXELS,
+        sequentialRead: true,
+      })
+        .timeout({ seconds: 5 })
+        .raw()
+        .toBuffer();
+    } catch (error) {
+      if (error instanceof ApiError) throw error;
+      throw new ApiError(
+        "invalid_asset",
+        "Asset content could not be decoded",
         400,
       );
     }

@@ -91,10 +91,14 @@ export interface Asset {
   mediaType: string;
   size: number;
   storageKey: string;
+  status: "pending" | "ready";
   createdAt: Date;
 }
 
 export interface RepositoryPort {
+  transaction<T>(
+    operation: (repository: RepositoryPort) => Promise<T>,
+  ): Promise<T>;
   isReady(): Promise<boolean>;
   countUsers(): Promise<number>;
   createBootstrapUser(input: {
@@ -200,4 +204,7 @@ export interface RepositoryPort {
   createAsset(
     input: Omit<Asset, "id" | "createdAt"> & { now: Date },
   ): Promise<Asset>;
+  listPendingAssets(createdBefore: Date): Promise<Asset[]>;
+  markAssetReady(id: string): Promise<Asset | undefined>;
+  removePendingAsset(id: string): Promise<boolean>;
 }

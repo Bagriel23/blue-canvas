@@ -15,7 +15,8 @@ Este documento descreve o estado observado no código. O plano completo está em
   Preact/Vite, com assets locais, manifest e validações de segurança.
 - API Fastify com bootstrap, convites, sessões, CSRF, projetos, membros, PATs,
   auditoria e upload de assets.
-- Persistência Prisma/MariaDB e storage local endereçado por conteúdo.
+- Persistência Prisma compatível com MariaDB/MySQL e storage local endereçado
+  por conteúdo.
 - Testes unitários, propriedades, contrato, export build e integração em MariaDB
   10.6/MySQL 8.0.
 
@@ -32,9 +33,8 @@ restauração de versão.
 React/Vite, login/home/library, workspace de três painéis, canvas DOM,
 inspector, preview, compartilhamento e exportação. A identidade visual prevista
 usa Samsung Blue `#1428A0`, neutros, tema inicial do sistema e preferência
-manual persistida em `localStorage`. Locales de produto previstos: pt-BR, inglês
-e coreano. O contrato HTTP atual ainda usa `es` em vez de coreano e terá de ser
-alinhado.
+manual persistida em `localStorage`. Locales de produto e do contrato HTTP:
+pt-BR, inglês (`en-US`) e coreano (`ko-KR`).
 
 ### Kits e templates
 

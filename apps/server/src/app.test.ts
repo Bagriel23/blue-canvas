@@ -1,15 +1,117 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import type { InjectOptions } from "fastify";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { buildApp, type ServerDependencies } from "./app.js";
+import type { AuditEvent, RepositoryPort, Session } from "./domain.js";
 import { InMemoryRepository } from "./memory-repository.js";
-import { ArgonPasswordHasher } from "./security.js";
-import { LocalAssetStorage } from "./storage.js";
+import { ArgonPasswordHasher, type PasswordHasher } from "./security.js";
+import {
+  type AssetStorage,
+  type AssetStorageInput,
+  LocalAssetStorage,
+} from "./storage.js";
 
 const PASSWORD = "correct horse battery staple";
+
+class AuditFailingRepository extends InMemoryRepository {
+  failNextAudit = false;
+  failNextAssetReady = false;
+  failNextCommit = false;
+  failNextSession = false;
+
+  override async transaction<T>(
+    operation: (repository: RepositoryPort) => Promise<T>,
+  ): Promise<T> {
+    return super.transaction(async (repository) => {
+      const result = await operation(repository);
+      if (this.failNextCommit) {
+        this.failNextCommit = false;
+        throw new Error("injected commit failure");
+      }
+      return result;
+    });
+  }
+
+  override async createAuditEvent(
+    input: Parameters<InMemoryRepository["createAuditEvent"]>[0],
+  ): Promise<AuditEvent> {
+    if (this.failNextAudit) {
+      this.failNextAudit = false;
+      throw new Error("injected audit failure");
+    }
+    return super.createAuditEvent(input);
+  }
+
+  override async markAssetReady(id: string) {
+    if (this.failNextAssetReady) {
+      this.failNextAssetReady = false;
+      throw new Error("injected asset finalization failure");
+    }
+    return super.markAssetReady(id);
+  }
+
+  override async createSession(
+    input: Parameters<InMemoryRepository["createSession"]>[0],
+  ): Promise<Session> {
+    if (this.failNextSession) {
+      this.failNextSession = false;
+      throw new Error("injected session failure");
+    }
+    return super.createSession(input);
+  }
+}
+
+class RecordingPasswordHasher implements PasswordHasher {
+  readonly verifiedHashes: string[] = [];
+  private readonly delegate = new ArgonPasswordHasher();
+
+  hash(password: string): Promise<string> {
+    return this.delegate.hash(password);
+  }
+
+  async verify(passwordHash: string, password: string): Promise<boolean> {
+    this.verifiedHashes.push(passwordHash);
+    return this.delegate.verify(passwordHash, password);
+  }
+}
+
+class PublishFailingStorage implements AssetStorage {
+  constructor(private readonly delegate: AssetStorage) {}
+
+  inspect(input: AssetStorageInput) {
+    return this.delegate.inspect(input);
+  }
+
+  exists(storageKey: string) {
+    return this.delegate.exists(storageKey);
+  }
+
+  async stage(input: AssetStorageInput) {
+    const staged = await this.delegate.stage(input);
+    return {
+      ...staged,
+      commit: async () => {
+        throw new Error("injected publication failure");
+      },
+    };
+  }
+
+  put(input: AssetStorageInput) {
+    return this.delegate.put(input);
+  }
+
+  read(storageKey: string) {
+    return this.delegate.read(storageKey);
+  }
+
+  delete(storageKey: string) {
+    return this.delegate.delete(storageKey);
+  }
+}
 
 function cookieFrom(response: { headers: Record<string, unknown> }): string {
   const header = response.headers["set-cookie"];
@@ -20,9 +122,10 @@ function cookieFrom(response: { headers: Record<string, unknown> }): string {
 
 function multipartPng(): { body: Buffer; contentType: string } {
   const boundary = "blue-canvas-test-boundary";
-  const png = Buffer.from([
-    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00,
-  ]);
+  const png = Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
+    "base64",
+  );
   return {
     contentType: `multipart/form-data; boundary=${boundary}`,
     body: Buffer.concat([
@@ -87,6 +190,14 @@ describe("application server", () => {
       payload: { email },
     });
     expect(invitation.statusCode).toBe(201);
+    const manualLink = new URL(
+      invitation.json().manualLink as string,
+      "https://blue-canvas.test",
+    );
+    expect(manualLink.search).toBe("");
+    expect(new URLSearchParams(manualLink.hash.slice(1)).get("token")).toBe(
+      invitation.json().token,
+    );
     const accepted = await admin.app.inject({
       method: "POST",
       url: "/api/v1/auth/invitations/accept",
@@ -215,7 +326,14 @@ describe("application server", () => {
     const token = invitation.json().token as string;
 
     expect(invitation.statusCode).toBe(201);
-    expect(invitation.json().manualLink).toContain(encodeURIComponent(token));
+    const manualLink = new URL(
+      invitation.json().manualLink as string,
+      "https://blue-canvas.test",
+    );
+    expect(manualLink.search).toBe("");
+    expect(new URLSearchParams(manualLink.hash.slice(1)).get("token")).toBe(
+      token,
+    );
     expect(JSON.stringify(repository.snapshot())).not.toContain(token);
 
     const accepted = await admin.app.inject({
@@ -239,6 +357,334 @@ describe("application server", () => {
       },
     });
     expect(reused.statusCode).toBe(410);
+  });
+
+  it("verifies Argon2 for absent and disabled users with identical failures", async () => {
+    const passwordHasher = new RecordingPasswordHasher();
+    const app = buildApp({ ...dependencies, passwordHasher });
+    const bootstrap = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/bootstrap-admin",
+      payload: {
+        email: "disabled@example.com",
+        displayName: "Disabled",
+        password: PASSWORD,
+        setupSecret: "development setup secret",
+      },
+    });
+    expect(bootstrap.statusCode).toBe(201);
+    const snapshot = repository.snapshot() as {
+      users: { status: "active" | "disabled" }[];
+    };
+    const disabled = snapshot.users[0];
+    if (!disabled) throw new Error("Bootstrap user missing");
+    disabled.status = "disabled";
+
+    const missing = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/login",
+      headers: { "x-request-id": "login-enumeration" },
+      payload: { email: "missing@example.com", password: PASSWORD },
+    });
+    const disabledResponse = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/login",
+      headers: { "x-request-id": "login-enumeration" },
+      payload: { email: "disabled@example.com", password: PASSWORD },
+    });
+
+    expect(passwordHasher.verifiedHashes).toHaveLength(2);
+    expect(passwordHasher.verifiedHashes[0]).toMatch(/^\$argon2id\$/u);
+    expect(disabledResponse.statusCode).toBe(401);
+    expect(missing.body).toBe(disabledResponse.body);
+  });
+
+  it("rolls back bootstrap when its audit event fails", async () => {
+    const failingRepository = new AuditFailingRepository();
+    failingRepository.failNextAudit = true;
+    const app = buildApp({ ...dependencies, repository: failingRepository });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/bootstrap-admin",
+      payload: {
+        email: "rollback@example.com",
+        displayName: "Rollback",
+        password: PASSWORD,
+        setupSecret: "development setup secret",
+      },
+    });
+
+    expect(response.statusCode).toBe(500);
+    expect(await failingRepository.countUsers()).toBe(0);
+    expect(failingRepository.snapshot()).toMatchObject({
+      sessions: [],
+      auditEvents: [],
+    });
+  });
+
+  it("rolls back every audited mutation when audit insertion fails", async () => {
+    const failingRepository = new AuditFailingRepository();
+    repository = failingRepository;
+    dependencies = { ...dependencies, repository: failingRepository };
+    const admin = await bootstrap();
+    const assertAuditRollback = async (request: InjectOptions) => {
+      const before = JSON.stringify(failingRepository.snapshot());
+      failingRepository.failNextAudit = true;
+      const response = await admin.app.inject(request);
+      expect(response.statusCode).toBe(500);
+      expect(JSON.stringify(failingRepository.snapshot())).toBe(before);
+    };
+    const authHeaders = {
+      cookie: admin.cookie,
+      "x-csrf-token": admin.csrf,
+    };
+
+    await assertAuditRollback({
+      method: "POST",
+      url: "/api/v1/invitations",
+      headers: authHeaders,
+      payload: { email: "rolled-back-invite@example.com" },
+    });
+    await assertAuditRollback({
+      method: "POST",
+      url: "/api/v1/projects",
+      headers: authHeaders,
+      payload: { name: "Rolled back project" },
+    });
+
+    const projectResponse = await admin.app.inject({
+      method: "POST",
+      url: "/api/v1/projects",
+      headers: authHeaders,
+      payload: { name: "Atomic project" },
+    });
+    const projectId = projectResponse.json().project.id as string;
+    await assertAuditRollback({
+      method: "PATCH",
+      url: `/api/v1/projects/${projectId}`,
+      headers: authHeaders,
+      payload: { name: "Rolled back name" },
+    });
+    await assertAuditRollback({
+      method: "POST",
+      url: `/api/v1/projects/${projectId}/archive`,
+      headers: authHeaders,
+    });
+    await assertAuditRollback({
+      method: "POST",
+      url: `/api/v1/projects/${projectId}/invitations`,
+      headers: authHeaders,
+      payload: {
+        email: "rolled-back-project-invite@example.com",
+        role: "editor",
+      },
+    });
+
+    const memberUser = await failingRepository.createUser({
+      email: "atomic-member@example.com",
+      displayName: "Atomic Member",
+      passwordHash: await dependencies.passwordHasher.hash(PASSWORD),
+      locale: "en-US",
+      isAdmin: false,
+      now: dependencies.now?.() ?? new Date(),
+    });
+    await assertAuditRollback({
+      method: "POST",
+      url: `/api/v1/projects/${projectId}/members`,
+      headers: authHeaders,
+      payload: { email: memberUser.email, role: "editor" },
+    });
+    await admin.app.inject({
+      method: "POST",
+      url: `/api/v1/projects/${projectId}/members`,
+      headers: authHeaders,
+      payload: { email: memberUser.email, role: "editor" },
+    });
+    await assertAuditRollback({
+      method: "PATCH",
+      url: `/api/v1/projects/${projectId}/members/${memberUser.id}`,
+      headers: authHeaders,
+      payload: { role: "viewer" },
+    });
+    await assertAuditRollback({
+      method: "DELETE",
+      url: `/api/v1/projects/${projectId}/members/${memberUser.id}`,
+      headers: authHeaders,
+    });
+
+    await assertAuditRollback({
+      method: "POST",
+      url: "/api/v1/personal-access-tokens",
+      headers: authHeaders,
+      payload: { name: "rolled back PAT", scopes: ["projects:read"] },
+    });
+    const patResponse = await admin.app.inject({
+      method: "POST",
+      url: "/api/v1/personal-access-tokens",
+      headers: authHeaders,
+      payload: { name: "atomic PAT", scopes: ["projects:read"] },
+    });
+    await assertAuditRollback({
+      method: "DELETE",
+      url: `/api/v1/personal-access-tokens/${patResponse.json().personalAccessToken.id as string}`,
+      headers: authHeaders,
+    });
+
+    const upload = multipartPng();
+    const filesBefore = await readdir(directory, { recursive: true });
+    await assertAuditRollback({
+      method: "POST",
+      url: `/api/v1/projects/${projectId}/assets`,
+      headers: { ...authHeaders, "content-type": upload.contentType },
+      payload: upload.body,
+    });
+    expect(await readdir(directory, { recursive: true })).toEqual(filesBefore);
+
+    const invitation = await admin.app.inject({
+      method: "POST",
+      url: "/api/v1/invitations",
+      headers: authHeaders,
+      payload: { email: "rolled-back-acceptance@example.com" },
+    });
+    await assertAuditRollback({
+      method: "POST",
+      url: "/api/v1/auth/invitations/accept",
+      payload: {
+        token: invitation.json().token,
+        displayName: "Rolled Back Acceptance",
+        password: PASSWORD,
+      },
+    });
+    await assertAuditRollback({
+      method: "POST",
+      url: "/api/v1/auth/logout",
+      headers: authHeaders,
+    });
+  });
+
+  it("rolls back a login audit when session creation fails", async () => {
+    const failingRepository = new AuditFailingRepository();
+    repository = failingRepository;
+    dependencies = { ...dependencies, repository: failingRepository };
+    const admin = await bootstrap();
+    const before = JSON.stringify(failingRepository.snapshot());
+    failingRepository.failNextSession = true;
+
+    const response = await admin.app.inject({
+      method: "POST",
+      url: "/api/v1/auth/login",
+      payload: { email: "admin@example.com", password: PASSWORD },
+    });
+
+    expect(response.statusCode).toBe(500);
+    expect(JSON.stringify(failingRepository.snapshot())).toBe(before);
+  });
+
+  it("does not publish an asset when its database transaction fails to commit", async () => {
+    const failingRepository = new AuditFailingRepository();
+    repository = failingRepository;
+    dependencies = { ...dependencies, repository: failingRepository };
+    const admin = await bootstrap();
+    const project = await admin.app.inject({
+      method: "POST",
+      url: "/api/v1/projects",
+      headers: { cookie: admin.cookie, "x-csrf-token": admin.csrf },
+      payload: { name: "Commit failure" },
+    });
+    const beforeRepository = JSON.stringify(failingRepository.snapshot());
+    const beforeFiles = await readdir(directory, { recursive: true });
+    const upload = multipartPng();
+    failingRepository.failNextCommit = true;
+
+    const response = await admin.app.inject({
+      method: "POST",
+      url: `/api/v1/projects/${project.json().project.id as string}/assets`,
+      headers: {
+        cookie: admin.cookie,
+        "x-csrf-token": admin.csrf,
+        "content-type": upload.contentType,
+      },
+      payload: upload.body,
+    });
+
+    expect(response.statusCode).toBe(500);
+    expect(JSON.stringify(failingRepository.snapshot())).toBe(beforeRepository);
+    expect(await readdir(directory, { recursive: true })).toEqual(beforeFiles);
+  });
+
+  it("does not retain an asset row when staged publication fails", async () => {
+    const realStorage = await LocalAssetStorage.create(directory);
+    dependencies = {
+      ...dependencies,
+      storage: new PublishFailingStorage(realStorage),
+    };
+    const admin = await bootstrap();
+    const project = await admin.app.inject({
+      method: "POST",
+      url: "/api/v1/projects",
+      headers: { cookie: admin.cookie, "x-csrf-token": admin.csrf },
+      payload: { name: "Publication failure" },
+    });
+    const upload = multipartPng();
+
+    const response = await admin.app.inject({
+      method: "POST",
+      url: `/api/v1/projects/${project.json().project.id as string}/assets`,
+      headers: {
+        cookie: admin.cookie,
+        "x-csrf-token": admin.csrf,
+        "content-type": upload.contentType,
+      },
+      payload: upload.body,
+    });
+
+    expect(response.statusCode).toBe(500);
+    expect(repository.snapshot()).toMatchObject({ assets: [] });
+    expect(await readdir(directory, { recursive: true })).toEqual([]);
+  });
+
+  it("reconciles a stale pending asset after database finalization fails", async () => {
+    const failingRepository = new AuditFailingRepository();
+    let currentTime = new Date("2026-08-24T12:00:00.000Z");
+    repository = failingRepository;
+    dependencies = {
+      ...dependencies,
+      repository: failingRepository,
+      now: () => currentTime,
+    };
+    const admin = await bootstrap();
+    const project = await admin.app.inject({
+      method: "POST",
+      url: "/api/v1/projects",
+      headers: { cookie: admin.cookie, "x-csrf-token": admin.csrf },
+      payload: { name: "Reconciled publication" },
+    });
+    const upload = multipartPng();
+    failingRepository.failNextAssetReady = true;
+
+    const response = await admin.app.inject({
+      method: "POST",
+      url: `/api/v1/projects/${project.json().project.id as string}/assets`,
+      headers: {
+        cookie: admin.cookie,
+        "x-csrf-token": admin.csrf,
+        "content-type": upload.contentType,
+      },
+      payload: upload.body,
+    });
+    expect(response.statusCode).toBe(500);
+    expect(failingRepository.snapshot()).toMatchObject({
+      assets: [{ status: "pending" }],
+    });
+
+    currentTime = new Date("2026-08-24T12:11:00.000Z");
+    const readiness = await admin.app.inject({ url: "/api/v1/ready" });
+
+    expect(readiness.statusCode).toBe(200);
+    expect(failingRepository.snapshot()).toMatchObject({
+      assets: [{ status: "ready" }],
+    });
   });
 
   it("consumes an invitation once under concurrent acceptance", async () => {
@@ -404,6 +850,14 @@ describe("application server", () => {
       payload: { email: "project-editor@example.com", role: "editor" },
     });
     expect(invitation.statusCode).toBe(201);
+    const manualLink = new URL(
+      invitation.json().manualLink as string,
+      "https://blue-canvas.test",
+    );
+    expect(manualLink.search).toBe("");
+    expect(new URLSearchParams(manualLink.hash.slice(1)).get("token")).toBe(
+      invitation.json().token,
+    );
 
     const accepted = await owner.app.inject({
       method: "POST",
@@ -452,6 +906,52 @@ describe("application server", () => {
       headers: { cookie: memberCookie },
     });
     expect(invisible.statusCode).toBe(403);
+  });
+
+  it("audits only the successful request during concurrent member removal", async () => {
+    const owner = await bootstrap();
+    const project = await owner.app.inject({
+      method: "POST",
+      url: "/api/v1/projects",
+      headers: { cookie: owner.cookie, "x-csrf-token": owner.csrf },
+      payload: { name: "Concurrent removal" },
+    });
+    const member = await repository.createUser({
+      email: "concurrent-remove@example.com",
+      displayName: "Concurrent Remove",
+      passwordHash: await dependencies.passwordHasher.hash(PASSWORD),
+      locale: "en-US",
+      isAdmin: false,
+      now: dependencies.now?.() ?? new Date(),
+    });
+    const projectId = project.json().project.id as string;
+    await owner.app.inject({
+      method: "POST",
+      url: `/api/v1/projects/${projectId}/members`,
+      headers: { cookie: owner.cookie, "x-csrf-token": owner.csrf },
+      payload: { email: member.email, role: "viewer" },
+    });
+    const removal = () =>
+      owner.app.inject({
+        method: "DELETE",
+        url: `/api/v1/projects/${projectId}/members/${member.id}`,
+        headers: { cookie: owner.cookie, "x-csrf-token": owner.csrf },
+      });
+
+    const responses = await Promise.all([removal(), removal()]);
+
+    expect(responses.map(({ statusCode }) => statusCode).sort()).toEqual([
+      204, 404,
+    ]);
+    const snapshot = repository.snapshot() as {
+      auditEvents: { action: string; targetId: string | null }[];
+    };
+    expect(
+      snapshot.auditEvents.filter(
+        ({ action, targetId }) =>
+          action === "project.member.remove" && targetId === member.id,
+      ),
+    ).toHaveLength(1);
   });
 
   it("accepts bearer tokens without CSRF but enforces their scopes", async () => {
@@ -529,7 +1029,7 @@ describe("application server", () => {
     expect(response.json().asset).toMatchObject({
       originalName: "pixel.png",
       mediaType: "image/png",
-      size: 9,
+      size: 68,
     });
     expect(response.json().asset).not.toHaveProperty("storageKey");
   });

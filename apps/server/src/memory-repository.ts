@@ -14,17 +14,35 @@ import type {
 } from "./domain.js";
 
 export class InMemoryRepository implements RepositoryPort {
-  private readonly users = new Map<string, User>();
-  private readonly sessions = new Map<string, Session>();
-  private readonly invitations = new Map<string, Invitation>();
-  private readonly projects = new Map<string, Project>();
-  private readonly members = new Map<string, ProjectMember>();
-  private readonly personalAccessTokens = new Map<
-    string,
-    PersonalAccessToken
-  >();
-  private readonly auditEvents = new Map<string, AuditEvent>();
-  private readonly assets = new Map<string, Asset>();
+  private users = new Map<string, User>();
+  private sessions = new Map<string, Session>();
+  private invitations = new Map<string, Invitation>();
+  private projects = new Map<string, Project>();
+  private members = new Map<string, ProjectMember>();
+  private personalAccessTokens = new Map<string, PersonalAccessToken>();
+  private auditEvents = new Map<string, AuditEvent>();
+  private assets = new Map<string, Asset>();
+  private transactionTail: Promise<void> = Promise.resolve();
+
+  async transaction<T>(
+    operation: (repository: RepositoryPort) => Promise<T>,
+  ): Promise<T> {
+    let release = (): void => undefined;
+    const preceding = this.transactionTail;
+    this.transactionTail = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await preceding;
+    const snapshot = this.cloneState();
+    try {
+      return await operation(this);
+    } catch (error) {
+      this.restoreState(snapshot);
+      throw error;
+    } finally {
+      release();
+    }
+  }
 
   async isReady(): Promise<boolean> {
     return true;
@@ -347,10 +365,30 @@ export class InMemoryRepository implements RepositoryPort {
       mediaType: input.mediaType,
       size: input.size,
       storageKey: input.storageKey,
+      status: input.status,
       createdAt: input.now,
     };
     this.assets.set(asset.id, asset);
     return asset;
+  }
+
+  async listPendingAssets(createdBefore: Date): Promise<Asset[]> {
+    return [...this.assets.values()].filter(
+      (asset) => asset.status === "pending" && asset.createdAt <= createdBefore,
+    );
+  }
+
+  async markAssetReady(id: string): Promise<Asset | undefined> {
+    const asset = this.assets.get(id);
+    if (!asset || asset.status !== "pending") return undefined;
+    asset.status = "ready";
+    return asset;
+  }
+
+  async removePendingAsset(id: string): Promise<boolean> {
+    const asset = this.assets.get(id);
+    if (!asset || asset.status !== "pending") return false;
+    return this.assets.delete(id);
   }
 
   snapshot(): unknown {
@@ -390,5 +428,29 @@ export class InMemoryRepository implements RepositoryPort {
     };
     this.users.set(user.id, user);
     return user;
+  }
+
+  private cloneState() {
+    return structuredClone({
+      users: this.users,
+      sessions: this.sessions,
+      invitations: this.invitations,
+      projects: this.projects,
+      members: this.members,
+      personalAccessTokens: this.personalAccessTokens,
+      auditEvents: this.auditEvents,
+      assets: this.assets,
+    });
+  }
+
+  private restoreState(snapshot: ReturnType<InMemoryRepository["cloneState"]>) {
+    this.users = snapshot.users;
+    this.sessions = snapshot.sessions;
+    this.invitations = snapshot.invitations;
+    this.projects = snapshot.projects;
+    this.members = snapshot.members;
+    this.personalAccessTokens = snapshot.personalAccessTokens;
+    this.auditEvents = snapshot.auditEvents;
+    this.assets = snapshot.assets;
   }
 }

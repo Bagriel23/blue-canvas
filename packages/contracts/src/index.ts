@@ -4,7 +4,7 @@ export const emailSchema = z.string().trim().toLowerCase().email().max(320);
 
 export const passwordSchema = z.string().min(12).max(1024);
 export const displayNameSchema = z.string().trim().min(1).max(100);
-export const localeSchema = z.enum(["en-US", "pt-BR", "es"]);
+export const localeSchema = z.enum(["en-US", "pt-BR", "ko-KR"]);
 export const projectRoleSchema = z.enum([
   "owner",
   "editor",

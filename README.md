@@ -52,7 +52,7 @@ desenvolvimento. Ainda não há um servidor de frontend utilizável.
 | -------------------------------------- | ------------------------------------------ |
 | `npm run check`                        | Formatação, lint, tipos, build e testes    |
 | `npm test`                             | Smoke tests e testes Vitest                |
-| `npm run test:integration`             | Migrações e integração real com MariaDB    |
+| `npm run test:integration`             | Migrações e integração MariaDB/MySQL       |
 | `npm run test:export-fixtures`         | Compila fixtures React e Preact exportadas |
 | `npm run db:generate`                  | Gera o Prisma Client                       |
 | `npm run db:migrate`                   | Aplica as migrations versionadas           |

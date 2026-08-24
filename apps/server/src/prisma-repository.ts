@@ -18,9 +18,11 @@ import type {
   Session,
   User,
 } from "./domain.js";
+import { ApiError } from "./core.js";
 import {
   Prisma,
   PrismaClient,
+  type Asset as PrismaAsset,
   type AuditEvent as PrismaAuditEvent,
   type PersonalAccessToken as PrismaPersonalAccessToken,
 } from "./generated/prisma/client.js";
@@ -58,8 +60,30 @@ function auditEvent(value: PrismaAuditEvent): AuditEvent {
   return { ...value, metadata: metadataSchema.parse(value.metadata) };
 }
 
+function asset(value: PrismaAsset): Asset {
+  return { ...value, status: z.enum(["pending", "ready"]).parse(value.status) };
+}
+
+function isPrismaError(error: unknown, code: string): boolean {
+  return (
+    error instanceof Prisma.PrismaClientKnownRequestError && error.code === code
+  );
+}
+
 export class PrismaRepository implements RepositoryPort {
-  constructor(readonly client: PrismaClient) {}
+  constructor(
+    readonly client: PrismaClient | Prisma.TransactionClient,
+    private readonly inTransaction = false,
+  ) {}
+
+  async transaction<T>(
+    operation: (repository: RepositoryPort) => Promise<T>,
+  ): Promise<T> {
+    if (this.inTransaction) return operation(this);
+    return (this.client as PrismaClient).$transaction((transaction) =>
+      operation(new PrismaRepository(transaction, true)),
+    );
+  }
 
   async isReady(): Promise<boolean> {
     await this.client.$queryRaw`SELECT 1`;
@@ -73,7 +97,7 @@ export class PrismaRepository implements RepositoryPort {
   async createBootstrapUser(
     input: Parameters<RepositoryPort["createBootstrapUser"]>[0],
   ): Promise<User | undefined> {
-    return this.client.$transaction(async (transaction) => {
+    return this.withinTransaction(async (transaction) => {
       await transaction.$queryRaw`SELECT name FROM system_locks WHERE name = 'bootstrap' FOR UPDATE`;
       const rows = await transaction.$queryRaw<{ count: bigint | number }[]>`
         SELECT COUNT(*) AS count FROM users FOR UPDATE
@@ -98,19 +122,26 @@ export class PrismaRepository implements RepositoryPort {
   async createUser(
     input: Parameters<RepositoryPort["createUser"]>[0],
   ): Promise<User> {
-    return this.client.user.create({
-      data: {
-        id: randomUUID(),
-        email: input.email,
-        displayName: input.displayName,
-        passwordHash: input.passwordHash,
-        status: "active",
-        locale: input.locale,
-        isAdmin: input.isAdmin,
-        createdAt: input.now,
-        updatedAt: input.now,
-      },
-    });
+    try {
+      return await this.client.user.create({
+        data: {
+          id: randomUUID(),
+          email: input.email,
+          displayName: input.displayName,
+          passwordHash: input.passwordHash,
+          status: "active",
+          locale: input.locale,
+          isAdmin: input.isAdmin,
+          createdAt: input.now,
+          updatedAt: input.now,
+        },
+      });
+    } catch (error) {
+      if (isPrismaError(error, "P2002")) {
+        throw new ApiError("email_exists", "Email is already registered", 409);
+      }
+      throw error;
+    }
   }
 
   async findUserByEmail(email: string): Promise<User | undefined> {
@@ -201,7 +232,7 @@ export class PrismaRepository implements RepositoryPort {
   async acceptInvitationAndCreateUser(
     input: Parameters<RepositoryPort["acceptInvitationAndCreateUser"]>[0],
   ): Promise<User | undefined> {
-    return this.client.$transaction(async (transaction) => {
+    return this.withinTransaction(async (transaction) => {
       const rows = await transaction.$queryRaw<
         {
           id: string;
@@ -229,19 +260,29 @@ export class PrismaRepository implements RepositoryPort {
         where: { id: invitation.id },
         data: { acceptedAt: input.now },
       });
-      const user = await transaction.user.create({
-        data: {
-          id: randomUUID(),
-          email: invitation.email,
-          displayName: input.displayName,
-          passwordHash: input.passwordHash,
-          status: "active",
-          locale: input.locale,
-          isAdmin: false,
-          createdAt: input.now,
-          updatedAt: input.now,
-        },
-      });
+      let user: User;
+      try {
+        user = await transaction.user.create({
+          data: {
+            id: randomUUID(),
+            email: invitation.email,
+            displayName: input.displayName,
+            passwordHash: input.passwordHash,
+            status: "active",
+            locale: input.locale,
+            isAdmin: false,
+            createdAt: input.now,
+            updatedAt: input.now,
+          },
+        });
+      } catch (error) {
+        if (!isPrismaError(error, "P2002")) throw error;
+        await transaction.invitation.update({
+          where: { id: invitation.id },
+          data: { acceptedAt: null },
+        });
+        return undefined;
+      }
       if (invitation.projectId && invitation.role) {
         await transaction.projectMember.create({
           data: {
@@ -261,7 +302,7 @@ export class PrismaRepository implements RepositoryPort {
   async createProject(
     input: Parameters<RepositoryPort["createProject"]>[0],
   ): Promise<Project> {
-    return this.client.$transaction(async (transaction) => {
+    return this.withinTransaction(async (transaction) => {
       const project = await transaction.project.create({
         data: {
           id: randomUUID(),
@@ -323,16 +364,23 @@ export class PrismaRepository implements RepositoryPort {
   async addProjectMember(
     input: Parameters<RepositoryPort["addProjectMember"]>[0],
   ): Promise<ProjectMember> {
-    return this.client.projectMember.create({
-      data: {
-        id: randomUUID(),
-        projectId: input.projectId,
-        userId: input.userId,
-        role: input.role,
-        createdAt: input.now,
-        updatedAt: input.now,
-      },
-    });
+    try {
+      return await this.client.projectMember.create({
+        data: {
+          id: randomUUID(),
+          projectId: input.projectId,
+          userId: input.userId,
+          role: input.role,
+          createdAt: input.now,
+          updatedAt: input.now,
+        },
+      });
+    } catch (error) {
+      if (isPrismaError(error, "P2002")) {
+        throw new ApiError("member_exists", "User is already a member", 409);
+      }
+      throw error;
+    }
   }
 
   async updateProjectMember(
@@ -452,19 +500,57 @@ export class PrismaRepository implements RepositoryPort {
   async createAsset(
     input: Parameters<RepositoryPort["createAsset"]>[0],
   ): Promise<Asset> {
-    return this.client.asset.create({
-      data: {
-        id: randomUUID(),
-        projectId: input.projectId,
-        uploadedById: input.uploadedById,
-        sha256: input.sha256,
-        originalName: input.originalName,
-        mediaType: input.mediaType,
-        size: input.size,
-        storageKey: input.storageKey,
-        createdAt: input.now,
-      },
+    return asset(
+      await this.client.asset.create({
+        data: {
+          id: randomUUID(),
+          projectId: input.projectId,
+          uploadedById: input.uploadedById,
+          sha256: input.sha256,
+          originalName: input.originalName,
+          mediaType: input.mediaType,
+          size: input.size,
+          storageKey: input.storageKey,
+          status: input.status,
+          createdAt: input.now,
+        },
+      }),
+    );
+  }
+
+  async listPendingAssets(createdBefore: Date): Promise<Asset[]> {
+    return (
+      await this.client.asset.findMany({
+        where: { status: "pending", createdAt: { lte: createdBefore } },
+        orderBy: { createdAt: "asc" },
+      })
+    ).map(asset);
+  }
+
+  async markAssetReady(id: string): Promise<Asset | undefined> {
+    const result = await this.client.asset.updateMany({
+      where: { id, status: "pending" },
+      data: { status: "ready" },
     });
+    if (result.count === 0) return undefined;
+    const value = await this.client.asset.findUnique({ where: { id } });
+    return value ? asset(value) : undefined;
+  }
+
+  async removePendingAsset(id: string): Promise<boolean> {
+    const result = await this.client.asset.deleteMany({
+      where: { id, status: "pending" },
+    });
+    return result.count === 1;
+  }
+
+  private async withinTransaction<T>(
+    operation: (transaction: Prisma.TransactionClient) => Promise<T>,
+  ): Promise<T> {
+    if (this.inTransaction) {
+      return operation(this.client as Prisma.TransactionClient);
+    }
+    return (this.client as PrismaClient).$transaction(operation);
   }
 }
 

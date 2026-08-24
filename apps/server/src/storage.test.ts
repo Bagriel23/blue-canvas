@@ -12,11 +12,15 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
+import sharp from "sharp";
 
 import { ApiError } from "./core.js";
 import { LocalAssetStorage } from "./storage.js";
 
-const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00]);
+const PNG = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
+  "base64",
+);
 
 const directories: string[] = [];
 
@@ -70,6 +74,29 @@ describe("local asset storage", () => {
     expect(await readdir(join(root, first.sha256.slice(0, 2)))).toEqual([
       first.sha256,
     ]);
+  });
+
+  it("keeps staged content private until commit and removes it on abort", async () => {
+    const root = await temporaryDirectory();
+    const storage = await LocalAssetStorage.create(root);
+    const input = {
+      bytes: PNG,
+      mediaType: "image/png",
+      originalName: "pixel.png",
+    } as const;
+
+    const aborted = await storage.stage(input);
+    await expect(storage.read(aborted.asset.storageKey)).rejects.toMatchObject({
+      code: "asset_not_found",
+    } satisfies Partial<ApiError>);
+    await aborted.abort();
+    expect(await readdir(root, { recursive: true })).toEqual([]);
+
+    const committed = await storage.stage(input);
+    await committed.commit();
+    await expect(storage.read(committed.asset.storageKey)).resolves.toEqual(
+      PNG,
+    );
   });
 
   it("reads stored bytes and reports a deleted asset as missing", async () => {
@@ -180,6 +207,67 @@ describe("local asset storage", () => {
       }),
     ).rejects.toMatchObject({
       code: "invalid_asset",
+    } satisfies Partial<ApiError>);
+  });
+
+  it("rejects a corrupt image even when its magic prefix is valid", async () => {
+    const root = await temporaryDirectory();
+    const storage = await LocalAssetStorage.create(root);
+
+    await expect(
+      storage.put({
+        bytes: PNG.subarray(0, 16),
+        mediaType: "image/png",
+        originalName: "truncated.png",
+      }),
+    ).rejects.toMatchObject({
+      code: "invalid_asset",
+    } satisfies Partial<ApiError>);
+  });
+
+  it("rejects raster dimensions and decoded pixel counts above the bounds", async () => {
+    const root = await temporaryDirectory();
+    const storage = await LocalAssetStorage.create(root);
+    const tooWide = await sharp({
+      create: { width: 8193, height: 1, channels: 3, background: "red" },
+    })
+      .png()
+      .toBuffer();
+    const tooManyPixels = await sharp({
+      create: { width: 5000, height: 4000, channels: 3, background: "red" },
+    })
+      .png()
+      .toBuffer();
+
+    for (const bytes of [tooWide, tooManyPixels]) {
+      await expect(
+        storage.put({
+          bytes,
+          mediaType: "image/png",
+          originalName: "bounded.png",
+        }),
+      ).rejects.toMatchObject({
+        code: "asset_dimensions",
+      } satisfies Partial<ApiError>);
+    }
+  });
+
+  it("rejects animated images beyond the frame policy", async () => {
+    const root = await temporaryDirectory();
+    const storage = await LocalAssetStorage.create(root);
+    const animatedGif = Buffer.from(
+      "R0lGODlhAQABAPAAAP8AAAAAACH/C05FVFNDQVBFMi4wAwEAAAAh+QQAAAAAACwAAAAAAQABAAACAkQBACH5BAAAAAAALAAAAAABAAEAgAAA/wAAAAICRAEAOw==",
+      "base64",
+    );
+
+    await expect(
+      storage.put({
+        bytes: animatedGif,
+        mediaType: "image/gif",
+        originalName: "animated.gif",
+      }),
+    ).rejects.toMatchObject({
+      code: "asset_frames",
     } satisfies Partial<ApiError>);
   });
 

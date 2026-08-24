@@ -90,3 +90,14 @@ test("the clean check builds workspace entry points before running tests", async
     /npm run typecheck && npm run build && npm run test$/u,
   );
 });
+
+test("database integration generates clean-checkout prerequisites", async () => {
+  const rootPackage = JSON.parse(await readFile("package.json", "utf8"));
+  const integration = rootPackage.scripts["test:integration"];
+
+  assert.match(integration, /build -w @blue-canvas\/contracts/u);
+  assert.match(integration, /db:generate/u);
+  assert.ok(
+    integration.indexOf("db:generate") < integration.indexOf("db:migrate"),
+  );
+});

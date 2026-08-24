@@ -3,6 +3,11 @@ import { describe, expect, it } from "vitest";
 import * as contracts from "./index.js";
 
 describe("server contracts", () => {
+  it("supports exactly the approved product locales", () => {
+    expect(contracts.localeSchema.options).toEqual(["en-US", "pt-BR", "ko-KR"]);
+    expect(() => contracts.localeSchema.parse("es")).toThrow();
+  });
+
   it("normalizes user email addresses at the API boundary", () => {
     expect(
       contracts.loginRequestSchema.parse({

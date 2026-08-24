@@ -154,6 +154,7 @@ model Asset {
   mediaType    String   @db.VarChar(100)
   size         Int      @db.UnsignedInt
   storageKey   String   @db.VarChar(80)
+  status       String   @default("ready") @db.VarChar(16)
   createdAt    DateTime @db.DateTime(3)
   project      Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   uploadedBy   User     @relation("AssetUploader", fields: [uploadedById], references: [id], onDelete: Restrict)

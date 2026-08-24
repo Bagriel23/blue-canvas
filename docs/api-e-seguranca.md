@@ -17,7 +17,8 @@ continuam sujeitos ao papel do usuário no projeto.
 
 Tokens brutos de sessão, convite, CSRF e PAT não são persistidos. O servidor
 armazena hashes SHA-256. Senhas usam Argon2id. Convites e PATs são exibidos em
-texto puro apenas na criação.
+texto puro apenas na criação. Links manuais de convite carregam o token no
+fragmento `#token=...`, que não faz parte da URL enviada ao servidor.
 
 ## Rotas públicas
 
@@ -30,7 +31,7 @@ texto puro apenas na criação.
 | `POST` | `/auth/invitations/accept` | Consome convite e cria conta/sessão              |
 
 O bootstrap só funciona se não existir usuário. Senhas aceitas têm de 12 a 1.024
-caracteres. Locales aceitos atualmente: `en-US`, `pt-BR` e `es`.
+caracteres. Locales aceitos atualmente: `en-US`, `pt-BR` e `ko-KR`.
 
 ## Rotas autenticadas
 
@@ -122,9 +123,14 @@ Erros seguem o envelope:
 
 O servidor aceita `X-Request-Id` apenas no formato permitido e sempre devolve
 `x-request-id`. Logs Pino removem headers de autorização/cookie, senhas, segredo
-de setup, token de convite e `Set-Cookie`.
+de setup, token de convite e `Set-Cookie`. Cada mutação auditada e seu evento de
+auditoria são gravados na mesma transação do banco.
 
 Uploads usam `multipart/form-data`, campo `file`, limite de 25 MiB e aceitam
-GIF, JPEG, PNG e WebP quando extensão, MIME e assinatura coincidem. O storage é
-endereçado por SHA-256, faz escrita atômica e rejeita raízes, diretórios e
-arquivos simbólicos. SVG não é aceito pelo endpoint de upload atual.
+GIF, JPEG, PNG e WebP estáticos quando extensão, MIME e conteúdo decodificado
+coincidem. Largura e altura são limitadas a 8.192 pixels, o raster a 16.777.216
+pixels e a decodificação tem timeout. O storage é endereçado por SHA-256, faz
+escrita atômica e usa um estado persistido `pending` até a publicação do arquivo
+e a finalização auditada como `ready`. Readiness reconcilia publicações
+pendentes antigas. O adapter rejeita raízes, diretórios e arquivos simbólicos.
+SVG e imagens animadas não são aceitos pelo endpoint de upload atual.
