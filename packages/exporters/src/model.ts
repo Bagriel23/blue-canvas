@@ -228,10 +228,8 @@ function validateCss(
 function validateScopeReferences(
   document: DesignDocument,
   pages: DesignPage[],
-  scope: ExportScope,
   diagnostics: ExportDiagnostic[],
 ): void {
-  if (scope.type === "project") return;
   const nodes: DesignNode[] = [];
   const components = new Map(
     document.components.map((component) => [component.id, component]),
@@ -400,7 +398,7 @@ export async function createExportModel(request: ExportRequest): Promise<{
   };
   validateCss(document, diagnostics);
   const pages = scopedPages(document, request.scope, diagnostics);
-  validateScopeReferences(document, pages, request.scope, diagnostics);
+  validateScopeReferences(document, pages, diagnostics);
   const assets = await validateNodes(
     document,
     pages,

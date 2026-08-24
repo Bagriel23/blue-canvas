@@ -989,7 +989,7 @@ export function HomeShopPage() {
 <div data-bc-branch="false" data-bc-equals="true"><p className="bc-node bc-text" data-bc-node-id="30000000-0000-4000-8000-000000000019" data-bc-kind="text" data-bc-name="Join the list">Join the list</p></div>
 </div>
 <dialog className="bc-node bc-overlay" data-bc-node-id="30000000-0000-4000-8000-000000000029" data-bc-kind="overlay" data-bc-name="Success dialog" hidden data-bc-interactions={JSON.stringify([{"trigger":"click","action":{"type":"close-overlay"}}])} data-bc-overlay="30000000-0000-4000-8000-000000000029"><p className="bc-node bc-text" data-bc-node-id="30000000-0000-4000-8000-000000000030" data-bc-kind="text" data-bc-name="Thank you">Thank you</p></dialog>
-<div className="bc-node bc-component-instance" data-bc-node-id="30000000-0000-4000-8000-000000000031" data-bc-kind="component-instance" data-bc-name="Badge instance" data-bc-component-id="30000000-0000-4000-8000-000000000090"><ProductBadge /></div></div></div></div>
+<div className="bc-node bc-component-instance" data-bc-node-id="30000000-0000-4000-8000-000000000031" data-bc-kind="component-instance" data-bc-name="Badge instance" data-bc-component-id="30000000-0000-4000-8000-000000000090" data-bc-instance-id="30000000-0000-4000-8000-000000000031"><ProductBadge /></div></div></div></div>
 <div data-bc-artboard data-bc-artboard-id="30000000-0000-4000-8000-000000000040" data-bc-breakpoint="mobile"><div className="bc-node bc-stack" data-bc-node-id="30000000-0000-4000-8000-000000000041" data-bc-kind="stack" data-bc-name="Mobile home"><p className="bc-node bc-text" data-bc-node-id="30000000-0000-4000-8000-000000000042" data-bc-kind="text" data-bc-name="Mobile store">Mobile store</p></div></div>
     </section>
   );
@@ -1035,7 +1035,8 @@ function refresh(): void {
 }
 
 function route(): void {
-  const requested = decodeURIComponent(location.hash.slice(1));
+  let requested = "";
+  try { requested = decodeURIComponent(location.hash.slice(1)); } catch { requested = ""; }
   const pages = [...document.querySelectorAll<HTMLElement>("[data-bc-page]")];
   const active = pages.find((page) => page.dataset.bcRoute === requested) ?? pages[0];
   pages.forEach((page) => { page.hidden = page !== active; });
@@ -1066,12 +1067,13 @@ function runAction(action: Action, source: HTMLElement): void {
       refresh();
       break;
     case "open-overlay": {
-      const overlay = document.querySelector<HTMLDialogElement>(
-        '[data-bc-overlay="' + CSS.escape(action.overlayId) + '"]',
-      );
+      const selector = '[data-bc-overlay="' + CSS.escape(action.overlayId) + '"]';
+      const instance = source.closest<HTMLElement>("[data-bc-instance-id]");
+      const overlay = instance?.querySelector<HTMLDialogElement>(selector) ??
+        document.querySelector<HTMLDialogElement>(selector);
       if (overlay !== null) {
         overlay.hidden = false;
-        if (!overlay.open) overlay.showModal();
+        if (typeof overlay.showModal === "function" && !overlay.open) overlay.showModal();
       }
       break;
     }
@@ -1218,4 +1220,4 @@ img { display: block; max-width: 100%; }
 89504e470d0a1a0a0000000d4948445200000001000000010804000000b51c0c020000000b4944415478da6364f80f00010501012718e3660000000049454e44ae426082
 
 === export-manifest.json ===
-{"schemaVersion":1,"target":"preact","scope":{"type":"project"},"files":[{"path":"package.json","mediaType":"application/json","bytes":282,"sha256":"540493cd7332fd9a1656b5a2df284a05a30c207cd78677fb787bd6d55d678a44"},{"path":"package-lock.json","mediaType":"application/json","bytes":26477,"sha256":"27041efbb95698cb50fb73e98717a1a9db87927fe355f4aeac11f6480f7e4fb0"},{"path":"index.html","mediaType":"text/html","bytes":288,"sha256":"db8f9dd54eb9a2e3a3c65ec532991914bdfb789f53a6da6228757fa6b6ad49d6"},{"path":"tsconfig.json","mediaType":"application/json","bytes":637,"sha256":"08ca185c82039068ac1724a8efeea3d6225dddc55c8a45d1bd11745b59e51417"},{"path":"vite.config.ts","mediaType":"text/typescript","bytes":100,"sha256":"026cc078912b0e43fb9e66dcc0c92e77852d3a47dbd4faffdc2ac9ba2de1e2d2"},{"path":"src/main.tsx","mediaType":"text/typescript","bytes":175,"sha256":"88fc07485837877c76694c0e7814f6f8c4f7170f8215d1b0edd68a9ca5379499"},{"path":"src/App.tsx","mediaType":"text/typescript","bytes":351,"sha256":"9012b6ca9358b7768f16417b45bd693ee71567f9411b1f5da7ec63f021a41d23"},{"path":"src/components/ProductBadge.tsx","mediaType":"text/typescript","bytes":342,"sha256":"a86d563c6b37a784c6ebbbb86085622ce19702072e4b15213489c96dcb69b05f"},{"path":"src/pages/HomeShopPage.tsx","mediaType":"text/typescript","bytes":4964,"sha256":"6445568200c367dd925681cdaf7c98118628b72ac37b26dd07a85b8997dd451b"},{"path":"src/pages/AboutPage.tsx","mediaType":"text/typescript","bytes":601,"sha256":"c7480fc9fa50d945c2114947d24090ca03565943925be72f8e0aa7ce51d981ac"},{"path":"src/runtime/state.ts","mediaType":"text/typescript","bytes":4535,"sha256":"192871c5f898977f9f6f3ee9c377ea45aea78af889716423745f4751cc285ec5"},{"path":"src/styles/tokens.css","mediaType":"text/css","bytes":94,"sha256":"9a57e6709b5e6aab97b6a8246fd1656c24a7719fe3d82db307b5b71cf2daf1e9"},{"path":"src/styles/base.css","mediaType":"text/css","bytes":1878,"sha256":"aa58a3271df12e946251a534e8ead417cf08f723d47248c2a0d1186fda3652e1"},{"path":"public/assets/canvas-preview.png","mediaType":"image/png","bytes":68,"sha256":"431ced6916a2a21a156e38701afe55bbd7f88969fbbfc56d7fe099d47f265460"}]}
+{"schemaVersion":1,"target":"preact","scope":{"type":"project"},"files":[{"path":"package.json","mediaType":"application/json","bytes":282,"sha256":"540493cd7332fd9a1656b5a2df284a05a30c207cd78677fb787bd6d55d678a44"},{"path":"package-lock.json","mediaType":"application/json","bytes":26477,"sha256":"27041efbb95698cb50fb73e98717a1a9db87927fe355f4aeac11f6480f7e4fb0"},{"path":"index.html","mediaType":"text/html","bytes":288,"sha256":"db8f9dd54eb9a2e3a3c65ec532991914bdfb789f53a6da6228757fa6b6ad49d6"},{"path":"tsconfig.json","mediaType":"application/json","bytes":637,"sha256":"08ca185c82039068ac1724a8efeea3d6225dddc55c8a45d1bd11745b59e51417"},{"path":"vite.config.ts","mediaType":"text/typescript","bytes":100,"sha256":"026cc078912b0e43fb9e66dcc0c92e77852d3a47dbd4faffdc2ac9ba2de1e2d2"},{"path":"src/main.tsx","mediaType":"text/typescript","bytes":175,"sha256":"88fc07485837877c76694c0e7814f6f8c4f7170f8215d1b0edd68a9ca5379499"},{"path":"src/App.tsx","mediaType":"text/typescript","bytes":351,"sha256":"9012b6ca9358b7768f16417b45bd693ee71567f9411b1f5da7ec63f021a41d23"},{"path":"src/components/ProductBadge.tsx","mediaType":"text/typescript","bytes":342,"sha256":"a86d563c6b37a784c6ebbbb86085622ce19702072e4b15213489c96dcb69b05f"},{"path":"src/pages/HomeShopPage.tsx","mediaType":"text/typescript","bytes":5023,"sha256":"83d41540c43f80dbf48cd8957fd9dbcc05e3e88b2a46869d38809620638fedfc"},{"path":"src/pages/AboutPage.tsx","mediaType":"text/typescript","bytes":601,"sha256":"c7480fc9fa50d945c2114947d24090ca03565943925be72f8e0aa7ce51d981ac"},{"path":"src/runtime/state.ts","mediaType":"text/typescript","bytes":4785,"sha256":"9aa531d0d75633524abcff2f27487520509053cb742fb077edcc7aa00a5ea06f"},{"path":"src/styles/tokens.css","mediaType":"text/css","bytes":94,"sha256":"9a57e6709b5e6aab97b6a8246fd1656c24a7719fe3d82db307b5b71cf2daf1e9"},{"path":"src/styles/base.css","mediaType":"text/css","bytes":1878,"sha256":"aa58a3271df12e946251a534e8ead417cf08f723d47248c2a0d1186fda3652e1"},{"path":"public/assets/canvas-preview.png","mediaType":"image/png","bytes":68,"sha256":"431ced6916a2a21a156e38701afe55bbd7f88969fbbfc56d7fe099d47f265460"}]}

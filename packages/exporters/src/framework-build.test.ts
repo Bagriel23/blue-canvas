@@ -254,4 +254,30 @@ describe.each(["react", "preact"] as const)("%s export", (target) => {
     );
     await installAndBuild(directory);
   }, 30_000);
+
+  test("avoids Windows device names for generated source basenames", async () => {
+    const document = exporterDocumentFixture();
+    const component = document.components[0];
+    if (component === undefined) throw new Error("Fixture component changed");
+    component.name = "CON";
+    const result = await generateExport({
+      document,
+      target,
+      scope: { type: "project" },
+      assets: fixtureAssets,
+    });
+    const componentPath = result.files.find(({ path }) =>
+      path.startsWith("src/components/"),
+    )?.path;
+
+    expect(componentPath).toBeDefined();
+    expect(componentPath?.split("/").at(-1)?.split(".")[0]).not.toMatch(
+      /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])$/iu,
+    );
+    const directory = await writeGeneratedFixture(
+      `${target}-windows-name`,
+      result.files,
+    );
+    await installAndBuild(directory);
+  }, 30_000);
 });

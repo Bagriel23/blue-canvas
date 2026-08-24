@@ -1,3 +1,4 @@
+import { maxEncodedAssetBytes, maxSvgAssetBytes } from "./assets.js";
 import { generateBaseCss, generateTokenCss } from "./styles.js";
 import { generateFrameworkFiles } from "./framework.js";
 import { generateFrameworkRuntime } from "./framework-runtime.js";
@@ -110,12 +111,34 @@ function normalizeRequest(input: ExportRequest): ExportRequest | ExportResult {
         scope,
       );
     }
+    if (
+      asset.bytes.byteLength > maxEncodedAssetBytes ||
+      (asset.mimeType?.toLowerCase() === "image/svg+xml" &&
+        asset.bytes.byteLength > maxSvgAssetBytes)
+    ) {
+      return failure(
+        "ASSET_LIMIT_EXCEEDED",
+        `Asset exceeds export size limits: ${asset.fileName}`,
+        target,
+        scope,
+      );
+    }
   }
+  const assets = Object.fromEntries(
+    Object.entries(input.assets).map(([key, asset]) => [
+      key,
+      {
+        fileName: asset.fileName,
+        mimeType: asset.mimeType,
+        bytes: asset.bytes.slice(),
+      },
+    ]),
+  );
   return {
     document: input.document,
     target,
     scope,
-    assets: input.assets,
+    assets,
   };
 }
 

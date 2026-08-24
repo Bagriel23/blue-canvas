@@ -1,7 +1,11 @@
 import { parseFragment, serialize, type DefaultTreeAdapterMap } from "parse5";
 import sharp from "sharp";
 
-import { assetOutputName, hasExternalReference } from "./safety.js";
+import {
+  assetOutputName,
+  hasExternalReference,
+  isWindowsReservedBasename,
+} from "./safety.js";
 import type { ExportAsset } from "./types.js";
 
 type ChildNode = DefaultTreeAdapterMap["childNode"];
@@ -17,6 +21,7 @@ export interface AssetValidationError {
     | "ASSET_INVALID"
     | "ASSET_MIME_UNSUPPORTED"
     | "ASSET_PATH_UNSAFE"
+    | "ASSET_LIMIT_EXCEEDED"
     | "BROKEN_ASSET";
   message: string;
 }
@@ -28,14 +33,17 @@ const supportedExtensions: Readonly<Record<string, readonly string[]>> = {
   "image/webp": ["webp"],
 };
 
-const windowsDeviceName = /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])$/iu;
+export const maxEncodedAssetBytes = 25 * 1024 * 1024;
+export const maxSvgAssetBytes = 1024 * 1024;
+const maxRasterDimension = 8192;
+const maxRasterPixels = 16_000_000;
 
 type RasterFormat = "jpeg" | "png" | "webp";
 
 async function validRaster(
   bytes: Uint8Array,
   expectedFormat: RasterFormat,
-): Promise<boolean> {
+): Promise<"valid" | "broken" | "limit"> {
   try {
     const image = sharp(bytes, {
       failOn: "error",
@@ -49,12 +57,19 @@ async function validRaster(
       metadata.width === 0 ||
       metadata.height === 0
     ) {
-      return false;
+      return "broken";
+    }
+    if (
+      metadata.width > maxRasterDimension ||
+      metadata.height > maxRasterDimension ||
+      metadata.width * metadata.height > maxRasterPixels
+    ) {
+      return "limit";
     }
     const decoded = await image.clone().raw().toBuffer();
-    return decoded.byteLength > 0;
+    return decoded.byteLength > 0 ? "valid" : "broken";
   } catch {
-    return false;
+    return "broken";
   }
 }
 
@@ -127,7 +142,21 @@ function isElement(node: ChildNode): node is Element {
   return "tagName" in node;
 }
 
-function safeSvgNode(node: ChildNode, parentTag?: string): boolean {
+function collectSvgIds(node: ChildNode, ids: Set<string>): boolean {
+  if (!isElement(node)) return true;
+  const id = node.attrs.find(({ name }) => name.toLowerCase() === "id")?.value;
+  if (id !== undefined) {
+    if (ids.has(id)) return false;
+    ids.add(id);
+  }
+  return node.childNodes.every((child) => collectSvgIds(child, ids));
+}
+
+function safeSvgNode(
+  node: ChildNode,
+  ids: ReadonlySet<string>,
+  parentTag?: string,
+): boolean {
   if (isElement(node)) {
     const tag = node.tagName.toLowerCase();
     if (!svgTags.has(tag)) return false;
@@ -140,14 +169,18 @@ function safeSvgNode(node: ChildNode, parentTag?: string): boolean {
         return false;
       if (name === "xmlns") {
         if (attribute.value !== "http://www.w3.org/2000/svg") return false;
-      } else if (
-        attribute.value.includes("\\") ||
-        hasExternalReference(attribute.value)
-      ) {
+      } else if (attribute.value.includes("\\")) {
         return false;
+      } else if (hasExternalReference(attribute.value)) {
+        const localReference = /^url\(\s*#([a-z_][a-z0-9_.:-]*)\s*\)$/iu.exec(
+          attribute.value,
+        );
+        if (localReference?.[1] === undefined || !ids.has(localReference[1])) {
+          return false;
+        }
       }
     }
-    return node.childNodes.every((child) => safeSvgNode(child, tag));
+    return node.childNodes.every((child) => safeSvgNode(child, ids, tag));
   }
   if (node.nodeName === "#text") {
     return (
@@ -177,7 +210,8 @@ function sanitizeSvg(bytes: Uint8Array): Uint8Array | undefined {
   ) {
     return undefined;
   }
-  if (!safeSvgNode(root)) return undefined;
+  const ids = new Set<string>();
+  if (!collectSvgIds(root, ids) || !safeSvgNode(root, ids)) return undefined;
   return new TextEncoder().encode(`${serialize(fragment)}\n`);
 }
 
@@ -192,7 +226,7 @@ export async function validateAsset(
     };
   }
   const normalizedBase = outputName.slice(0, outputName.lastIndexOf("."));
-  if (windowsDeviceName.test(normalizedBase)) {
+  if (isWindowsReservedBasename(normalizedBase)) {
     return {
       code: "ASSET_PATH_UNSAFE",
       message: `Asset path uses a reserved device name: ${asset.fileName}`,
@@ -220,17 +254,34 @@ export async function validateAsset(
       message: `Asset bytes are empty or invalid: ${asset.fileName}`,
     };
   }
+  if (
+    asset.bytes.byteLength > maxEncodedAssetBytes ||
+    (mimeType === "image/svg+xml" && asset.bytes.byteLength > maxSvgAssetBytes)
+  ) {
+    return {
+      code: "ASSET_LIMIT_EXCEEDED",
+      message: `Asset exceeds export size limits: ${asset.fileName}`,
+    };
+  }
 
-  let bytes = asset.bytes;
-  const valid =
+  let bytes: Uint8Array = asset.bytes.slice();
+  const validation =
     mimeType === "image/png"
       ? await validRaster(bytes, "png")
       : mimeType === "image/jpeg"
         ? await validRaster(bytes, "jpeg")
         : mimeType === "image/webp"
           ? await validRaster(bytes, "webp")
-          : (bytes = sanitizeSvg(bytes) ?? new Uint8Array()).byteLength > 0;
-  if (!valid) {
+          : (bytes = sanitizeSvg(bytes) ?? new Uint8Array()).byteLength > 0
+            ? "valid"
+            : "broken";
+  if (validation === "limit") {
+    return {
+      code: "ASSET_LIMIT_EXCEEDED",
+      message: `Asset exceeds export dimension limits: ${asset.fileName}`,
+    };
+  }
+  if (validation !== "valid") {
     return {
       code: "BROKEN_ASSET",
       message: `Asset content is invalid for ${asset.mimeType}: ${asset.fileName}`,

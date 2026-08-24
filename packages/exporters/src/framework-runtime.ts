@@ -28,7 +28,8 @@ function refresh(): void {
 }
 
 function route(): void {
-  const requested = decodeURIComponent(location.hash.slice(1));
+  let requested = "";
+  try { requested = decodeURIComponent(location.hash.slice(1)); } catch { requested = ""; }
   const pages = [...document.querySelectorAll<HTMLElement>("[data-bc-page]")];
   const active = pages.find((page) => page.dataset.bcRoute === requested) ?? pages[0];
   pages.forEach((page) => { page.hidden = page !== active; });
@@ -59,12 +60,13 @@ function runAction(action: Action, source: HTMLElement): void {
       refresh();
       break;
     case "open-overlay": {
-      const overlay = document.querySelector<HTMLDialogElement>(
-        '[data-bc-overlay="' + CSS.escape(action.overlayId) + '"]',
-      );
+      const selector = '[data-bc-overlay="' + CSS.escape(action.overlayId) + '"]';
+      const instance = source.closest<HTMLElement>("[data-bc-instance-id]");
+      const overlay = instance?.querySelector<HTMLDialogElement>(selector) ??
+        document.querySelector<HTMLDialogElement>(selector);
       if (overlay !== null) {
         overlay.hidden = false;
-        if (!overlay.open) overlay.showModal();
+        if (typeof overlay.showModal === "function" && !overlay.open) overlay.showModal();
       }
       break;
     }

@@ -1,3 +1,6 @@
+import { createHash } from "node:crypto";
+
+import sharp from "sharp";
 import { describe, expect, test } from "vitest";
 
 import {
@@ -169,6 +172,140 @@ describe("export hardening", () => {
     expect(
       Buffer.byteLength(generatedAsset?.path.split("/").at(-1) ?? "", "utf8"),
     ).toBeLessThanOrEqual(120);
+  });
+
+  test("snapshots caller-owned asset bytes before awaiting decode", async () => {
+    const callerBytes = fixturePng().bytes.slice();
+    const expectedBytes = callerBytes.slice();
+    const pending = generateExport(
+      request({
+        fileName: "snapshot.png",
+        mimeType: "image/png",
+        bytes: callerBytes,
+      }),
+    );
+    callerBytes.fill(0);
+
+    const result = await pending;
+    const generated = result.files.find(
+      ({ path }) => path === "assets/snapshot.png",
+    );
+    expect(result.diagnostics).toEqual([]);
+    expect(generated).toEqual({
+      path: "assets/snapshot.png",
+      bytes: expectedBytes,
+    });
+    expect(
+      generated !== undefined && "bytes" in generated
+        ? generated.bytes
+        : undefined,
+    ).not.toBe(callerBytes);
+    callerBytes.fill(1);
+    const manifestEntry = result.manifest.files.find(
+      ({ path }) => path === "assets/snapshot.png",
+    );
+    expect(manifestEntry?.sha256).toBe(
+      createHash("sha256").update(expectedBytes).digest("hex"),
+    );
+  });
+
+  test.each([
+    {
+      name: "encoded bytes",
+      asset: async (): Promise<ExportAsset> => ({
+        fileName: "oversized.png",
+        mimeType: "image/png",
+        bytes: new Uint8Array(25 * 1024 * 1024 + 1),
+      }),
+    },
+    {
+      name: "dimension",
+      asset: async (): Promise<ExportAsset> => ({
+        fileName: "too-wide.png",
+        mimeType: "image/png",
+        bytes: new Uint8Array(
+          await sharp({
+            create: {
+              width: 8193,
+              height: 1,
+              channels: 4,
+              background: "transparent",
+            },
+          })
+            .png()
+            .toBuffer(),
+        ),
+      }),
+    },
+    {
+      name: "pixel count",
+      asset: async (): Promise<ExportAsset> => ({
+        fileName: "too-many-pixels.png",
+        mimeType: "image/png",
+        bytes: new Uint8Array(
+          await sharp({
+            create: {
+              width: 4097,
+              height: 4097,
+              channels: 4,
+              background: "transparent",
+            },
+          })
+            .png()
+            .toBuffer(),
+        ),
+      }),
+    },
+    {
+      name: "SVG bytes",
+      asset: async (): Promise<ExportAsset> => ({
+        fileName: "oversized.svg",
+        mimeType: "image/svg+xml",
+        bytes: new TextEncoder().encode(
+          `<svg xmlns="http://www.w3.org/2000/svg"><desc>${"a".repeat(1024 * 1024)}</desc></svg>`,
+        ),
+      }),
+    },
+  ])("rejects assets exceeding the $name limit", async ({ asset }) => {
+    const result = await generateExport(request(await asset()));
+
+    expect(result.files).toEqual([]);
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: "ASSET_LIMIT_EXCEEDED",
+        severity: "error",
+      }),
+    );
+  });
+
+  test("allows only resolved local SVG url references", async () => {
+    const local = await generateExport(
+      request({
+        fileName: "local.svg",
+        mimeType: "image/svg+xml",
+        bytes: new TextEncoder().encode(
+          '<svg xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="paint"><stop offset="0" stop-color="#fff"/></linearGradient></defs><path fill="url(#paint)" d="M0 0h1v1z"/></svg>',
+        ),
+      }),
+    );
+    const missing = await generateExport(
+      request({
+        fileName: "missing.svg",
+        mimeType: "image/svg+xml",
+        bytes: new TextEncoder().encode(
+          '<svg xmlns="http://www.w3.org/2000/svg"><path fill="url(#missing)" d="M0 0h1v1z"/></svg>',
+        ),
+      }),
+    );
+
+    expect(local.diagnostics).toEqual([]);
+    expect(local.files.some(({ path }) => path === "assets/local.svg")).toBe(
+      true,
+    );
+    expect(missing.files).toEqual([]);
+    expect(missing.diagnostics).toContainEqual(
+      expect.objectContaining({ code: "BROKEN_ASSET" }),
+    );
   });
 
   test.each([

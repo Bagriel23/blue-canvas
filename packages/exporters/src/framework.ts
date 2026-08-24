@@ -12,6 +12,7 @@ import {
   boundedPathComponent,
   compareStable,
   escapeHtml,
+  isWindowsReservedBasename,
   safeJson,
   slug,
   uniqueSlugs,
@@ -47,15 +48,16 @@ function uniqueNames(
   used: Set<string>,
 ): Map<string, string> {
   const names = new Map<string, string>();
+  const safeSourceName = (value: string): string => {
+    const stem = isWindowsReservedBasename(value) ? `Bc${value}` : value;
+    return boundedPathComponent(stem, ".tsx").slice(0, -4);
+  };
   for (const item of items) {
     const base = `${identifier(item.name, "Item")}${suffix}`;
-    let candidate = boundedPathComponent(base, ".tsx").slice(0, -4);
+    let candidate = safeSourceName(base);
     let sequence = 2;
     while (used.has(candidate)) {
-      candidate = boundedPathComponent(`${base}${sequence++}`, ".tsx").slice(
-        0,
-        -4,
-      );
+      candidate = safeSourceName(`${base}${sequence++}`);
     }
     used.add(candidate);
     names.set(item.id, candidate);
@@ -175,8 +177,8 @@ function renderNode(
     case "component-instance": {
       const componentName = names.components.get(node.componentId);
       return componentName === undefined
-        ? `<div ${attrs} data-bc-component-id="${node.componentId}" />`
-        : `<div ${attrs} data-bc-component-id="${node.componentId}"><${componentName} /></div>`;
+        ? `<div ${attrs} data-bc-component-id="${node.componentId}" data-bc-instance-id="${node.id}" />`
+        : `<div ${attrs} data-bc-component-id="${node.componentId}" data-bc-instance-id="${node.id}"><${componentName} /></div>`;
     }
   }
 }

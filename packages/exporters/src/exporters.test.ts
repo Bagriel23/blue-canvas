@@ -168,6 +168,51 @@ describe("generateExport", () => {
     ).toBe(true);
   });
 
+  test("blocks project interactions targeting overlays outside the rendered graph", async () => {
+    const document = exporterDocumentFixture();
+    const root = document.pages[0]?.artboards[0]?.root;
+    if (root?.kind !== "stack") throw new Error("Fixture root changed");
+    const grid = root.children[1];
+    const button = grid?.kind === "grid" ? grid.children[3] : undefined;
+    const action = button?.interactions?.[1]?.action;
+    if (button?.kind !== "button" || action?.type !== "open-overlay") {
+      throw new Error("Fixture button changed");
+    }
+    const unavailableOverlayId = fixtureId(200);
+    action.overlayId = unavailableOverlayId;
+    document.components.push({
+      id: fixtureId(202),
+      name: "Unused overlays",
+      root: {
+        id: unavailableOverlayId,
+        kind: "overlay",
+        name: "Unavailable overlay",
+        visible: false,
+        style: {},
+        children: [
+          {
+            id: fixtureId(201),
+            kind: "text",
+            name: "Unavailable",
+            visible: true,
+            style: {},
+            text: "Unavailable",
+          },
+        ],
+      },
+    });
+
+    const result = await generateExport({ ...staticRequest(), document });
+
+    expect(result.files).toEqual([]);
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: "SCOPE_REFERENCE_MISSING",
+        nodeId: button.id,
+      }),
+    );
+  });
+
   test("blocks missing, remote, unsafe-path, CSS, and navigation inputs", async () => {
     const missingAsset = await generateExport({
       ...staticRequest(),

@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 
 const maxPathComponentBytes = 120;
+const windowsDeviceName = /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])$/iu;
 
 export function escapeHtml(value: string): string {
   return value
@@ -56,6 +57,10 @@ export function boundedPathComponent(stem: string, extension: string): string {
     maxPathComponentBytes - Buffer.byteLength(suffix, "utf8"),
   );
   return `${prefix}${suffix}`;
+}
+
+export function isWindowsReservedBasename(value: string): boolean {
+  return windowsDeviceName.test(value);
 }
 
 export function uniqueSlugs(values: string[], fallback = "item"): string[] {

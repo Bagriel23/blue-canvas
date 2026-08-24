@@ -23,7 +23,7 @@
 <div data-bc-branch="false" data-bc-equals="true"><p class="bc-node bc-text" data-bc-node-id="30000000-0000-4000-8000-000000000019" data-bc-kind="text" data-bc-name="Join the list">Join the list</p></div>
 </div>
 <dialog class="bc-node bc-overlay" data-bc-node-id="30000000-0000-4000-8000-000000000029" data-bc-kind="overlay" data-bc-name="Success dialog" hidden data-bc-interactions="[{&quot;trigger&quot;:&quot;click&quot;,&quot;action&quot;:{&quot;type&quot;:&quot;close-overlay&quot;}}]" data-bc-overlay="30000000-0000-4000-8000-000000000029"><p class="bc-node bc-text" data-bc-node-id="30000000-0000-4000-8000-000000000030" data-bc-kind="text" data-bc-name="Thank you">Thank you</p></dialog>
-<div class="bc-node bc-component-instance" data-bc-node-id="30000000-0000-4000-8000-000000000031" data-bc-kind="component-instance" data-bc-name="Badge instance" data-bc-component-id="30000000-0000-4000-8000-000000000090" data-bc-component-name="Product badge"><div class="bc-node bc-stack" data-bc-node-id="30000000-0000-4000-8000-000000000091" data-bc-kind="stack" data-bc-name="Badge layout"><p class="bc-node bc-text" data-bc-node-id="30000000-0000-4000-8000-000000000092" data-bc-kind="text" data-bc-name="Featured">Featured</p></div></div></div></div></div>
+<div class="bc-node bc-component-instance" data-bc-node-id="30000000-0000-4000-8000-000000000031" data-bc-kind="component-instance" data-bc-name="Badge instance" data-bc-component-id="30000000-0000-4000-8000-000000000090" data-bc-instance-id="30000000-0000-4000-8000-000000000031" data-bc-component-name="Product badge"><div class="bc-node bc-stack" data-bc-node-id="30000000-0000-4000-8000-000000000091" data-bc-kind="stack" data-bc-name="Badge layout"><p class="bc-node bc-text" data-bc-node-id="30000000-0000-4000-8000-000000000092" data-bc-kind="text" data-bc-name="Featured">Featured</p></div></div></div></div></div>
 <div data-bc-artboard data-bc-artboard-id="30000000-0000-4000-8000-000000000040" data-bc-breakpoint="mobile"><div class="bc-node bc-stack" data-bc-node-id="30000000-0000-4000-8000-000000000041" data-bc-kind="stack" data-bc-name="Mobile home"><p class="bc-node bc-text" data-bc-node-id="30000000-0000-4000-8000-000000000042" data-bc-kind="text" data-bc-name="Mobile store">Mobile store</p></div></div></section>
 <section data-bc-page data-bc-page-id="30000000-0000-4000-8000-000000000081" data-bc-route="about" hidden><div data-bc-artboard data-bc-artboard-id="30000000-0000-4000-8000-000000000082" data-bc-breakpoint="desktop"><div class="bc-node bc-stack" data-bc-node-id="30000000-0000-4000-8000-000000000083" data-bc-kind="stack" data-bc-name="About layout"><p class="bc-node bc-text" data-bc-node-id="30000000-0000-4000-8000-000000000084" data-bc-kind="text" data-bc-name="About Blue Canvas">About Blue Canvas</p></div></div></section></main>
 </body>
@@ -147,14 +147,15 @@ img { display: block; max-width: 100%; }
   };
 
   const route = () => {
-    const requested = decodeURIComponent(location.hash.slice(1));
+    let requested = "";
+    try { requested = decodeURIComponent(location.hash.slice(1)); } catch { requested = ""; }
     const pages = [...document.querySelectorAll("[data-bc-page]")];
     const active = pages.find((page) => page.dataset.bcRoute === requested) || pages[0];
     pages.forEach((page) => { page.hidden = page !== active; });
   };
 
   const filterCollection = (collection, query) => {
-    const normalized = String(query || "").trim().toLocaleLowerCase();
+    const normalized = String(query ?? "").trim().toLocaleLowerCase();
     document.querySelectorAll('[data-bc-repeater="' + CSS.escape(collection) + '"] > .bc-node').forEach((item) => {
       item.hidden = normalized.length > 0 && !item.textContent.toLocaleLowerCase().includes(normalized);
     });
@@ -176,7 +177,9 @@ img { display: block; max-width: 100%; }
         refresh();
         break;
       case "open-overlay": {
-        const overlay = document.querySelector('[data-bc-overlay="' + CSS.escape(action.overlayId) + '"]');
+        const selector = '[data-bc-overlay="' + CSS.escape(action.overlayId) + '"]';
+        const instance = source.closest("[data-bc-instance-id]");
+        const overlay = instance?.querySelector(selector) ?? document.querySelector(selector);
         if (overlay) {
           overlay.hidden = false;
           if (typeof overlay.showModal === "function" && !overlay.open) overlay.showModal();
@@ -225,4 +228,4 @@ img { display: block; max-width: 100%; }
 89504e470d0a1a0a0000000d4948445200000001000000010804000000b51c0c020000000b4944415478da6364f80f00010501012718e3660000000049454e44ae426082
 
 === export-manifest.json ===
-{"schemaVersion":1,"target":"html","scope":{"type":"project"},"files":[{"path":"index.html","mediaType":"text/html","bytes":6412,"sha256":"dcd0e880ad7706fa03f6b75da42d3adce250e58d06fb462e55e308f03d1fc164"},{"path":"styles/tokens.css","mediaType":"text/css","bytes":94,"sha256":"9a57e6709b5e6aab97b6a8246fd1656c24a7719fe3d82db307b5b71cf2daf1e9"},{"path":"styles/base.css","mediaType":"text/css","bytes":1878,"sha256":"aa58a3271df12e946251a534e8ead417cf08f723d47248c2a0d1186fda3652e1"},{"path":"scripts/runtime.js","mediaType":"text/javascript","bytes":3924,"sha256":"613ba8ab7da8316fa068d14c098b0729c7eb0010a0e0831fc571b1fc334eda21"},{"path":"assets/canvas-preview.png","mediaType":"image/png","bytes":68,"sha256":"431ced6916a2a21a156e38701afe55bbd7f88969fbbfc56d7fe099d47f265460"}]}
+{"schemaVersion":1,"target":"html","scope":{"type":"project"},"files":[{"path":"index.html","mediaType":"text/html","bytes":6471,"sha256":"1b639987d6033dbac812eddde9e21df67aca105e027ea2d60ea6e91f97655c84"},{"path":"styles/tokens.css","mediaType":"text/css","bytes":94,"sha256":"9a57e6709b5e6aab97b6a8246fd1656c24a7719fe3d82db307b5b71cf2daf1e9"},{"path":"styles/base.css","mediaType":"text/css","bytes":1878,"sha256":"aa58a3271df12e946251a534e8ead417cf08f723d47248c2a0d1186fda3652e1"},{"path":"scripts/runtime.js","mediaType":"text/javascript","bytes":4114,"sha256":"048386f4c5ba1551874d82f9365deb855aaef4e247fdc02569aac677b67df93d"},{"path":"assets/canvas-preview.png","mediaType":"image/png","bytes":68,"sha256":"431ced6916a2a21a156e38701afe55bbd7f88969fbbfc56d7fe099d47f265460"}]}

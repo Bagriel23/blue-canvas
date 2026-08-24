@@ -24,14 +24,15 @@ export const staticRuntime = `(() => {
   };
 
   const route = () => {
-    const requested = decodeURIComponent(location.hash.slice(1));
+    let requested = "";
+    try { requested = decodeURIComponent(location.hash.slice(1)); } catch { requested = ""; }
     const pages = [...document.querySelectorAll("[data-bc-page]")];
     const active = pages.find((page) => page.dataset.bcRoute === requested) || pages[0];
     pages.forEach((page) => { page.hidden = page !== active; });
   };
 
   const filterCollection = (collection, query) => {
-    const normalized = String(query || "").trim().toLocaleLowerCase();
+    const normalized = String(query ?? "").trim().toLocaleLowerCase();
     document.querySelectorAll('[data-bc-repeater="' + CSS.escape(collection) + '"] > .bc-node').forEach((item) => {
       item.hidden = normalized.length > 0 && !item.textContent.toLocaleLowerCase().includes(normalized);
     });
@@ -53,7 +54,9 @@ export const staticRuntime = `(() => {
         refresh();
         break;
       case "open-overlay": {
-        const overlay = document.querySelector('[data-bc-overlay="' + CSS.escape(action.overlayId) + '"]');
+        const selector = '[data-bc-overlay="' + CSS.escape(action.overlayId) + '"]';
+        const instance = source.closest("[data-bc-instance-id]");
+        const overlay = instance?.querySelector(selector) ?? document.querySelector(selector);
         if (overlay) {
           overlay.hidden = false;
           if (typeof overlay.showModal === "function" && !overlay.open) overlay.showModal();

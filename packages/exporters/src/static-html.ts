@@ -96,12 +96,12 @@ function renderNode(node: DesignNode, context: RenderContext): string {
         component === undefined ||
         context.activeComponents.has(component.id)
       ) {
-        return `<div ${attrs} data-bc-component-id="${node.componentId}"></div>`;
+        return `<div ${attrs} data-bc-component-id="${node.componentId}" data-bc-instance-id="${node.id}"></div>`;
       }
       context.activeComponents.add(component.id);
       const rendered = renderNode(component.root, context);
       context.activeComponents.delete(component.id);
-      return `<div ${attrs} data-bc-component-id="${component.id}" data-bc-component-name="${escapeHtml(component.name)}">${rendered}</div>`;
+      return `<div ${attrs} data-bc-component-id="${component.id}" data-bc-instance-id="${node.id}" data-bc-component-name="${escapeHtml(component.name)}">${rendered}</div>`;
     }
   }
 }
