@@ -32,6 +32,15 @@ describe("design document", () => {
     expect(second).not.toBe(first);
   });
 
+  it("uses an injectable browser-compatible UUID generator", () => {
+    const generated = "30000000-0000-4000-8000-000000000001";
+
+    expect(createNodeId({ randomUUID: () => generated })).toBe(generated);
+    expect(
+      createDesignDocument("Injected", { randomUUID: () => generated }).id,
+    ).toBe(generated);
+  });
+
   it("rejects arbitrary JavaScript fields", () => {
     const document = createDesignDocument("Unsafe");
     Object.assign(document, { javascript: "alert('unsafe')" });

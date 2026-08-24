@@ -95,6 +95,7 @@ export interface CommandState {
   document: DesignDocument;
   revision: number;
   appliedBatchIds: string[];
+  appliedBatchFingerprints: Record<string, string>;
   past: DesignDocument[];
   future: DesignDocument[];
 }

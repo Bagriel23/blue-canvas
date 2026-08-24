@@ -83,22 +83,48 @@ describe("command batch safety", () => {
   });
 
   it("treats an already applied batch id as an idempotent no-op", () => {
-    const first = applyCommandBatch(createCommandState(documentFixture()), {
+    const batch = {
       id: id(52),
       actorId: id(51),
       baseRevision: 0,
       commands: [{ type: "rename-page", pageId: id(2), name: "Applied" }],
-    });
+    } as const;
+    const first = applyCommandBatch(
+      createCommandState(documentFixture()),
+      batch,
+    );
 
-    expect(
-      applyCommandBatch(first, {
-        id: id(52),
+    expect(applyCommandBatch(first, batch)).toBe(first);
+    expect(first.appliedBatchFingerprints[id(52)]).toEqual(expect.any(String));
+  });
+
+  it.each([
+    ["actor", id(58), "Applied"],
+    ["payload", id(51), "Different"],
+  ])(
+    "rejects a reused batch id with mismatched %s",
+    (_label, actorId, name) => {
+      const first = applyCommandBatch(createCommandState(documentFixture()), {
+        id: id(57),
         actorId: id(51),
         baseRevision: 0,
-        commands: [{ type: "rename-page", pageId: id(2), name: "Ignored" }],
-      }),
-    ).toBe(first);
-  });
+        commands: [{ type: "rename-page", pageId: id(2), name: "Applied" }],
+      });
+
+      expect(() =>
+        applyCommandBatch(first, {
+          id: id(57),
+          actorId,
+          baseRevision: 0,
+          commands: [{ type: "rename-page", pageId: id(2), name }],
+        }),
+      ).toThrowError(
+        expect.objectContaining<Partial<CommandError>>({
+          code: "IDEMPOTENCY_CONFLICT",
+        }),
+      );
+    },
+  );
 
   it("records an empty batch without incrementing revision or history", () => {
     const state = createCommandState(documentFixture());

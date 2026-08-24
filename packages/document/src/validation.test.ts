@@ -11,7 +11,11 @@ function validDocument() {
     id: id(1),
     name: "Validation fixture",
     tokens: { space: { type: "dimension" as const, value: 8 } },
-    variables: {},
+    variables: {
+      query: { type: "string" as const, value: "" },
+      show: { type: "boolean" as const, value: true },
+      count: { type: "number" as const, value: 1 },
+    },
     components: [
       {
         id: id(2),
@@ -83,7 +87,43 @@ function validDocument() {
                         overlayId: id(7),
                       },
                     },
+                    {
+                      trigger: "click" as const,
+                      action: {
+                        type: "set-variable" as const,
+                        variable: "show",
+                        value: false,
+                      },
+                    },
+                    {
+                      trigger: "click" as const,
+                      action: {
+                        type: "filter-collection" as const,
+                        collection: "items",
+                        variable: "query",
+                      },
+                    },
                   ],
+                },
+                {
+                  id: id(10),
+                  kind: "input" as const,
+                  name: "Count",
+                  visible: true,
+                  style: {},
+                  inputType: "number" as const,
+                  variable: "count",
+                },
+                {
+                  id: id(11),
+                  kind: "conditional" as const,
+                  name: "Visible",
+                  visible: true,
+                  style: {},
+                  variable: "show",
+                  equals: true,
+                  whenTrue: [],
+                  whenFalse: [],
                 },
               ],
             },
@@ -195,5 +235,134 @@ describe("document-wide validation", () => {
     Object.assign(at(button.interactions ?? [], 0), { action });
 
     expect(() => parseDesignDocument(document)).toThrow();
+  });
+
+  it.each([
+    [
+      "input",
+      (document: ReturnType<typeof validDocument>) => {
+        const root = at(at(document.pages, 0).artboards, 0).root;
+        const input = at(root.children, 3);
+        if (input.kind !== "input") throw new Error("Expected input fixture");
+        input.variable = "missing";
+      },
+    ],
+    [
+      "conditional",
+      (document: ReturnType<typeof validDocument>) => {
+        const root = at(at(document.pages, 0).artboards, 0).root;
+        const conditional = at(root.children, 4);
+        if (conditional.kind !== "conditional") {
+          throw new Error("Expected conditional fixture");
+        }
+        conditional.variable = "missing";
+      },
+    ],
+    [
+      "set-variable",
+      (document: ReturnType<typeof validDocument>) => {
+        const root = at(at(document.pages, 0).artboards, 0).root;
+        const button = at(root.children, 2);
+        const action = at(button.interactions ?? [], 1).action;
+        if (action.type !== "set-variable") throw new Error("Expected action");
+        action.variable = "missing";
+      },
+    ],
+    [
+      "filter-collection",
+      (document: ReturnType<typeof validDocument>) => {
+        const root = at(at(document.pages, 0).artboards, 0).root;
+        const button = at(root.children, 2);
+        const action = at(button.interactions ?? [], 2).action;
+        if (action.type !== "filter-collection")
+          throw new Error("Expected action");
+        action.variable = "missing";
+      },
+    ],
+  ])("rejects a dangling %s variable reference", (_label, mutate) => {
+    const document = validDocument();
+    mutate(document);
+
+    expect(() => parseDesignDocument(document)).toThrow(/dangling variable/iu);
+  });
+
+  it("rejects input bindings with an incompatible variable type", () => {
+    const document = validDocument();
+    const root = at(at(document.pages, 0).artboards, 0).root;
+    const input = at(root.children, 3);
+    if (input.kind !== "input") throw new Error("Expected input fixture");
+    input.variable = "query";
+
+    expect(() => parseDesignDocument(document)).toThrow(/variable type/iu);
+  });
+
+  it("rejects conditional comparisons with an incompatible value type", () => {
+    const document = validDocument();
+    const root = at(at(document.pages, 0).artboards, 0).root;
+    const conditional = at(root.children, 4);
+    if (conditional.kind !== "conditional") {
+      throw new Error("Expected conditional fixture");
+    }
+    Object.assign(conditional, { equals: "true" });
+
+    expect(() => parseDesignDocument(document)).toThrow(/variable type/iu);
+  });
+
+  it("rejects set-variable values with an incompatible variable type", () => {
+    const document = validDocument();
+    const root = at(at(document.pages, 0).artboards, 0).root;
+    const button = at(root.children, 2);
+    const action = at(button.interactions ?? [], 1).action;
+    if (action.type !== "set-variable") throw new Error("Expected action");
+    Object.assign(action, { value: "false" });
+
+    expect(() => parseDesignDocument(document)).toThrow(/variable type/iu);
+  });
+
+  it("rejects a self-referencing component cycle", () => {
+    const document = parseDesignDocument(validDocument());
+    const component = at(document.components, 0);
+    component.root = {
+      id: id(12),
+      kind: "component-instance",
+      name: "Recursive label",
+      visible: true,
+      style: {},
+      componentId: component.id,
+    };
+
+    expect(() => parseDesignDocument(document)).toThrow(
+      /component cycle.*Label.*Label/iu,
+    );
+  });
+
+  it("rejects a mutual component cycle with the dependency path", () => {
+    const document = parseDesignDocument(validDocument());
+    const label = at(document.components, 0);
+    const cardId = id(13);
+    label.root = {
+      id: id(14),
+      kind: "component-instance",
+      name: "Card instance",
+      visible: true,
+      style: {},
+      componentId: cardId,
+    };
+    document.components.push({
+      id: cardId,
+      name: "Card",
+      root: {
+        id: id(15),
+        kind: "component-instance",
+        name: "Label instance",
+        visible: true,
+        style: {},
+        componentId: label.id,
+      },
+    });
+
+    expect(() => parseDesignDocument(document)).toThrow(
+      /component cycle.*Label.*Card.*Label/iu,
+    );
   });
 });

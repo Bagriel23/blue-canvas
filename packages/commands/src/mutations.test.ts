@@ -4,7 +4,11 @@ import {
 } from "@blue-canvas/document";
 import { describe, expect, it } from "vitest";
 
-import { applyCommandBatch, createCommandState } from "./index.js";
+import {
+  applyCommandBatch,
+  CommandError,
+  createCommandState,
+} from "./index.js";
 import { documentFixture, id, pageOf, rootOf } from "./test-fixtures.js";
 
 function documentWithNodes(): DesignDocument {
@@ -132,5 +136,70 @@ describe("document mutations", () => {
 
     expect(JSON.stringify(result.document)).not.toContain(id(20));
     expect(JSON.stringify(result.document)).not.toContain(id(21));
+  });
+
+  it("rejects update fields that do not apply to the target node kind", () => {
+    const state = createCommandState(documentWithNodes());
+    const before = structuredClone(state);
+
+    expect(() =>
+      applyCommandBatch(state, {
+        id: id(34),
+        actorId: id(31),
+        baseRevision: 0,
+        commands: [
+          { type: "update-node", nodeId: id(21), patch: { href: "/wrong" } },
+        ],
+      }),
+    ).toThrowError(
+      expect.objectContaining<Partial<CommandError>>({ code: "INVALID_PATCH" }),
+    );
+    expect(state).toEqual(before);
+  });
+
+  it("rejects a grid layout patch for a stack node", () => {
+    expect(() =>
+      applyCommandBatch(createCommandState(documentWithNodes()), {
+        id: id(35),
+        actorId: id(31),
+        baseRevision: 0,
+        commands: [
+          {
+            type: "update-node",
+            nodeId: id(20),
+            patch: {
+              layout: {
+                columns: [{ type: "auto" }],
+                rows: [{ type: "auto" }],
+                gap: 0,
+                align: "stretch",
+                justify: "stretch",
+              },
+            },
+          },
+        ],
+      }),
+    ).toThrowError(
+      expect.objectContaining<Partial<CommandError>>({ code: "INVALID_PATCH" }),
+    );
+  });
+
+  it("rejects executable href updates during batch validation", () => {
+    expect(() =>
+      applyCommandBatch(createCommandState(documentWithNodes()), {
+        id: id(36),
+        actorId: id(31),
+        baseRevision: 0,
+        commands: [
+          {
+            type: "update-node",
+            nodeId: id(21),
+            patch: { href: "javascript:alert('unsafe')" },
+          },
+        ],
+      }),
+    ).toThrowError(
+      expect.objectContaining<Partial<CommandError>>({ code: "INVALID_BATCH" }),
+    );
   });
 });

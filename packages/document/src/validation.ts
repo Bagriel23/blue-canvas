@@ -10,6 +10,23 @@ interface Reference {
   expectedTypes?: TokenDefinition["type"][] | undefined;
 }
 
+interface VariableReference extends Reference {
+  expectedType?: "string" | "number" | "boolean" | "null" | undefined;
+}
+
+interface ComponentEdge extends Reference {
+  source: string;
+}
+
+function primitiveType(
+  value: string | number | boolean | null,
+): VariableReference["expectedType"] {
+  if (value === null) return "null";
+  if (typeof value === "string") return "string";
+  if (typeof value === "number") return "number";
+  return "boolean";
+}
+
 function typedTokenReferences(
   node: DesignNode,
   path: PropertyKey[],
@@ -115,6 +132,8 @@ export function validateDocumentReferences(
   const overlayReferences: Reference[] = [];
   const pageReferences: Reference[] = [];
   const referencesToTokens: Reference[] = [];
+  const variableReferences: VariableReference[] = [];
+  const componentEdges: ComponentEdge[] = [];
 
   const addId = (id: string, path: PropertyKey[]): void => {
     if (ids.has(id)) {
@@ -127,13 +146,35 @@ export function validateDocumentReferences(
     ids.add(id);
   };
 
-  const visitNode = (node: DesignNode, path: PropertyKey[]): void => {
+  const visitNode = (
+    node: DesignNode,
+    path: PropertyKey[],
+    componentId?: string,
+  ): void => {
     addId(node.id, [...path, "id"]);
     if (node.kind === "overlay") overlayIds.add(node.id);
     if (node.kind === "component-instance") {
-      componentReferences.push({
+      const reference = {
         target: node.componentId,
         path: [...path, "componentId"],
+      };
+      componentReferences.push(reference);
+      if (componentId !== undefined) {
+        componentEdges.push({ ...reference, source: componentId });
+      }
+    }
+    if (node.kind === "input" && node.variable !== undefined) {
+      variableReferences.push({
+        target: node.variable,
+        path: [...path, "variable"],
+        expectedType: node.inputType === "number" ? "number" : "string",
+      });
+    }
+    if (node.kind === "conditional") {
+      variableReferences.push({
+        target: node.variable,
+        path: [...path, "variable"],
+        expectedType: primitiveType(node.equals),
       });
     }
 
@@ -154,18 +195,31 @@ export function validateDocumentReferences(
           path: [...actionPath, "pageId"],
         });
       }
+      if (interaction.action.type === "set-variable") {
+        variableReferences.push({
+          target: interaction.action.variable,
+          path: [...actionPath, "variable"],
+          expectedType: primitiveType(interaction.action.value),
+        });
+      }
+      if (interaction.action.type === "filter-collection") {
+        variableReferences.push({
+          target: interaction.action.variable,
+          path: [...actionPath, "variable"],
+        });
+      }
     }
 
     referencesToTokens.push(...typedTokenReferences(node, path));
     for (const [index, child] of getNodeChildren(node).entries()) {
-      visitNode(child, [...path, "children", index]);
+      visitNode(child, [...path, "children", index], componentId);
     }
   };
 
   for (const [componentIndex, component] of document.components.entries()) {
     const path = ["components", componentIndex];
     addId(component.id, [...path, "id"]);
-    visitNode(component.root, [...path, "root"]);
+    visitNode(component.root, [...path, "root"], component.id);
   }
   for (const [pageIndex, page] of document.pages.entries()) {
     const pagePath = ["pages", pageIndex];
@@ -197,10 +251,48 @@ export function validateDocumentReferences(
   checkReferences(overlayReferences, overlayIds, "overlay");
   checkReferences(pageReferences, pageIds, "page");
   checkReferences(
+    variableReferences,
+    new Set(Object.keys(document.variables)),
+    "variable",
+  );
+  checkReferences(
     referencesToTokens,
     new Set(Object.keys(document.tokens)),
     "token",
   );
+  const componentNames = new Map(
+    document.components.map((component) => [component.id, component.name]),
+  );
+  const visitedComponents = new Set<string>();
+  const activeComponents = new Set<string>();
+  const dependencyPath: string[] = [];
+  const visitComponent = (componentId: string): void => {
+    if (visitedComponents.has(componentId)) return;
+    activeComponents.add(componentId);
+    dependencyPath.push(componentId);
+    for (const edge of componentEdges.filter(
+      ({ source }) => source === componentId,
+    )) {
+      if (!componentIds.has(edge.target)) continue;
+      if (activeComponents.has(edge.target)) {
+        const cycleStart = dependencyPath.indexOf(edge.target);
+        const cycle = [...dependencyPath.slice(cycleStart), edge.target]
+          .map((id) => componentNames.get(id) ?? id)
+          .join(" -> ");
+        context.addIssue({
+          code: "custom",
+          message: `Component cycle: ${cycle}`,
+          path: edge.path,
+        });
+      } else {
+        visitComponent(edge.target);
+      }
+    }
+    dependencyPath.pop();
+    activeComponents.delete(componentId);
+    visitedComponents.add(componentId);
+  };
+  for (const componentId of componentIds) visitComponent(componentId);
   for (const reference of referencesToTokens) {
     const token = document.tokens[reference.target];
     if (
@@ -211,6 +303,20 @@ export function validateDocumentReferences(
       context.addIssue({
         code: "custom",
         message: `Token type mismatch for ${reference.target}: expected ${reference.expectedTypes.join(" or ")}, received ${token.type}`,
+        path: reference.path,
+      });
+    }
+  }
+  for (const reference of variableReferences) {
+    const variable = document.variables[reference.target];
+    if (
+      variable !== undefined &&
+      reference.expectedType !== undefined &&
+      variable.type !== reference.expectedType
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: `Variable type mismatch for ${reference.target}: expected ${reference.expectedType}, received ${variable.type}`,
         path: reference.path,
       });
     }

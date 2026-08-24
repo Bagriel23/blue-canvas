@@ -3,6 +3,7 @@ import {
   gridLayoutSchema,
   imageSourceSchema,
   interactionSchema,
+  navigationTargetSchema,
   nodeStyleSchema,
   safeRecordKeySchema,
   stackLayoutSchema,
@@ -34,7 +35,7 @@ const updateNodeCommandSchema = z.strictObject({
       alt: z.string().optional(),
       icon: z.string().min(1).optional(),
       label: z.string().optional(),
-      href: z.string().min(1).optional(),
+      href: navigationTargetSchema.optional(),
       buttonType: z.enum(["button", "submit", "reset"]).optional(),
       inputType: z
         .enum(["text", "email", "password", "number", "search"])

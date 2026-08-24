@@ -3,6 +3,7 @@ export {
   createNodeId,
   parseDesignDocument,
 } from "./factory.js";
+export type { UuidGeneratorOptions } from "./factory.js";
 export {
   designNodeSchema,
   getNodeChildren,
@@ -36,6 +37,7 @@ export type {
 } from "./values.js";
 export {
   interactionSchema,
+  navigationTargetSchema,
   nodeStyleSchema,
   safeRecordKeySchema,
   tokenDefinitionSchema,

@@ -1,4 +1,5 @@
 import { CommandError } from "./errors.js";
+import { createHistorySnapshot } from "./snapshot.js";
 import type { CommandState } from "./types.js";
 
 export function undo(state: CommandState): CommandState {
@@ -14,11 +15,9 @@ export function undo(state: CommandState): CommandState {
     document: structuredClone(document),
     revision: state.revision + 1,
     appliedBatchIds: [...state.appliedBatchIds],
-    past: state.past.slice(0, -1).map((snapshot) => structuredClone(snapshot)),
-    future: [
-      ...state.future.map((snapshot) => structuredClone(snapshot)),
-      structuredClone(state.document),
-    ],
+    appliedBatchFingerprints: { ...state.appliedBatchFingerprints },
+    past: state.past.slice(0, -1),
+    future: [...state.future, createHistorySnapshot(state.document)],
   };
 }
 
@@ -35,12 +34,8 @@ export function redo(state: CommandState): CommandState {
     document: structuredClone(document),
     revision: state.revision + 1,
     appliedBatchIds: [...state.appliedBatchIds],
-    past: [
-      ...state.past.map((snapshot) => structuredClone(snapshot)),
-      structuredClone(state.document),
-    ],
-    future: state.future
-      .slice(0, -1)
-      .map((snapshot) => structuredClone(snapshot)),
+    appliedBatchFingerprints: { ...state.appliedBatchFingerprints },
+    past: [...state.past, createHistorySnapshot(state.document)],
+    future: state.future.slice(0, -1),
   };
 }

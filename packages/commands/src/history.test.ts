@@ -62,4 +62,38 @@ describe("command history", () => {
       expect(error).toMatchObject({ code: "HISTORY_EMPTY" });
     }
   });
+
+  it("deeply freezes isolated history snapshots", () => {
+    const initial = createCommandState(documentFixture());
+    const changed = applyCommandBatch(
+      initial,
+      renameBatch(id(44), 0, "Changed"),
+    );
+    const snapshot = changed.past[0];
+    if (snapshot === undefined) throw new Error("Expected history snapshot");
+
+    expect(Object.isFrozen(snapshot)).toBe(true);
+    expect(Object.isFrozen(snapshot.pages)).toBe(true);
+    expect(Object.isFrozen(snapshot.pages[0])).toBe(true);
+    expect(() => {
+      snapshot.name = "Mutated";
+    }).toThrow(TypeError);
+    initial.document.name = "Caller mutation";
+    expect(snapshot.name).toBe("Commands fixture");
+  });
+
+  it("reuses frozen history snapshots across undo and redo", () => {
+    const first = applyCommandBatch(
+      createCommandState(documentFixture()),
+      renameBatch(id(45), 0, "First"),
+    );
+    const second = applyCommandBatch(first, renameBatch(id(46), 1, "Second"));
+    const firstSnapshot = second.past[0];
+    const undone = undo(second);
+
+    expect(undone.past[0]).toBe(firstSnapshot);
+    expect(Object.isFrozen(undone.future[0])).toBe(true);
+    const redone = redo(undone);
+    expect(redone.past[0]).toBe(firstSnapshot);
+  });
 });
