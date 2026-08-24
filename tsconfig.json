@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "files": [],
+  "references": [
+    { "path": "apps/web" },
+    { "path": "apps/server" },
+    { "path": "apps/mcp-server" },
+    { "path": "apps/mcp-stdio" },
+    { "path": "packages/contracts" },
+    { "path": "packages/document" },
+    { "path": "packages/commands" },
+    { "path": "packages/renderer" },
+    { "path": "packages/exporters" },
+    { "path": "packages/ui" },
+    { "path": "packages/testing" }
+  ]
+}

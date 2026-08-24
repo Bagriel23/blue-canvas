@@ -1,0 +1,24 @@
+name: blue-canvas
+
+services:
+  mariadb:
+    image: mariadb:11.8
+    restart: unless-stopped
+    environment:
+      MARIADB_DATABASE: ${MARIADB_DATABASE:-blue_canvas}
+      MARIADB_PASSWORD: ${MARIADB_PASSWORD:-blue_canvas_dev}
+      MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD:-blue_canvas_root_dev}
+      MARIADB_USER: ${MARIADB_USER:-blue_canvas}
+    ports:
+      - "${MARIADB_PORT:-3306}:3306"
+    volumes:
+      - mariadb-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+volumes:
+  mariadb-data:
