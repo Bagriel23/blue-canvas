@@ -1,5 +1,13 @@
 import { z } from "zod";
 
+export const safeRecordKeySchema = z
+  .string()
+  .min(1)
+  .regex(
+    /^(?!(?:__proto__|constructor|prototype)$).+$/u,
+    "Reserved map key is not allowed",
+  );
+
 export const tokenReferenceSchema = z.strictObject({
   token: z.string().min(1),
 });

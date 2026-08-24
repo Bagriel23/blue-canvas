@@ -38,4 +38,17 @@ describe("design document", () => {
 
     expect(() => parseDesignDocument(document)).toThrow();
   });
+
+  it.each(["__proto__", "constructor", "prototype"])(
+    "rejects reserved token and variable key %s",
+    (key) => {
+      for (const field of ["tokens", "variables"] as const) {
+        const document = createDesignDocument("Unsafe key");
+        const value = { type: "string" as const, value: "unsafe" };
+        document[field] = Object.fromEntries([[key, value]]);
+
+        expect(() => parseDesignDocument(document)).toThrow(/reserved/iu);
+      }
+    },
+  );
 });

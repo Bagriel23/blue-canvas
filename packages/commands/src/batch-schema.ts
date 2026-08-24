@@ -4,6 +4,7 @@ import {
   imageSourceSchema,
   interactionSchema,
   nodeStyleSchema,
+  safeRecordKeySchema,
   stackLayoutSchema,
   tokenDefinitionSchema,
   variableDefinitionSchema,
@@ -64,13 +65,13 @@ const moveNodeCommandSchema = z.strictObject({
 
 const setTokenCommandSchema = z.strictObject({
   type: z.literal("set-token"),
-  name: z.string().min(1),
+  name: safeRecordKeySchema,
   value: tokenDefinitionSchema,
 });
 
 const setVariableCommandSchema = z.strictObject({
   type: z.literal("set-variable"),
-  name: z.string().min(1),
+  name: safeRecordKeySchema,
   value: variableDefinitionSchema,
 });
 

@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 
-import { parseDesignDocument } from "./index.js";
+import { designNodeSchema, parseDesignDocument } from "./index.js";
 
 const id = (suffix: number): string =>
   `00000000-0000-4000-8000-${suffix.toString().padStart(12, "0")}`;
@@ -208,4 +208,15 @@ it("parses every semantic node in a responsive document", () => {
   };
 
   expect(parseDesignDocument(document)).toEqual(document);
+});
+
+it("rejects a non-UUID image asset id", () => {
+  expect(() =>
+    designNodeSchema.parse({
+      kind: "image",
+      ...common(30, "Asset image"),
+      source: { type: "asset", assetId: "logo-file" },
+      alt: "Logo",
+    }),
+  ).toThrow();
 });

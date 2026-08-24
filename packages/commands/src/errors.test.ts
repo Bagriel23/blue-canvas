@@ -8,6 +8,63 @@ import {
 import { documentFixture, id } from "./test-fixtures.js";
 
 describe("command batch safety", () => {
+  it.each([null, undefined, 42])(
+    "rejects unknown batch input %# with INVALID_BATCH",
+    (input) => {
+      const state = createCommandState(documentFixture());
+
+      expect(() => applyCommandBatch(state, input)).toThrowError(
+        expect.objectContaining<Partial<CommandError>>({
+          code: "INVALID_BATCH",
+        }),
+      );
+    },
+  );
+
+  it("validates a malformed duplicate-id batch before idempotency", () => {
+    const applied = applyCommandBatch(createCommandState(documentFixture()), {
+      id: id(49),
+      actorId: id(51),
+      baseRevision: 0,
+      commands: [],
+    });
+
+    expect(() => applyCommandBatch(applied, { id: id(49) })).toThrowError(
+      expect.objectContaining<Partial<CommandError>>({ code: "INVALID_BATCH" }),
+    );
+  });
+
+  it.each([
+    ["set-token", "__proto__"],
+    ["set-token", "constructor"],
+    ["set-token", "prototype"],
+    ["set-variable", "__proto__"],
+    ["set-variable", "constructor"],
+    ["set-variable", "prototype"],
+  ] as const)("rejects reserved key %s:%s", (type, name) => {
+    const state = createCommandState(documentFixture());
+    const command = {
+      type,
+      name,
+      value: { type: "string" as const, value: "unsafe" },
+    };
+
+    expect(() =>
+      applyCommandBatch(state, {
+        id: id(48),
+        actorId: id(51),
+        baseRevision: 0,
+        commands: [command],
+      }),
+    ).toThrowError(
+      expect.objectContaining<Partial<CommandError>>({ code: "INVALID_BATCH" }),
+    );
+    expect(Object.getPrototypeOf(state.document.tokens)).toBe(Object.prototype);
+    expect(Object.getPrototypeOf(state.document.variables)).toBe(
+      Object.prototype,
+    );
+  });
+
   it("rejects revision conflicts with a typed domain error", () => {
     const state = createCommandState(documentFixture());
 

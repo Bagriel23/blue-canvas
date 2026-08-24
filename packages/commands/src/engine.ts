@@ -15,7 +15,6 @@ import type {
   AddNodeCommand,
   CommandState,
   DesignCommand,
-  DesignCommandBatch,
   MoveNodeCommand,
   RemoveNodeCommand,
   UpdateNodeCommand,
@@ -167,10 +166,8 @@ function applyCommand(document: DesignDocument, command: DesignCommand): void {
 
 export function applyCommandBatch(
   state: CommandState,
-  input: DesignCommandBatch,
+  input: unknown,
 ): CommandState {
-  if (state.appliedBatchIds.includes(input.id)) return state;
-
   const parsed = designCommandBatchSchema.safeParse(input);
   if (!parsed.success) {
     throw new CommandError(
@@ -180,6 +177,7 @@ export function applyCommandBatch(
     );
   }
   const batch = parsed.data;
+  if (state.appliedBatchIds.includes(batch.id)) return state;
   if (batch.baseRevision !== state.revision) {
     throw new CommandError(
       "REVISION_CONFLICT",

@@ -110,7 +110,7 @@ export const gridLayoutSchema = z.strictObject({
 });
 
 export const imageSourceSchema = z.discriminatedUnion("type", [
-  z.strictObject({ type: z.literal("asset"), assetId: z.string().min(1) }),
+  z.strictObject({ type: z.literal("asset"), assetId: z.uuid() }),
   z.strictObject({ type: z.literal("url"), url: z.url() }),
 ]);
 

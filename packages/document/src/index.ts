@@ -37,6 +37,7 @@ export type {
 export {
   interactionSchema,
   nodeStyleSchema,
+  safeRecordKeySchema,
   tokenDefinitionSchema,
   variableDefinitionSchema,
 } from "./values.js";

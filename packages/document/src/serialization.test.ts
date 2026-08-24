@@ -50,6 +50,14 @@ it("references reused schemas instead of duplicating them", () => {
   );
 });
 
+it("publishes the reserved map-key restriction", () => {
+  const serialized = deterministicSerialize(designDocumentJsonSchema);
+
+  expect(serialized).toContain("__proto__");
+  expect(serialized).toContain("constructor");
+  expect(serialized).toContain("prototype");
+});
+
 it("keeps the checked JSON Schema artifact deterministic", () => {
   const schemaPath = new URL(
     "../schema/design-document.schema.json",

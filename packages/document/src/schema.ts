@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import { designNodeSchema, type DesignNode } from "./nodes.js";
 import {
+  safeRecordKeySchema,
   tokenDefinitionSchema,
   variableDefinitionSchema,
   type TokenDefinition,
@@ -80,13 +81,33 @@ const componentSchema = z.strictObject({
   root: designNodeSchema,
 });
 
+const safeRecord = <Value extends z.ZodType>(valueSchema: Value) =>
+  z.preprocess(
+    (value, context) => {
+      if (
+        value !== null &&
+        typeof value === "object" &&
+        Object.keys(value).some(
+          (key) => !safeRecordKeySchema.safeParse(key).success,
+        )
+      ) {
+        context.addIssue({
+          code: "custom",
+          message: "Reserved map key is not allowed",
+        });
+      }
+      return value;
+    },
+    z.record(safeRecordKeySchema, valueSchema),
+  );
+
 export const designDocumentSchema: z.ZodType<DesignDocument> = z
   .strictObject({
     schemaVersion: z.literal(1),
     id: z.uuid(),
     name: z.string().min(1),
-    tokens: z.record(z.string().min(1), tokenDefinitionSchema),
-    variables: z.record(z.string().min(1), variableDefinitionSchema),
+    tokens: safeRecord(tokenDefinitionSchema),
+    variables: safeRecord(variableDefinitionSchema),
     components: z.array(componentSchema),
     pages: z.array(pageSchema),
   })
