@@ -2,7 +2,7 @@ name: blue-canvas
 
 services:
   mariadb:
-    image: mariadb:11.8
+    image: mariadb:11.8.8@sha256:24e76fcec8c003a0362d0dd53f4806e7e79458d7fdeaf47437760e19496f5a9c
     restart: unless-stopped
     environment:
       MARIADB_DATABASE: ${MARIADB_DATABASE:-blue_canvas}
@@ -10,7 +10,7 @@ services:
       MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD:-blue_canvas_root_dev}
       MARIADB_USER: ${MARIADB_USER:-blue_canvas}
     ports:
-      - "${MARIADB_PORT:-3306}:3306"
+      - "127.0.0.1:${MARIADB_PORT:-3306}:3306"
     volumes:
       - mariadb-data:/var/lib/mysql
     healthcheck:

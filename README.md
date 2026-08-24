@@ -8,7 +8,7 @@ live under `docs/superpowers/`.
 
 ## Prerequisites
 
-- Node.js 24 LTS with npm 11 or newer
+- Node.js 24 LTS with npm 11.19.0
 - Docker with Docker Compose
 - `nvm` for the setup commands below
 
@@ -19,6 +19,8 @@ Run these commands from the repository root:
 ```bash
 nvm install
 nvm use
+npm install --global npm@11.19.0
+test "$(npm --version)" = "11.19.0"
 npm ci
 cp .env.example .env
 docker compose up -d
@@ -30,6 +32,10 @@ Stop the development database without deleting its data:
 ```bash
 docker compose down
 ```
+
+The values in `.env.example` are local development defaults. Production
+deployments must provide unique secrets through the deployment environment and
+must not reuse or expose these credentials.
 
 ## Repository Commands
 

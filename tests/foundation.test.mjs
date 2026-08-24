@@ -29,3 +29,40 @@ test("the repository declares every planned npm workspace", async () => {
     assert.equal(workspacePackage.private, true);
   }
 });
+
+test("browser workspaces typecheck TypeScript React files", async () => {
+  for (const workspace of ["apps/web", "packages/ui"]) {
+    const tsconfig = JSON.parse(
+      await readFile(`${workspace}/tsconfig.json`, "utf8"),
+    );
+
+    assert.equal(tsconfig.compilerOptions.jsx, "react-jsx");
+    assert.deepEqual(tsconfig.include, ["src/**/*.ts", "src/**/*.tsx"]);
+  }
+});
+
+test("the development database is immutable and bound to loopback", async () => {
+  const compose = await readFile("compose.yaml", "utf8");
+  const developmentEnvironment = await readFile(".env.example", "utf8");
+
+  assert.match(compose, /image: mariadb:11\.8\.8@sha256:[a-f0-9]{64}/u);
+  assert.match(compose, /127\.0\.0\.1:\$\{MARIADB_PORT:-3306\}:3306/u);
+  assert.match(developmentEnvironment, /^APP_HOST=127\.0\.0\.1$/mu);
+});
+
+test("the repository and CI use the pinned npm release", async () => {
+  const rootPackage = JSON.parse(await readFile("package.json", "utf8"));
+  const workflow = await readFile(".github/workflows/ci.yml", "utf8");
+
+  assert.equal(rootPackage.packageManager, "npm@11.19.0");
+  assert.equal(rootPackage.engines.npm, ">=11.19.0 <12");
+  assert.match(workflow, /npm install --global npm@11\.19\.0/u);
+});
+
+test("CI actions are pinned to immutable revisions", async () => {
+  const workflow = await readFile(".github/workflows/ci.yml", "utf8");
+
+  assert.doesNotMatch(workflow, /uses: [^\n]+@v\d/u);
+  assert.match(workflow, /uses: actions\/checkout@[a-f0-9]{40}/u);
+  assert.match(workflow, /uses: actions\/setup-node@[a-f0-9]{40}/u);
+});
