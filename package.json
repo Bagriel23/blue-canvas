@@ -13,15 +13,18 @@
     "packages/*"
   ],
   "scripts": {
-    "build": "tsc --build tsconfig.json --pretty false",
+    "build": "npm run db:generate && tsc --build tsconfig.json --pretty false",
     "check": "npm run format:check && npm run lint && npm run typecheck && npm run build && npm run test",
+    "db:generate": "npm run db:generate -w @blue-canvas/server",
+    "db:migrate": "npm run db:migrate -w @blue-canvas/server",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "eslint .",
     "test": "npm run test:smoke && vitest run",
     "test:export-fixtures": "vitest run --project packages/exporters src/framework-build.test.ts",
+    "test:integration": "npm run db:migrate && vitest run --config vitest.integration.config.ts",
     "test:smoke": "node --test tests/foundation.test.mjs",
-    "typecheck": "tsc --build tsconfig.json --emitDeclarationOnly --pretty false"
+    "typecheck": "npm run db:generate && tsc --build tsconfig.json --emitDeclarationOnly --pretty false"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

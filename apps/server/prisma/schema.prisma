@@ -1,0 +1,164 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+model SystemLock {
+  name String @id @db.VarChar(64)
+
+  @@map("system_locks")
+}
+
+enum UserStatus {
+  active
+  disabled
+}
+
+enum ProjectRole {
+  owner
+  editor
+  commenter
+  viewer
+}
+
+model User {
+  id                   String                @id @db.VarChar(36)
+  email                String                @unique(map: "users_email_key") @db.VarChar(320)
+  displayName          String                @db.VarChar(100)
+  passwordHash         String                @db.VarChar(255)
+  status               UserStatus            @default(active)
+  locale               String                @db.VarChar(16)
+  isAdmin              Boolean               @default(false)
+  createdAt            DateTime              @db.DateTime(3)
+  updatedAt            DateTime              @db.DateTime(3)
+  sessions             Session[]
+  sentInvitations      Invitation[]          @relation("InvitationSender")
+  ownedProjects        Project[]             @relation("ProjectOwner")
+  memberships          ProjectMember[]
+  personalAccessTokens PersonalAccessToken[]
+  auditEvents          AuditEvent[]           @relation("AuditActor")
+  uploadedAssets       Asset[]                @relation("AssetUploader")
+
+  @@map("users")
+}
+
+model Session {
+  id         String    @id @db.VarChar(36)
+  userId     String    @db.VarChar(36)
+  tokenHash  String    @unique(map: "sessions_token_hash_key") @db.Char(64)
+  csrfHash   String    @db.Char(64)
+  expiresAt  DateTime  @db.DateTime(3)
+  revokedAt  DateTime? @db.DateTime(3)
+  lastSeenAt DateTime  @db.DateTime(3)
+  createdAt  DateTime  @db.DateTime(3)
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt], map: "sessions_user_expiry_idx")
+  @@map("sessions")
+}
+
+model Invitation {
+  id          String    @id @db.VarChar(36)
+  email       String    @db.VarChar(320)
+  tokenHash   String    @unique(map: "invitations_token_hash_key") @db.Char(64)
+  invitedById String    @db.VarChar(36)
+  expiresAt   DateTime  @db.DateTime(3)
+  acceptedAt  DateTime? @db.DateTime(3)
+  projectId   String?   @db.VarChar(36)
+  role        ProjectRole?
+  createdAt   DateTime  @db.DateTime(3)
+  invitedBy   User      @relation("InvitationSender", fields: [invitedById], references: [id], onDelete: Restrict)
+  project     Project?  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([email, expiresAt], map: "invitations_email_expiry_idx")
+  @@index([projectId], map: "invitations_project_idx")
+  @@map("invitations")
+}
+
+model Project {
+  id          String          @id @db.VarChar(36)
+  name        String          @db.VarChar(120)
+  ownerId     String          @db.VarChar(36)
+  archivedAt  DateTime?       @db.DateTime(3)
+  createdAt   DateTime        @db.DateTime(3)
+  updatedAt   DateTime        @db.DateTime(3)
+  owner       User            @relation("ProjectOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  members     ProjectMember[]
+  auditEvents AuditEvent[]
+  assets      Asset[]
+  invitations Invitation[]
+
+  @@index([ownerId], map: "projects_owner_idx")
+  @@map("projects")
+}
+
+model ProjectMember {
+  id        String      @id @db.VarChar(36)
+  projectId String      @db.VarChar(36)
+  userId    String      @db.VarChar(36)
+  role      ProjectRole
+  createdAt DateTime    @db.DateTime(3)
+  updatedAt DateTime    @db.DateTime(3)
+  project   Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, userId], map: "project_members_project_user_key")
+  @@index([userId], map: "project_members_user_idx")
+  @@map("project_members")
+}
+
+model PersonalAccessToken {
+  id         String    @id @db.VarChar(36)
+  userId     String    @db.VarChar(36)
+  name       String    @db.VarChar(100)
+  tokenHash  String    @unique(map: "personal_access_tokens_hash_key") @db.Char(64)
+  scopes     Json
+  expiresAt  DateTime? @db.DateTime(3)
+  revokedAt  DateTime? @db.DateTime(3)
+  lastUsedAt DateTime? @db.DateTime(3)
+  createdAt  DateTime  @db.DateTime(3)
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt], map: "personal_access_tokens_user_idx")
+  @@map("personal_access_tokens")
+}
+
+model AuditEvent {
+  id         String   @id @db.VarChar(36)
+  actorId    String?  @db.VarChar(36)
+  action     String   @db.VarChar(100)
+  targetType String   @db.VarChar(80)
+  targetId   String?  @db.VarChar(36)
+  projectId  String?  @db.VarChar(36)
+  traceId    String   @db.VarChar(128)
+  metadata   Json
+  createdAt  DateTime @db.DateTime(3)
+  actor      User?    @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+  project    Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, createdAt], map: "audit_events_project_created_idx")
+  @@index([actorId, createdAt], map: "audit_events_actor_created_idx")
+  @@map("audit_events")
+}
+
+model Asset {
+  id           String   @id @db.VarChar(36)
+  projectId    String   @db.VarChar(36)
+  uploadedById String   @db.VarChar(36)
+  sha256       String   @db.Char(64)
+  originalName String   @db.VarChar(255)
+  mediaType    String   @db.VarChar(100)
+  size         Int      @db.UnsignedInt
+  storageKey   String   @db.VarChar(80)
+  createdAt    DateTime @db.DateTime(3)
+  project      Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  uploadedBy   User     @relation("AssetUploader", fields: [uploadedById], references: [id], onDelete: Restrict)
+
+  @@index([projectId, createdAt], map: "assets_project_created_idx")
+  @@index([sha256], map: "assets_sha256_idx")
+  @@map("assets")
+}

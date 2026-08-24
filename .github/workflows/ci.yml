@@ -12,6 +12,19 @@ jobs:
   check:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    services:
+      mariadb:
+        image: mariadb:11.8.8@sha256:24e76fcec8c003a0362d0dd53f4806e7e79458d7fdeaf47437760e19496f5a9c
+        env:
+          MARIADB_DATABASE: blue_canvas
+          MARIADB_PASSWORD: blue_canvas_dev
+          MARIADB_ROOT_PASSWORD: blue_canvas_root_dev
+          MARIADB_USER: blue_canvas
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=5s --health-timeout=5s --health-retries=20
     steps:
       - name: Check out repository
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -28,3 +41,11 @@ jobs:
         run: npm ci
       - name: Run repository checks
         run: npm run check
+      - name: Run database integration tests
+        env:
+          DATABASE_HOST: 127.0.0.1
+          DATABASE_PORT: 3306
+          DATABASE_NAME: blue_canvas
+          DATABASE_USER: blue_canvas
+          DATABASE_PASSWORD: blue_canvas_dev
+        run: npm run test:integration

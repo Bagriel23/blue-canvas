@@ -14,5 +14,8 @@
   },
   "scripts": {
     "build": "tsc --build --pretty false"
+  },
+  "dependencies": {
+    "zod": "4.1.5"
   }
 }
