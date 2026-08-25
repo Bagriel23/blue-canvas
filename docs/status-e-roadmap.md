@@ -38,16 +38,20 @@ Este documento descreve o estado observado no código. O plano completo está em
   portável `apps/mcp-server/SKILL.md`. Toda operação delega o PAT do usuário e o
   serviço não acessa banco ou storage diretamente. Detalhes em
   [MCP e skill](mcp-e-skill.md).
+- Perfil `app` do Docker Compose com serviços `api`, `web` e `mcp` além do
+  MariaDB, scripts `scripts/backup.sh` e `scripts/restore.sh` para snapshots
+  MySQL+assets, scripts PowerShell (`scripts/windows/*.ps1`) para
+  Windows/Laragon e o runbook em [Operação](operacao.md).
 - Testes unitários, propriedades, contrato, export build, componente (happy-dom
   \+ Testing Library) e integração em MariaDB 10.6/MySQL 8.0.
 
 ## Em desenvolvimento
 
-### Operação e aceite
+### Ainda pendente
 
-Compose de aplicação completo, scripts PowerShell/Laragon, proxy/hardening,
-backup/restore, testes Playwright e visuais, E2E com dois usuários, carga,
-segurança integrada e smoke test Windows.
+Reverse-proxy padrão do Compose, testes Playwright, testes visuais, E2E com dois
+usuários simultâneos, cenários de carga e cobertura CI para o smoke test
+Windows.
 
 ## Limitações atuais importantes
 

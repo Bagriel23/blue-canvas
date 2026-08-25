@@ -48,6 +48,7 @@ Vite em `http://127.0.0.1:5173` fazendo proxy de `/api` para a API Fastify.
 - [Exportadores HTML, React e Preact](docs/exportadores.md)
 - [Testes e qualidade](docs/testes-e-qualidade.md)
 - [Implantação e operação](docs/implantacao-e-operacao.md)
+- [Runbook de operação](docs/operacao.md)
 - [Status e roadmap](docs/status-e-roadmap.md)
 - [Especificação de produto aprovada](docs/superpowers/specs/2026-08-24-blue-canvas-design.md)
 - [Plano de implementação aprovado](docs/superpowers/plans/2026-08-24-blue-canvas-v1.md)

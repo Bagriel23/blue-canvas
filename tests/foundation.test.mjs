@@ -101,3 +101,38 @@ test("database integration generates clean-checkout prerequisites", async () => 
     integration.indexOf("db:generate") < integration.indexOf("db:migrate"),
   );
 });
+
+test("compose declares an app profile with api, web and mcp services", async () => {
+  const compose = await readFile("compose.yaml", "utf8");
+  for (const name of ["api", "web", "mcp"]) {
+    assert.match(compose, new RegExp(`\\s${name}:`, "u"));
+  }
+  assert.match(compose, /profiles: \["app"\]/u);
+  assert.match(compose, /BLUE_CANVAS_API_URL: http:\/\/api:3000/u);
+  assert.match(compose, /VITE_API_UPSTREAM: http:\/\/api:3000/u);
+  assert.match(compose, /assets-data:\/var\/lib\/blue-canvas\/assets/u);
+});
+
+test("operational scripts are shipped with executable permissions", async () => {
+  const backupScript = await readFile("scripts/backup.sh", "utf8");
+  const restoreScript = await readFile("scripts/restore.sh", "utf8");
+  assert.match(backupScript, /^#!\/usr\/bin\/env bash/mu);
+  assert.match(restoreScript, /^#!\/usr\/bin\/env bash/mu);
+  assert.match(backupScript, /mysqldump/u);
+  assert.match(restoreScript, /BLUE_CANVAS_FORCE_RESTORE/u);
+});
+
+test("windows script bundle covers start, stop, migrate, backup, restore and smoke", async () => {
+  for (const name of [
+    "start.ps1",
+    "stop.ps1",
+    "migrate.ps1",
+    "backup.ps1",
+    "restore.ps1",
+    "smoke.ps1",
+    "_common.ps1",
+  ]) {
+    const contents = await readFile(`scripts/windows/${name}`, "utf8");
+    assert.match(contents, /Requires -Version 5\.1|Import-Module/u);
+  }
+});
