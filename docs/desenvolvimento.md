@@ -79,8 +79,16 @@ npm run start -w @blue-canvas/server
 ```
 
 O `start` executa `apps/server/dist/index.js`, portanto faça `npm run build` ou
-`npm run check` depois de mudar o código. Ainda não existe script de watch ou
-servidor de desenvolvimento do frontend.
+`npm run check` depois de mudar o código.
+
+Para o cliente web, em outro terminal:
+
+```bash
+npm run dev -w @blue-canvas/web
+```
+
+O Vite responde em `http://127.0.0.1:5173` e faz proxy de `/api` para o servidor
+Fastify. Ajuste `VITE_API_UPSTREAM` se a API estiver em outra porta.
 
 Com os defaults locais:
 

@@ -4,9 +4,20 @@
     "composite": true,
     "jsx": "react-jsx",
     "lib": ["ES2024", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
     "outDir": "dist",
     "rootDir": "src",
-    "tsBuildInfoFile": "dist/.tsbuildinfo"
+    "tsBuildInfoFile": "dist/.tsbuildinfo",
+    "types": ["vite/client"]
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx"]
+  "include": ["src/**/*.ts", "src/**/*.tsx"],
+  "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx"],
+  "references": [
+    { "path": "../../packages/collaboration" },
+    { "path": "../../packages/commands" },
+    { "path": "../../packages/contracts" },
+    { "path": "../../packages/document" },
+    { "path": "../../packages/ui" }
+  ]
 }

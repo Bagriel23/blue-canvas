@@ -1,3 +1,4 @@
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
 
 const workspaceDirectories = [
@@ -15,6 +16,12 @@ const workspaceDirectories = [
   "packages/testing",
 ];
 
+const browserDirectories = new Set(["apps/web"]);
+
+function fromRoot(relative: string): string {
+  return fileURLToPath(new URL(relative, import.meta.url));
+}
+
 export default defineConfig({
   test: {
     passWithNoTests: true,
@@ -25,6 +32,12 @@ export default defineConfig({
         include: ["src/**/*.test.{ts,tsx}"],
         name: root,
         passWithNoTests: true,
+        ...(browserDirectories.has(root)
+          ? {
+              environment: "happy-dom" as const,
+              setupFiles: [fromRoot(`./${root}/src/testing/setup.ts`)],
+            }
+          : {}),
       },
     })),
   },

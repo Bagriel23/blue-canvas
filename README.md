@@ -6,9 +6,10 @@ Pen e no Claude Design, mas foi desenhado para operar sem tokens de serviços
 externos, telemetria, CDNs ou serviços de IA externos.
 
 > Estado atual: o modelo de documento, o motor de comandos, os exportadores, a
-> API e a colaboração em tempo real estão implementados. Editor web,
-> kits/templates e MCP ainda estão em desenvolvimento. Consulte
-> [Status e roadmap](docs/status-e-roadmap.md).
+> API, a colaboração em tempo real e o esqueleto do cliente web React (login,
+> home, biblioteca, workspace de três painéis com canvas DOM semântico) já
+> existem no branch. Ainda faltam a integração Yjs no cliente, kits/templates,
+> exportação HTTP e MCP. Consulte [Status e roadmap](docs/status-e-roadmap.md).
 
 ## Início rápido
 
@@ -30,13 +31,15 @@ npm run start -w @blue-canvas/server
 ```
 
 A API escuta em `http://127.0.0.1:3000/api/v1` com a configuração de
-desenvolvimento. Ainda não há um servidor de frontend utilizável.
+desenvolvimento. Em outro terminal, `npm run dev -w @blue-canvas/web` sobe o
+Vite em `http://127.0.0.1:5173` fazendo proxy de `/api` para a API Fastify.
 
 ## Documentação
 
 - [Arquitetura e mapa do monorepo](docs/arquitetura.md)
 - [Desenvolvimento local, npm, Docker e Laragon](docs/desenvolvimento.md)
 - [Configuração e variáveis de ambiente](docs/configuracao.md)
+- [Aplicação web](docs/aplicacao-web.md)
 - [API, autenticação, autorização e segurança](docs/api-e-seguranca.md)
 - [Colaboração em tempo real, versões e comentários](docs/colaboracao.md)
 - [Documento semântico e motor de comandos](docs/documento-e-comandos.md)

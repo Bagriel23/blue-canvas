@@ -21,18 +21,15 @@ Este documento descreve o estado observado no código. O plano completo está em
   reconexão, snapshots compactados, versões nomeadas e comentários.
 - Revalidação de sessão/PAT e papel a cada atualização, limite de dez editores e
   clientes commenter/viewer estritamente read-only.
-- Testes unitários, propriedades, contrato, export build e integração em MariaDB
-  10.6/MySQL 8.0.
+- Aplicação web React 19/Vite 8 com tokens SEDA claros/escuros (Samsung Blue
+  `#1428A0`), locales pt-BR/en-US/ko-KR, roteador por hash, sessão HTTP com
+  CSRF, workspace de três painéis, canvas DOM semântico com seleção por clique e
+  teclado e diálogos de compartilhamento e exportação. Detalhes em
+  [Aplicação web](aplicacao-web.md).
+- Testes unitários, propriedades, contrato, export build, componente (happy-dom
+  + Testing Library) e integração em MariaDB 10.6/MySQL 8.0.
 
 ## Em desenvolvimento
-
-### Aplicação web
-
-React/Vite, login/home/library, workspace de três painéis, canvas DOM,
-inspector, preview, compartilhamento e exportação. A identidade visual prevista
-usa Samsung Blue `#1428A0`, neutros, tema inicial do sistema e preferência
-manual persistida em `localStorage`. Locales de produto e do contrato HTTP:
-pt-BR, inglês (`en-US`) e coreano (`ko-KR`).
 
 ### Kits e templates
 
@@ -53,11 +50,16 @@ segurança integrada e smoke test Windows.
 
 ## Limitações atuais importantes
 
-- Não há UI web executável.
-- Ainda não há editor web consumindo a colaboração; os contratos, APIs e o
-  transporte WebSocket já estão disponíveis.
-- Não há endpoint de exportação ou empacotamento ZIP; existe a biblioteca.
+- A aplicação web ainda não consome Hocuspocus/Yjs: o workspace opera com um
+  documento fixture local em `apps/web/src/fixtures/demo.ts` e as edições não
+  são persistidas no servidor.
+- Não há endpoint de exportação ou empacotamento ZIP no servidor; existe a
+  biblioteca em `packages/exporters` e o diálogo web já constrói a requisição
+  esperada.
 - Não há download/listagem de assets na API.
+- Não há transformações estilo Moveable/Selecto no canvas — a seleção é por
+  clique e navegação por teclado.
+- Não há Playwright, screenshots de referência ou testes visuais automatizados.
 - Não há MCP funcional nem integração com agente de IA.
 - Não há recursos offline persistentes.
 - A API ainda não tem OpenAPI, rate limiting ou automação operacional de
