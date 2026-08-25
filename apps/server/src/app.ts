@@ -36,6 +36,13 @@ import {
   type Principal,
 } from "./core.js";
 import { CollaborationManager } from "./collaboration.js";
+import {
+  LibraryError,
+  LibraryService,
+  publicKit,
+  publicTemplate,
+  type LibraryActor,
+} from "./library-service.js";
 import type { RepositoryPort } from "./domain.js";
 import type { PasswordHasher } from "./security.js";
 import { MAX_ASSET_BYTES, type AssetStorage } from "./storage.js";
@@ -221,6 +228,7 @@ export function buildApp(dependencies: ServerDependencies): FastifyInstance {
     service,
     now: dependencies.now ?? (() => new Date()),
   });
+  const library = new LibraryService(dependencies.now ?? (() => new Date()));
 
   void app.register(websocket, {
     options: { maxPayload: 1024 * 1024 + 64 * 1024 },
@@ -257,6 +265,15 @@ export function buildApp(dependencies: ServerDependencies): FastifyInstance {
   });
 
   app.setErrorHandler(async (error, request, reply) => {
+    if (error instanceof LibraryError) {
+      return reply.code(error.status).send({
+        error: {
+          code: error.code,
+          message: error.message,
+          traceId: request.id,
+        },
+      });
+    }
     if (error instanceof ApiError) {
       const details =
         error.details === undefined ? {} : { details: error.details };
@@ -752,6 +769,106 @@ export function buildApp(dependencies: ServerDependencies): FastifyInstance {
     );
     return reply.code(201).send({ asset: assetResponse(asset) });
   });
+
+  function libraryActor(principal: Principal): LibraryActor {
+    return { id: principal.user.id, isAdmin: principal.user.isAdmin };
+  }
+
+  function libraryManifest(request: FastifyRequest): unknown {
+    const body = request.body;
+    if (
+      body !== null &&
+      typeof body === "object" &&
+      "manifest" in (body as Record<string, unknown>)
+    ) {
+      return (body as { manifest?: unknown }).manifest;
+    }
+    throw new ApiError("invalid_request", "manifest is required", 400);
+  }
+
+  app.get("/api/v1/library/kits", async (request) => {
+    const principal = await authenticate(request);
+    return {
+      kits: library.listKits(libraryActor(principal)).map(publicKit),
+    };
+  });
+
+  app.post("/api/v1/library/kits", async (request, reply) => {
+    const principal = await authenticate(request, { mutating: true });
+    const record = library.createKitDraft(
+      libraryActor(principal),
+      libraryManifest(request),
+    );
+    return reply.code(201).send({ kit: publicKit(record) });
+  });
+
+  app.post("/api/v1/library/kits/:kitId/publish", async (request) => {
+    const principal = await authenticate(request, { mutating: true });
+    const record = library.publishKit(
+      libraryActor(principal),
+      identifier(request, "kitId"),
+    );
+    return { kit: publicKit(record) };
+  });
+
+  app.post("/api/v1/library/kits/:kitId/duplicate", async (request, reply) => {
+    const principal = await authenticate(request, { mutating: true });
+    const record = library.duplicateKit(
+      libraryActor(principal),
+      identifier(request, "kitId"),
+    );
+    return reply.code(201).send({ kit: publicKit(record) });
+  });
+
+  app.post("/api/v1/library/kits/:kitId/deprecate", async (request) => {
+    const principal = await authenticate(request, { mutating: true });
+    const record = library.deprecateKit(
+      libraryActor(principal),
+      identifier(request, "kitId"),
+    );
+    return { kit: publicKit(record) };
+  });
+
+  app.get("/api/v1/library/templates", async (request) => {
+    const principal = await authenticate(request);
+    return {
+      templates: library
+        .listTemplates(libraryActor(principal))
+        .map((entry) =>
+          publicTemplate(entry.record, entry.compatible, entry.reason),
+        ),
+    };
+  });
+
+  app.post("/api/v1/library/templates", async (request, reply) => {
+    const principal = await authenticate(request, { mutating: true });
+    const record = library.createTemplateDraft(
+      libraryActor(principal),
+      libraryManifest(request),
+    );
+    return reply.code(201).send({ template: publicTemplate(record, true) });
+  });
+
+  app.post("/api/v1/library/templates/:templateId/publish", async (request) => {
+    const principal = await authenticate(request, { mutating: true });
+    const record = library.publishTemplate(
+      libraryActor(principal),
+      identifier(request, "templateId"),
+    );
+    return { template: publicTemplate(record, true) };
+  });
+
+  app.post(
+    "/api/v1/library/templates/:templateId/duplicate",
+    async (request, reply) => {
+      const principal = await authenticate(request, { mutating: true });
+      const record = library.duplicateTemplate(
+        libraryActor(principal),
+        identifier(request, "templateId"),
+      );
+      return reply.code(201).send({ template: publicTemplate(record, true) });
+    },
+  );
 
   return app;
 }

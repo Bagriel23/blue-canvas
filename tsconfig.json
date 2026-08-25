@@ -12,6 +12,7 @@
     { "path": "packages/renderer" },
     { "path": "packages/exporters" },
     { "path": "packages/collaboration" },
+    { "path": "packages/library" },
     { "path": "packages/ui" },
     { "path": "packages/testing" }
   ]

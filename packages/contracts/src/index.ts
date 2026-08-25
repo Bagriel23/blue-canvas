@@ -117,6 +117,20 @@ export const createPersonalAccessTokenRequestSchema = z.strictObject({
   expiresAt: z.iso.datetime().optional(),
 });
 
+export const libraryEntityKindSchema = z.enum(["kit", "template"]);
+
+export const libraryStatusSchema = z.enum(["draft", "published", "deprecated"]);
+
+export const createLibraryDraftRequestSchema = z.strictObject({
+  manifest: z.unknown(),
+});
+
+export type CreateLibraryDraftRequest = z.infer<
+  typeof createLibraryDraftRequestSchema
+>;
+export type LibraryEntityKind = z.infer<typeof libraryEntityKindSchema>;
+export type LibraryStatus = z.infer<typeof libraryStatusSchema>;
+
 export const errorEnvelopeSchema = z.strictObject({
   error: z.strictObject({
     code: z.string().min(1),

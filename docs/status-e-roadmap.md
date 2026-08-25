@@ -26,15 +26,16 @@ Este documento descreve o estado observado no código. O plano completo está em
   CSRF, workspace de três painéis, canvas DOM semântico com seleção por clique e
   teclado e diálogos de compartilhamento e exportação. Detalhes em
   [Aplicação web](aplicacao-web.md).
+- Biblioteca de kits e templates com manifestos versionados, ciclo draft →
+  published → deprecated, revisão administrativa, duplicação com bump de patch e
+  diagnóstico de compatibilidade. Três kits (SEDA Enterprise, Wireframe, Neutral
+  Product) e seis templates (dashboard, CRUD, formulário, auth, settings,
+  mobile) já são publicados na inicialização. Detalhes em
+  [Kits e templates](kits-e-templates.md).
 - Testes unitários, propriedades, contrato, export build, componente (happy-dom
-  + Testing Library) e integração em MariaDB 10.6/MySQL 8.0.
+  \+ Testing Library) e integração em MariaDB 10.6/MySQL 8.0.
 
 ## Em desenvolvimento
-
-### Kits e templates
-
-Kits versionados, drafts privados, aprovação administrativa, releases imutáveis
-e templates que fixam a versão do kit.
 
 ### MCP e skill
 
@@ -50,6 +51,9 @@ segurança integrada e smoke test Windows.
 
 ## Limitações atuais importantes
 
+- A biblioteca de kits e templates ainda armazena registros em memória; os
+  drafts criados por usuários somem quando o processo é reiniciado. A camada
+  Prisma para library ainda não existe.
 - A aplicação web ainda não consome Hocuspocus/Yjs: o workspace opera com um
   documento fixture local em `apps/web/src/fixtures/demo.ts` e as edições não
   são persistidas no servidor.

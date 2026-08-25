@@ -12,6 +12,7 @@ const workspaceDirectories = [
   "packages/renderer",
   "packages/exporters",
   "packages/collaboration",
+  "packages/library",
   "packages/ui",
   "packages/testing",
 ];

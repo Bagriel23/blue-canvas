@@ -10,7 +10,8 @@
   "references": [
     { "path": "../../packages/contracts" },
     { "path": "../../packages/document" },
-    { "path": "../../packages/collaboration" }
+    { "path": "../../packages/collaboration" },
+    { "path": "../../packages/library" }
   ],
   "include": ["src/**/*.ts"]
 }

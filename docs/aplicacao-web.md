@@ -30,11 +30,11 @@ mesmas chaves — o teste `i18n.test.ts` reprova acréscimos em um único idioma
 
 ## Roteamento
 
-`apps/web/src/router/router.ts` implementa um roteador baseado em `location.hash`
-com rotas para `home`, `library`, `sign-in`, `invitation?token=...`,
-`projects/:id`, `projects/:id/share` e `projects/:id/export`. Não há dependência
-de biblioteca externa. `serializeRoute` produz `href`s estáveis para navegação
-com âncoras.
+`apps/web/src/router/router.ts` implementa um roteador baseado em
+`location.hash` com rotas para `home`, `library`, `sign-in`,
+`invitation?token=...`, `projects/:id`, `projects/:id/share` e
+`projects/:id/export`. Não há dependência de biblioteca externa.
+`serializeRoute` produz `href`s estáveis para navegação com âncoras.
 
 ## Sessão e API
 
@@ -49,9 +49,10 @@ anônima — a UI mostra a tela de login em vez de propagar erro.
 
 ## Workspace e canvas
 
-O workspace divide a tela em três painéis: páginas + camadas à esquerda, o canvas
-DOM ao centro e o inspetor à direita com botões de prévia, compartilhamento e
-exportação. Em telas menores que 900 px o layout empilha as colunas.
+O workspace divide a tela em três painéis: páginas + camadas à esquerda, o
+canvas DOM ao centro e o inspetor à direita com botões de prévia,
+compartilhamento e exportação. Em telas menores que 900 px o layout empilha as
+colunas.
 
 O canvas renderiza `DesignDocument` como DOM semântico (`div`, `span`, `button`,
 `img`, `input`, `a`, `form`) usando `styleToCss` e `layoutToCss`. A seleção é
@@ -88,13 +89,13 @@ atrás do mesmo reverse proxy que expõe a API.
 
 ## Limitações atuais
 
-- Sem integração com o cliente Hocuspocus/Yjs. O documento de trabalho ainda
-  usa um fixture local em `apps/web/src/fixtures/demo.ts`.
+- Sem integração com o cliente Hocuspocus/Yjs. O documento de trabalho ainda usa
+  um fixture local em `apps/web/src/fixtures/demo.ts`.
 - Sem persistência das edições no servidor. Os manipuladores do inspetor
   atualizam apenas o estado em memória.
 - Sem Playwright, screenshots de referência ou testes visuais automatizados.
-- Sem transformações estilo Moveable/Selecto no canvas. A seleção é por clique
-  e teclado; arrastar para mover ainda não está implementado.
+- Sem transformações estilo Moveable/Selecto no canvas. A seleção é por clique e
+  teclado; arrastar para mover ainda não está implementado.
 - Sem download real de exportações — o diálogo consome
   `POST /api/v1/projects/:id/exports`, mas o servidor ainda não expõe esse
   endpoint (Task 9 do plano).
