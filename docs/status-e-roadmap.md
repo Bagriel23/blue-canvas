@@ -17,16 +17,14 @@ Este documento descreve o estado observado no código. O plano completo está em
   auditoria e upload de assets.
 - Persistência Prisma compatível com MariaDB/MySQL e storage local endereçado
   por conteúdo.
+- Hocuspocus/Yjs no mesmo servidor Fastify, com presença, convergência,
+  reconexão, snapshots compactados, versões nomeadas e comentários.
+- Revalidação de sessão/PAT e papel a cada atualização, limite de dez editores e
+  clientes commenter/viewer estritamente read-only.
 - Testes unitários, propriedades, contrato, export build e integração em MariaDB
   10.6/MySQL 8.0.
 
 ## Em desenvolvimento
-
-### Colaboração em tempo real
-
-Persistência do documento e versões, Yjs/Hocuspocus, presença, edição
-concorrente, reconexão, autorização por operação, comentários, menções e
-restauração de versão.
 
 ### Aplicação web
 
@@ -56,8 +54,8 @@ segurança integrada e smoke test Windows.
 ## Limitações atuais importantes
 
 - Não há UI web executável.
-- Não há persistência nem endpoints para o conteúdo semântico do projeto.
-- Não há colaboração, comentários ou versões.
+- Ainda não há editor web consumindo a colaboração; os contratos, APIs e o
+  transporte WebSocket já estão disponíveis.
 - Não há endpoint de exportação ou empacotamento ZIP; existe a biblioteca.
 - Não há download/listagem de assets na API.
 - Não há MCP funcional nem integração com agente de IA.

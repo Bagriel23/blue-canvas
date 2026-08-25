@@ -42,6 +42,10 @@ model User {
   personalAccessTokens PersonalAccessToken[]
   auditEvents          AuditEvent[]           @relation("AuditActor")
   uploadedAssets       Asset[]                @relation("AssetUploader")
+  namedVersions        NamedVersion[]         @relation("NamedVersionActor")
+  authoredComments     ProjectComment[]       @relation("CommentAuthor")
+  resolvedComments     ProjectComment[]       @relation("CommentResolver")
+  commentMentions      CommentMention[]
 
   @@map("users")
 }
@@ -91,6 +95,9 @@ model Project {
   auditEvents AuditEvent[]
   assets      Asset[]
   invitations Invitation[]
+  document    ProjectDocument?
+  versions    NamedVersion[]
+  comments    ProjectComment[]
 
   @@index([ownerId], map: "projects_owner_idx")
   @@map("projects")
@@ -162,4 +169,70 @@ model Asset {
   @@index([projectId, createdAt], map: "assets_project_created_idx")
   @@index([sha256], map: "assets_sha256_idx")
   @@map("assets")
+}
+
+model ProjectDocument {
+  projectId   String   @id @db.VarChar(36)
+  state       Bytes    @db.LongBlob
+  stateVector Bytes    @db.Blob
+  revision    Int      @default(1) @db.UnsignedInt
+  updatedAt   DateTime @db.DateTime(3)
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("project_documents")
+}
+
+model NamedVersion {
+  id             String         @id @db.VarChar(36)
+  projectId      String         @db.VarChar(36)
+  actorId        String         @db.VarChar(36)
+  name           String         @db.VarChar(120)
+  state          Bytes          @db.LongBlob
+  stateVector    Bytes          @db.Blob
+  revision       Int            @db.UnsignedInt
+  restoredFromId String?        @db.VarChar(36)
+  createdAt      DateTime       @db.DateTime(3)
+  project        Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  actor          User           @relation("NamedVersionActor", fields: [actorId], references: [id], onDelete: Restrict)
+  restoredFrom   NamedVersion?  @relation("VersionRestore", fields: [restoredFromId], references: [id], onDelete: SetNull)
+  restorations   NamedVersion[] @relation("VersionRestore")
+
+  @@index([projectId, createdAt], map: "named_versions_project_created_idx")
+  @@index([actorId], map: "named_versions_actor_idx")
+  @@index([restoredFromId], map: "named_versions_restored_from_idx")
+  @@map("named_versions")
+}
+
+model ProjectComment {
+  id           String           @id @db.VarChar(36)
+  projectId    String           @db.VarChar(36)
+  authorId     String           @db.VarChar(36)
+  body         String           @db.Text
+  nodeId       String?          @db.VarChar(36)
+  positionX    Float?
+  positionY    Float?
+  resolvedAt   DateTime?        @db.DateTime(3)
+  resolvedById String?          @db.VarChar(36)
+  createdAt    DateTime         @db.DateTime(3)
+  updatedAt    DateTime         @db.DateTime(3)
+  project      Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  author       User             @relation("CommentAuthor", fields: [authorId], references: [id], onDelete: Restrict)
+  resolvedBy   User?            @relation("CommentResolver", fields: [resolvedById], references: [id], onDelete: SetNull)
+  mentions     CommentMention[]
+
+  @@index([projectId, createdAt], map: "project_comments_project_created_idx")
+  @@index([authorId], map: "project_comments_author_idx")
+  @@index([resolvedById], map: "project_comments_resolver_idx")
+  @@map("project_comments")
+}
+
+model CommentMention {
+  commentId String         @db.VarChar(36)
+  userId    String         @db.VarChar(36)
+  comment   ProjectComment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  user      User           @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@id([commentId, userId])
+  @@index([userId], map: "comment_mentions_user_idx")
+  @@map("comment_mentions")
 }

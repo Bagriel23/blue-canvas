@@ -7,7 +7,10 @@ import type {
   Invitation,
   PersonalAccessToken,
   Project,
+  ProjectComment,
+  ProjectDocument,
   ProjectMember,
+  NamedVersion,
   RepositoryPort,
   Session,
   User,
@@ -22,6 +25,9 @@ export class InMemoryRepository implements RepositoryPort {
   private personalAccessTokens = new Map<string, PersonalAccessToken>();
   private auditEvents = new Map<string, AuditEvent>();
   private assets = new Map<string, Asset>();
+  private projectDocuments = new Map<string, ProjectDocument>();
+  private namedVersions = new Map<string, NamedVersion>();
+  private comments = new Map<string, ProjectComment>();
   private transactionTail: Promise<void> = Promise.resolve();
 
   async transaction<T>(
@@ -391,6 +397,137 @@ export class InMemoryRepository implements RepositoryPort {
     return this.assets.delete(id);
   }
 
+  async findProjectDocument(
+    projectId: string,
+  ): Promise<ProjectDocument | undefined> {
+    return this.projectDocuments.get(projectId);
+  }
+
+  async upsertProjectDocument(
+    input: Parameters<RepositoryPort["upsertProjectDocument"]>[0],
+  ): Promise<ProjectDocument> {
+    const current = this.projectDocuments.get(input.projectId);
+    if (
+      input.expectedRevision !== undefined &&
+      (current?.revision ?? 0) !== input.expectedRevision
+    ) {
+      throw new ApiError("revision_conflict", "Document revision changed", 409);
+    }
+    const document: ProjectDocument = {
+      projectId: input.projectId,
+      state: input.state.slice(),
+      stateVector: input.stateVector.slice(),
+      revision: (current?.revision ?? 0) + 1,
+      updatedAt: input.now,
+    };
+    this.projectDocuments.set(input.projectId, document);
+    return document;
+  }
+
+  async createNamedVersion(
+    input: Parameters<RepositoryPort["createNamedVersion"]>[0],
+  ): Promise<NamedVersion> {
+    const version: NamedVersion = {
+      id: randomUUID(),
+      projectId: input.projectId,
+      actorId: input.actorId,
+      name: input.name,
+      state: input.state.slice(),
+      stateVector: input.stateVector.slice(),
+      revision: input.revision,
+      restoredFromId: input.restoredFromId,
+      createdAt: input.now,
+    };
+    this.namedVersions.set(version.id, version);
+    return version;
+  }
+
+  async listNamedVersions(projectId: string): Promise<NamedVersion[]> {
+    return [...this.namedVersions.values()]
+      .filter((version) => version.projectId === projectId)
+      .sort(
+        (left, right) => right.createdAt.getTime() - left.createdAt.getTime(),
+      );
+  }
+
+  async findNamedVersion(
+    projectId: string,
+    versionId: string,
+  ): Promise<NamedVersion | undefined> {
+    const version = this.namedVersions.get(versionId);
+    return version?.projectId === projectId ? version : undefined;
+  }
+
+  async findProjectMembers(projectId: string): Promise<ProjectMember[]> {
+    return [...this.members.values()].filter(
+      (member) => member.projectId === projectId,
+    );
+  }
+
+  async createComment(
+    input: Parameters<RepositoryPort["createComment"]>[0],
+  ): Promise<ProjectComment> {
+    const comment: ProjectComment = {
+      id: randomUUID(),
+      projectId: input.projectId,
+      authorId: input.authorId,
+      body: input.body,
+      nodeId: input.nodeId,
+      positionX: input.positionX,
+      positionY: input.positionY,
+      mentionUserIds: [...input.mentionUserIds],
+      resolvedAt: input.resolvedAt,
+      resolvedById: input.resolvedById,
+      createdAt: input.now,
+      updatedAt: input.now,
+    };
+    this.comments.set(comment.id, comment);
+    return comment;
+  }
+
+  async listComments(projectId: string): Promise<ProjectComment[]> {
+    return [...this.comments.values()]
+      .filter((comment) => comment.projectId === projectId)
+      .sort(
+        (left, right) => left.createdAt.getTime() - right.createdAt.getTime(),
+      );
+  }
+
+  async findComment(
+    projectId: string,
+    commentId: string,
+  ): Promise<ProjectComment | undefined> {
+    const comment = this.comments.get(commentId);
+    return comment?.projectId === projectId ? comment : undefined;
+  }
+
+  async updateComment(
+    projectId: string,
+    commentId: string,
+    input: Parameters<RepositoryPort["updateComment"]>[2],
+  ): Promise<ProjectComment | undefined> {
+    const comment = await this.findComment(projectId, commentId);
+    if (!comment) return undefined;
+    if (input.body !== undefined) comment.body = input.body;
+    if (input.mentionUserIds !== undefined)
+      comment.mentionUserIds = [...input.mentionUserIds];
+    comment.updatedAt = input.now;
+    return comment;
+  }
+
+  async resolveComment(
+    projectId: string,
+    commentId: string,
+    input: Parameters<RepositoryPort["resolveComment"]>[2],
+  ): Promise<ProjectComment | undefined> {
+    const comment = await this.findComment(projectId, commentId);
+    if (!comment) return undefined;
+    comment.resolvedAt = input.resolvedAt;
+    comment.resolvedById = input.resolvedById;
+    comment.updatedAt = input.now;
+    return comment;
+  }
+
   snapshot(): unknown {
     return {
       users: [...this.users.values()],
@@ -401,6 +538,9 @@ export class InMemoryRepository implements RepositoryPort {
       personalAccessTokens: [...this.personalAccessTokens.values()],
       auditEvents: [...this.auditEvents.values()],
       assets: [...this.assets.values()],
+      projectDocuments: [...this.projectDocuments.values()],
+      namedVersions: [...this.namedVersions.values()],
+      comments: [...this.comments.values()],
     };
   }
 
@@ -440,6 +580,9 @@ export class InMemoryRepository implements RepositoryPort {
       personalAccessTokens: this.personalAccessTokens,
       auditEvents: this.auditEvents,
       assets: this.assets,
+      projectDocuments: this.projectDocuments,
+      namedVersions: this.namedVersions,
+      comments: this.comments,
     });
   }
 
@@ -452,5 +595,8 @@ export class InMemoryRepository implements RepositoryPort {
     this.personalAccessTokens = snapshot.personalAccessTokens;
     this.auditEvents = snapshot.auditEvents;
     this.assets = snapshot.assets;
+    this.projectDocuments = snapshot.projectDocuments;
+    this.namedVersions = snapshot.namedVersions;
+    this.comments = snapshot.comments;
   }
 }

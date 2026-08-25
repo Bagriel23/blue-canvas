@@ -54,6 +54,45 @@ export const createProjectRequestSchema = z.strictObject({
   name: z.string().trim().min(1).max(120),
 });
 
+export const createNamedVersionRequestSchema = z.strictObject({
+  name: z.string().trim().min(1).max(120),
+});
+
+export const restoreNamedVersionRequestSchema = createNamedVersionRequestSchema;
+
+const normalizedPositionSchema = z.strictObject({
+  x: z.number().finite().min(0).max(1),
+  y: z.number().finite().min(0).max(1),
+});
+
+const mentionUserIdsSchema = z
+  .array(z.uuid())
+  .max(20)
+  .refine((ids) => new Set(ids).size === ids.length, {
+    message: "Mentioned users must be unique",
+  });
+
+export const createCommentRequestSchema = z.strictObject({
+  body: z.string().trim().min(1).max(5000),
+  nodeId: z.uuid().optional(),
+  position: normalizedPositionSchema.optional(),
+  mentionUserIds: mentionUserIdsSchema.default([]),
+});
+
+export const updateCommentRequestSchema = z
+  .strictObject({
+    body: z.string().trim().min(1).max(5000).optional(),
+    mentionUserIds: mentionUserIdsSchema.optional(),
+  })
+  .refine(
+    (input) => input.body !== undefined || input.mentionUserIds !== undefined,
+    { message: "At least one comment field is required" },
+  );
+
+export const resolveCommentRequestSchema = z.strictObject({
+  resolved: z.boolean(),
+});
+
 export const updateProjectRequestSchema = z
   .strictObject({
     name: z.string().trim().min(1).max(120).optional(),
@@ -99,6 +138,15 @@ export type AcceptInvitationRequest = z.infer<
 >;
 export type LoginRequest = z.infer<typeof loginRequestSchema>;
 export type CreateProjectRequest = z.infer<typeof createProjectRequestSchema>;
+export type CreateNamedVersionRequest = z.infer<
+  typeof createNamedVersionRequestSchema
+>;
+export type RestoreNamedVersionRequest = z.infer<
+  typeof restoreNamedVersionRequestSchema
+>;
+export type CreateCommentRequest = z.infer<typeof createCommentRequestSchema>;
+export type UpdateCommentRequest = z.infer<typeof updateCommentRequestSchema>;
+export type ResolveCommentRequest = z.infer<typeof resolveCommentRequestSchema>;
 export type UpdateProjectRequest = z.infer<typeof updateProjectRequestSchema>;
 export type AddProjectMemberRequest = z.infer<
   typeof addProjectMemberRequestSchema

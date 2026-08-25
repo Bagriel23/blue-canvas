@@ -2,17 +2,23 @@ import { randomUUID } from "node:crypto";
 
 import cookie from "@fastify/cookie";
 import multipart from "@fastify/multipart";
+import websocket from "@fastify/websocket";
 import {
   acceptInvitationRequestSchema,
   addProjectMemberRequestSchema,
   bootstrapAdminRequestSchema,
   createInvitationRequestSchema,
+  createCommentRequestSchema,
+  createNamedVersionRequestSchema,
   createPersonalAccessTokenRequestSchema,
   createProjectRequestSchema,
   loginRequestSchema,
+  resolveCommentRequestSchema,
+  restoreNamedVersionRequestSchema,
   inviteProjectMemberRequestSchema,
   updateProjectMemberRequestSchema,
   updateProjectRequestSchema,
+  updateCommentRequestSchema,
   type PersonalAccessTokenScope,
 } from "@blue-canvas/contracts";
 import Fastify, {
@@ -29,6 +35,7 @@ import {
   publicUser,
   type Principal,
 } from "./core.js";
+import { CollaborationManager } from "./collaboration.js";
 import type { RepositoryPort } from "./domain.js";
 import type { PasswordHasher } from "./security.js";
 import { MAX_ASSET_BYTES, type AssetStorage } from "./storage.js";
@@ -125,6 +132,58 @@ function assetResponse(asset: {
   };
 }
 
+function versionResponse(version: {
+  id: string;
+  projectId: string;
+  actorId: string;
+  name: string;
+  revision: number;
+  restoredFromId: string | null;
+  createdAt: Date;
+}) {
+  return {
+    id: version.id,
+    projectId: version.projectId,
+    actorId: version.actorId,
+    name: version.name,
+    revision: version.revision,
+    restoredFromId: version.restoredFromId,
+    createdAt: version.createdAt,
+  };
+}
+
+function commentResponse(comment: {
+  id: string;
+  projectId: string;
+  authorId: string;
+  body: string;
+  nodeId: string | null;
+  positionX: number | null;
+  positionY: number | null;
+  mentionUserIds: string[];
+  resolvedAt: Date | null;
+  resolvedById: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}) {
+  return {
+    id: comment.id,
+    projectId: comment.projectId,
+    authorId: comment.authorId,
+    body: comment.body,
+    nodeId: comment.nodeId,
+    position:
+      comment.positionX === null || comment.positionY === null
+        ? null
+        : { x: comment.positionX, y: comment.positionY },
+    mentionUserIds: comment.mentionUserIds,
+    resolvedAt: comment.resolvedAt,
+    resolvedById: comment.resolvedById,
+    createdAt: comment.createdAt,
+    updatedAt: comment.updatedAt,
+  };
+}
+
 export function buildApp(dependencies: ServerDependencies): FastifyInstance {
   const app = Fastify({
     logger: {
@@ -157,7 +216,24 @@ export function buildApp(dependencies: ServerDependencies): FastifyInstance {
     setupSecret: dependencies.setupSecret,
     now: dependencies.now ?? (() => new Date()),
   });
+  const collaboration = new CollaborationManager({
+    repository: dependencies.repository,
+    service,
+    now: dependencies.now ?? (() => new Date()),
+  });
 
+  void app.register(websocket, {
+    options: { maxPayload: 1024 * 1024 + 64 * 1024 },
+  });
+  void app.register(async (instance) => {
+    instance.get(
+      "/api/v1/collaboration",
+      { websocket: true },
+      (socket, request) => {
+        collaboration.handle(socket, request);
+      },
+    );
+  });
   void app.register(cookie);
   void app.register(multipart, {
     limits: { files: 1, fileSize: MAX_ASSET_BYTES },
@@ -165,6 +241,9 @@ export function buildApp(dependencies: ServerDependencies): FastifyInstance {
 
   app.addHook("onRequest", async (request, reply) => {
     void reply.header("x-request-id", request.id);
+  });
+  app.addHook("onClose", async () => {
+    await collaboration.close();
   });
 
   app.setNotFoundHandler(async (request, reply) => {
@@ -515,6 +594,142 @@ export function buildApp(dependencies: ServerDependencies): FastifyInstance {
       ),
     };
   });
+
+  app.post("/api/v1/projects/:projectId/versions", async (request, reply) => {
+    const principal = await authenticate(request, {
+      mutating: true,
+      scope: "projects:write",
+    });
+    const version = await service.createNamedVersion(
+      principal,
+      identifier(request, "projectId"),
+      parse(createNamedVersionRequestSchema, request.body),
+      request.id,
+    );
+    return reply.code(201).send({ version: versionResponse(version) });
+  });
+
+  app.get("/api/v1/projects/:projectId/versions", async (request) => {
+    const principal = await authenticate(request, { scope: "projects:read" });
+    const versions = await service.listNamedVersions(
+      principal,
+      identifier(request, "projectId"),
+    );
+    return { versions: versions.map(versionResponse) };
+  });
+
+  app.get(
+    "/api/v1/projects/:projectId/versions/:versionId",
+    async (request) => {
+      const principal = await authenticate(request, { scope: "projects:read" });
+      const version = await service.getNamedVersion(
+        principal,
+        identifier(request, "projectId"),
+        identifier(request, "versionId"),
+      );
+      return { version: versionResponse(version) };
+    },
+  );
+
+  app.post(
+    "/api/v1/projects/:projectId/versions/:versionId/restore",
+    async (request, reply) => {
+      const principal = await authenticate(request, {
+        mutating: true,
+        scope: "projects:write",
+      });
+      const projectId = identifier(request, "projectId");
+      await service.collaborationAccess(principal, projectId, true);
+      const finishRestore = await collaboration.prepareRestore(projectId);
+      try {
+        const version = await service.restoreNamedVersion(
+          principal,
+          projectId,
+          identifier(request, "versionId"),
+          parse(restoreNamedVersionRequestSchema, request.body),
+          request.id,
+        );
+        return reply.code(201).send({ version: versionResponse(version) });
+      } finally {
+        finishRestore();
+      }
+    },
+  );
+
+  app.post("/api/v1/projects/:projectId/comments", async (request, reply) => {
+    const principal = await authenticate(request, {
+      mutating: true,
+      scope: "projects:write",
+    });
+    const projectId = identifier(request, "projectId");
+    const input = parse(createCommentRequestSchema, request.body);
+    if (input.nodeId) await collaboration.flushProject(projectId);
+    const comment = await service.createComment(
+      principal,
+      projectId,
+      input,
+      request.id,
+    );
+    return reply.code(201).send({ comment: commentResponse(comment) });
+  });
+
+  app.get("/api/v1/projects/:projectId/comments", async (request) => {
+    const principal = await authenticate(request, { scope: "projects:read" });
+    const comments = await service.listComments(
+      principal,
+      identifier(request, "projectId"),
+    );
+    return { comments: comments.map(commentResponse) };
+  });
+
+  app.get(
+    "/api/v1/projects/:projectId/comments/:commentId",
+    async (request) => {
+      const principal = await authenticate(request, { scope: "projects:read" });
+      const comment = await service.getComment(
+        principal,
+        identifier(request, "projectId"),
+        identifier(request, "commentId"),
+      );
+      return { comment: commentResponse(comment) };
+    },
+  );
+
+  app.patch(
+    "/api/v1/projects/:projectId/comments/:commentId",
+    async (request) => {
+      const principal = await authenticate(request, {
+        mutating: true,
+        scope: "projects:write",
+      });
+      const comment = await service.updateComment(
+        principal,
+        identifier(request, "projectId"),
+        identifier(request, "commentId"),
+        parse(updateCommentRequestSchema, request.body),
+        request.id,
+      );
+      return { comment: commentResponse(comment) };
+    },
+  );
+
+  app.post(
+    "/api/v1/projects/:projectId/comments/:commentId/resolve",
+    async (request) => {
+      const principal = await authenticate(request, {
+        mutating: true,
+        scope: "projects:write",
+      });
+      const comment = await service.resolveComment(
+        principal,
+        identifier(request, "projectId"),
+        identifier(request, "commentId"),
+        parse(resolveCommentRequestSchema, request.body),
+        request.id,
+      );
+      return { comment: commentResponse(comment) };
+    },
+  );
 
   app.post("/api/v1/projects/:projectId/assets", async (request, reply) => {
     const principal = await authenticate(request, {

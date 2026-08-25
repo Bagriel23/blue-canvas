@@ -95,6 +95,41 @@ export interface Asset {
   createdAt: Date;
 }
 
+export interface ProjectDocument {
+  projectId: string;
+  state: Uint8Array;
+  stateVector: Uint8Array;
+  revision: number;
+  updatedAt: Date;
+}
+
+export interface NamedVersion {
+  id: string;
+  projectId: string;
+  actorId: string;
+  name: string;
+  state: Uint8Array;
+  stateVector: Uint8Array;
+  revision: number;
+  restoredFromId: string | null;
+  createdAt: Date;
+}
+
+export interface ProjectComment {
+  id: string;
+  projectId: string;
+  authorId: string;
+  body: string;
+  nodeId: string | null;
+  positionX: number | null;
+  positionY: number | null;
+  mentionUserIds: string[];
+  resolvedAt: Date | null;
+  resolvedById: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 export interface RepositoryPort {
   transaction<T>(
     operation: (repository: RepositoryPort) => Promise<T>,
@@ -207,4 +242,41 @@ export interface RepositoryPort {
   listPendingAssets(createdBefore: Date): Promise<Asset[]>;
   markAssetReady(id: string): Promise<Asset | undefined>;
   removePendingAsset(id: string): Promise<boolean>;
+  findProjectDocument(projectId: string): Promise<ProjectDocument | undefined>;
+  upsertProjectDocument(input: {
+    projectId: string;
+    state: Uint8Array;
+    stateVector: Uint8Array;
+    now: Date;
+    expectedRevision?: number;
+  }): Promise<ProjectDocument>;
+  createNamedVersion(
+    input: Omit<NamedVersion, "id" | "createdAt"> & { now: Date },
+  ): Promise<NamedVersion>;
+  listNamedVersions(projectId: string): Promise<NamedVersion[]>;
+  findNamedVersion(
+    projectId: string,
+    versionId: string,
+  ): Promise<NamedVersion | undefined>;
+  findProjectMembers(projectId: string): Promise<ProjectMember[]>;
+  createComment(
+    input: Omit<ProjectComment, "id" | "createdAt" | "updatedAt"> & {
+      now: Date;
+    },
+  ): Promise<ProjectComment>;
+  listComments(projectId: string): Promise<ProjectComment[]>;
+  findComment(
+    projectId: string,
+    commentId: string,
+  ): Promise<ProjectComment | undefined>;
+  updateComment(
+    projectId: string,
+    commentId: string,
+    input: { body?: string; mentionUserIds?: string[]; now: Date },
+  ): Promise<ProjectComment | undefined>;
+  resolveComment(
+    projectId: string,
+    commentId: string,
+    input: { resolvedAt: Date | null; resolvedById: string | null; now: Date },
+  ): Promise<ProjectComment | undefined>;
 }

@@ -12,9 +12,9 @@ Editor React (pendente)       MCP HTTP/stdio (pendente)
             |                           |
             +-------- API /api/v1 ------+
                            |
-                 Fastify + domínio
-                    |            |
-              Prisma/MariaDB   Assets locais
+            Fastify + Hocuspocus/Yjs
+                 |               |
+          Prisma/MariaDB      Assets locais
 
                  packages/document
                   /             \
@@ -27,24 +27,25 @@ acesso direto ao MariaDB ou ao diretório de assets.
 
 ## Aplicações
 
-| Workspace         | Responsabilidade                                                    | Estado          |
-| ----------------- | ------------------------------------------------------------------- | --------------- |
-| `apps/server`     | API Fastify, domínio, portas de repositório, Prisma e storage local | Implementado    |
-| `apps/web`        | Editor React/Vite e shell do produto                                | Apenas scaffold |
-| `apps/mcp-server` | Servidor MCP HTTP separado                                          | Apenas scaffold |
-| `apps/mcp-stdio`  | Ponte MCP para clientes locais como ClineSR                         | Apenas scaffold |
+| Workspace         | Responsabilidade                                         | Estado          |
+| ----------------- | -------------------------------------------------------- | --------------- |
+| `apps/server`     | API Fastify, Hocuspocus, domínio, Prisma e storage local | Implementado    |
+| `apps/web`        | Editor React/Vite e shell do produto                     | Apenas scaffold |
+| `apps/mcp-server` | Servidor MCP HTTP separado                               | Apenas scaffold |
+| `apps/mcp-stdio`  | Ponte MCP para clientes locais como ClineSR              | Apenas scaffold |
 
 ## Pacotes
 
-| Workspace            | Responsabilidade                                   | Estado          |
-| -------------------- | -------------------------------------------------- | --------------- |
-| `packages/contracts` | Schemas Zod e tipos das entradas HTTP              | Implementado    |
-| `packages/document`  | Documento semântico v1, validação e JSON Schema    | Implementado    |
-| `packages/commands`  | Batches atômicos, revisão, idempotência, undo/redo | Implementado    |
-| `packages/exporters` | Geração determinística para HTML, React e Preact   | Implementado    |
-| `packages/renderer`  | Renderização compartilhada                         | Apenas scaffold |
-| `packages/ui`        | Tokens e componentes visuais SEDA                  | Apenas scaffold |
-| `packages/testing`   | Fixtures e utilitários comuns                      | Apenas scaffold |
+| Workspace                | Responsabilidade                                   | Estado          |
+| ------------------------ | -------------------------------------------------- | --------------- |
+| `packages/contracts`     | Schemas Zod e tipos das entradas HTTP              | Implementado    |
+| `packages/document`      | Documento semântico v1, validação e JSON Schema    | Implementado    |
+| `packages/commands`      | Batches atômicos, revisão, idempotência, undo/redo | Implementado    |
+| `packages/exporters`     | Geração determinística para HTML, React e Preact   | Implementado    |
+| `packages/collaboration` | Codec Yjs validado e estado offline em memória     | Implementado    |
+| `packages/renderer`      | Renderização compartilhada                         | Apenas scaffold |
+| `packages/ui`            | Tokens e componentes visuais SEDA                  | Apenas scaffold |
+| `packages/testing`       | Fixtures e utilitários comuns                      | Apenas scaffold |
 
 ## Limites arquiteturais
 
@@ -60,9 +61,9 @@ acesso direto ao MariaDB ou ao diretório de assets.
 ## Persistência atual
 
 As migrations criam usuários, sessões, convites, projetos, membros, personal
-access tokens, auditoria, assets e locks de sistema. Conteúdo do documento,
-versões, comentários e estado Yjs pertencem à etapa de colaboração e ainda não
-estão persistidos.
+access tokens, auditoria, assets, locks de sistema, snapshots Yjs compactados,
+versões nomeadas, comentários e menções. O estado colaborativo atual ocupa uma
+linha por projeto; atualizações incrementais não formam um log sem limite.
 
 Para decisões de produto e requisitos não implementados, consulte a
 [especificação aprovada](superpowers/specs/2026-08-24-blue-canvas-design.md) e o

@@ -11,6 +11,7 @@
     { "path": "packages/commands" },
     { "path": "packages/renderer" },
     { "path": "packages/exporters" },
+    { "path": "packages/collaboration" },
     { "path": "packages/ui" },
     { "path": "packages/testing" }
   ]

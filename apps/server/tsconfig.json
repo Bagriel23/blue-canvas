@@ -7,6 +7,10 @@
     "tsBuildInfoFile": "dist/.tsbuildinfo",
     "types": ["node"]
   },
-  "references": [{ "path": "../../packages/contracts" }],
+  "references": [
+    { "path": "../../packages/contracts" },
+    { "path": "../../packages/document" },
+    { "path": "../../packages/collaboration" }
+  ],
   "include": ["src/**/*.ts"]
 }

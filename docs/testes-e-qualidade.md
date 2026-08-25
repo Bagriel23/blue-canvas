@@ -27,7 +27,7 @@ O TypeScript compartilhado usa modo strict. Código gerado do Prisma, `dist`,
 - `packages/exporters/src/*.test.ts`: goldens, segurança, runtime, build real e
   conformidade entre targets.
 - `apps/server/src/*.test.ts`: API em memória, segurança, configuração e
-  storage.
+  storage, colaboração com clientes WebSocket reais e ACL dinâmica.
 - `apps/server/test/*.integration.test.ts`: adapter Prisma contra MariaDB/MySQL
   real.
 
@@ -58,6 +58,6 @@ npm run test:integration
 git diff --check
 ```
 
-Testes Playwright, visuais, colaboração com dois usuários, carga e smoke tests
-Windows ainda são parte do roadmap. Ausência dessas suítes não deve ser
-interpretada como validação do produto completo.
+Testes Playwright, visuais, carga e smoke tests Windows ainda são parte do
+roadmap. A colaboração já possui testes reais com dois clientes, presença,
+convergência, restauração, restart, revogação e limite de conexões.

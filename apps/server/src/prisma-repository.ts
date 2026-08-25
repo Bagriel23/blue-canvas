@@ -13,7 +13,10 @@ import type {
   Invitation,
   PersonalAccessToken,
   Project,
+  ProjectComment,
+  ProjectDocument,
   ProjectMember,
+  NamedVersion,
   RepositoryPort,
   Session,
   User,
@@ -62,6 +65,62 @@ function auditEvent(value: PrismaAuditEvent): AuditEvent {
 
 function asset(value: PrismaAsset): Asset {
   return { ...value, status: z.enum(["pending", "ready"]).parse(value.status) };
+}
+
+function projectDocument(value: {
+  projectId: string;
+  state: Uint8Array;
+  stateVector: Uint8Array;
+  revision: number;
+  updatedAt: Date;
+}): ProjectDocument {
+  return {
+    ...value,
+    state: new Uint8Array(value.state),
+    stateVector: new Uint8Array(value.stateVector),
+  };
+}
+
+function prismaBytes(value: Uint8Array): Uint8Array<ArrayBuffer> {
+  return Uint8Array.from(value);
+}
+
+function namedVersion(value: {
+  id: string;
+  projectId: string;
+  actorId: string;
+  name: string;
+  state: Uint8Array;
+  stateVector: Uint8Array;
+  revision: number;
+  restoredFromId: string | null;
+  createdAt: Date;
+}): NamedVersion {
+  return {
+    ...value,
+    state: new Uint8Array(value.state),
+    stateVector: new Uint8Array(value.stateVector),
+  };
+}
+
+function projectComment(value: {
+  id: string;
+  projectId: string;
+  authorId: string;
+  body: string;
+  nodeId: string | null;
+  positionX: number | null;
+  positionY: number | null;
+  resolvedAt: Date | null;
+  resolvedById: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  mentions: { userId: string }[];
+}): ProjectComment {
+  return {
+    ...value,
+    mentionUserIds: value.mentions.map(({ userId }) => userId).sort(),
+  };
 }
 
 function isPrismaError(error: unknown, code: string): boolean {
@@ -542,6 +601,222 @@ export class PrismaRepository implements RepositoryPort {
       where: { id, status: "pending" },
     });
     return result.count === 1;
+  }
+
+  async findProjectDocument(
+    projectId: string,
+  ): Promise<ProjectDocument | undefined> {
+    const value = await this.client.projectDocument.findUnique({
+      where: { projectId },
+    });
+    return value ? projectDocument(value) : undefined;
+  }
+
+  async upsertProjectDocument(
+    input: Parameters<RepositoryPort["upsertProjectDocument"]>[0],
+  ): Promise<ProjectDocument> {
+    if (input.expectedRevision === 0) {
+      try {
+        return projectDocument(
+          await this.client.projectDocument.create({
+            data: {
+              projectId: input.projectId,
+              state: prismaBytes(input.state),
+              stateVector: prismaBytes(input.stateVector),
+              revision: 1,
+              updatedAt: input.now,
+            },
+          }),
+        );
+      } catch (error) {
+        if (isPrismaError(error, "P2002"))
+          throw new ApiError(
+            "revision_conflict",
+            "Document revision changed",
+            409,
+          );
+        throw error;
+      }
+    }
+    if (input.expectedRevision !== undefined) {
+      const result = await this.client.projectDocument.updateMany({
+        where: {
+          projectId: input.projectId,
+          revision: input.expectedRevision,
+        },
+        data: {
+          state: prismaBytes(input.state),
+          stateVector: prismaBytes(input.stateVector),
+          revision: { increment: 1 },
+          updatedAt: input.now,
+        },
+      });
+      if (result.count !== 1)
+        throw new ApiError(
+          "revision_conflict",
+          "Document revision changed",
+          409,
+        );
+      const value = await this.client.projectDocument.findUniqueOrThrow({
+        where: { projectId: input.projectId },
+      });
+      return projectDocument(value);
+    }
+    const value = await this.client.projectDocument.upsert({
+      where: { projectId: input.projectId },
+      create: {
+        projectId: input.projectId,
+        state: prismaBytes(input.state),
+        stateVector: prismaBytes(input.stateVector),
+        revision: 1,
+        updatedAt: input.now,
+      },
+      update: {
+        state: prismaBytes(input.state),
+        stateVector: prismaBytes(input.stateVector),
+        revision: { increment: 1 },
+        updatedAt: input.now,
+      },
+    });
+    return projectDocument(value);
+  }
+
+  async createNamedVersion(
+    input: Parameters<RepositoryPort["createNamedVersion"]>[0],
+  ): Promise<NamedVersion> {
+    return namedVersion(
+      await this.client.namedVersion.create({
+        data: {
+          id: randomUUID(),
+          projectId: input.projectId,
+          actorId: input.actorId,
+          name: input.name,
+          state: prismaBytes(input.state),
+          stateVector: prismaBytes(input.stateVector),
+          revision: input.revision,
+          restoredFromId: input.restoredFromId,
+          createdAt: input.now,
+        },
+      }),
+    );
+  }
+
+  async listNamedVersions(projectId: string): Promise<NamedVersion[]> {
+    return (
+      await this.client.namedVersion.findMany({
+        where: { projectId },
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      })
+    ).map(namedVersion);
+  }
+
+  async findNamedVersion(
+    projectId: string,
+    versionId: string,
+  ): Promise<NamedVersion | undefined> {
+    const value = await this.client.namedVersion.findFirst({
+      where: { id: versionId, projectId },
+    });
+    return value ? namedVersion(value) : undefined;
+  }
+
+  async findProjectMembers(projectId: string): Promise<ProjectMember[]> {
+    return this.client.projectMember.findMany({ where: { projectId } });
+  }
+
+  async createComment(
+    input: Parameters<RepositoryPort["createComment"]>[0],
+  ): Promise<ProjectComment> {
+    return projectComment(
+      await this.client.projectComment.create({
+        data: {
+          id: randomUUID(),
+          projectId: input.projectId,
+          authorId: input.authorId,
+          body: input.body,
+          nodeId: input.nodeId,
+          positionX: input.positionX,
+          positionY: input.positionY,
+          resolvedAt: input.resolvedAt,
+          resolvedById: input.resolvedById,
+          createdAt: input.now,
+          updatedAt: input.now,
+          mentions: {
+            create: input.mentionUserIds.map((userId) => ({ userId })),
+          },
+        },
+        include: { mentions: true },
+      }),
+    );
+  }
+
+  async listComments(projectId: string): Promise<ProjectComment[]> {
+    return (
+      await this.client.projectComment.findMany({
+        where: { projectId },
+        include: { mentions: true },
+        orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+      })
+    ).map(projectComment);
+  }
+
+  async findComment(
+    projectId: string,
+    commentId: string,
+  ): Promise<ProjectComment | undefined> {
+    const value = await this.client.projectComment.findFirst({
+      where: { id: commentId, projectId },
+      include: { mentions: true },
+    });
+    return value ? projectComment(value) : undefined;
+  }
+
+  async updateComment(
+    projectId: string,
+    commentId: string,
+    input: Parameters<RepositoryPort["updateComment"]>[2],
+  ): Promise<ProjectComment | undefined> {
+    return this.withinTransaction(async (transaction) => {
+      const exists = await transaction.projectComment.findFirst({
+        where: { id: commentId, projectId },
+        select: { id: true },
+      });
+      if (!exists) return undefined;
+      if (input.mentionUserIds !== undefined) {
+        await transaction.commentMention.deleteMany({ where: { commentId } });
+        if (input.mentionUserIds.length > 0) {
+          await transaction.commentMention.createMany({
+            data: input.mentionUserIds.map((userId) => ({ commentId, userId })),
+          });
+        }
+      }
+      const value = await transaction.projectComment.update({
+        where: { id: commentId },
+        data: {
+          ...(input.body === undefined ? {} : { body: input.body }),
+          updatedAt: input.now,
+        },
+        include: { mentions: true },
+      });
+      return projectComment(value);
+    });
+  }
+
+  async resolveComment(
+    projectId: string,
+    commentId: string,
+    input: Parameters<RepositoryPort["resolveComment"]>[2],
+  ): Promise<ProjectComment | undefined> {
+    const result = await this.client.projectComment.updateMany({
+      where: { id: commentId, projectId },
+      data: {
+        resolvedAt: input.resolvedAt,
+        resolvedById: input.resolvedById,
+        updatedAt: input.now,
+      },
+    });
+    if (result.count !== 1) return undefined;
+    return this.findComment(projectId, commentId);
   }
 
   private async withinTransaction<T>(

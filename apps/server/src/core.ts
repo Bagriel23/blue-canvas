@@ -5,17 +5,32 @@ import type {
   CreateInvitationRequest,
   CreatePersonalAccessTokenRequest,
   CreateProjectRequest,
+  CreateNamedVersionRequest,
+  RestoreNamedVersionRequest,
+  CreateCommentRequest,
+  UpdateCommentRequest,
+  ResolveCommentRequest,
   InviteProjectMemberRequest,
   PersonalAccessTokenScope,
   UpdateProjectMemberRequest,
   UpdateProjectRequest,
 } from "@blue-canvas/contracts";
+import {
+  applyCollaborationState,
+  createInitialCollaborationDocument,
+  encodeCollaborationState,
+  readSemanticDocument,
+} from "@blue-canvas/collaboration";
+import { getNodeChildren, type DesignNode } from "@blue-canvas/document";
+import * as Y from "yjs";
 
 import type {
   Asset,
   AuditEvent,
   PersonalAccessToken,
   Project,
+  ProjectComment,
+  NamedVersion,
   ProjectMember,
   RepositoryPort,
   Session,
@@ -477,6 +492,14 @@ export class ApplicationService {
     return this.dependencies.repository.listProjectsForUser(principal.user.id);
   }
 
+  async collaborationAccess(
+    principal: Principal,
+    projectId: string,
+    write: boolean,
+  ): Promise<ProjectMember> {
+    return this.requireCollaborationRole(principal, projectId, write);
+  }
+
   async getProject(principal: Principal, projectId: string): Promise<Project> {
     await this.requireProject(principal, projectId, "project:read");
     const project =
@@ -808,6 +831,269 @@ export class ApplicationService {
     }
   }
 
+  async createNamedVersion(
+    principal: Principal,
+    projectId: string,
+    input: CreateNamedVersionRequest,
+    traceId: string,
+  ): Promise<NamedVersion> {
+    await this.requireCollaborationRole(principal, projectId, true);
+    return this.dependencies.repository.transaction(async (repository) => {
+      await this.requireCollaborationRole(
+        principal,
+        projectId,
+        true,
+        repository,
+      );
+      let current = await repository.findProjectDocument(projectId);
+      if (!current) {
+        const project = await repository.findProjectById(projectId);
+        if (!project) throw new ApiError("not_found", "Project not found", 404);
+        const initial = encodeCollaborationState(
+          createInitialCollaborationDocument(project.id, project.name),
+        );
+        current = await repository.upsertProjectDocument({
+          projectId,
+          ...initial,
+          now: this.dependencies.now(),
+          expectedRevision: 0,
+        });
+      }
+      const version = await repository.createNamedVersion({
+        projectId,
+        actorId: principal.user.id,
+        name: input.name,
+        state: current.state,
+        stateVector: current.stateVector,
+        revision: current.revision,
+        restoredFromId: null,
+        now: this.dependencies.now(),
+      });
+      await this.auditWith(
+        repository,
+        principal.user.id,
+        "project.version.create",
+        "named_version",
+        version.id,
+        projectId,
+        traceId,
+        { name: version.name, revision: version.revision },
+      );
+      return version;
+    });
+  }
+
+  async listNamedVersions(
+    principal: Principal,
+    projectId: string,
+  ): Promise<NamedVersion[]> {
+    await this.requireCollaborationRole(principal, projectId, false);
+    return this.dependencies.repository.listNamedVersions(projectId);
+  }
+
+  async getNamedVersion(
+    principal: Principal,
+    projectId: string,
+    versionId: string,
+  ): Promise<NamedVersion> {
+    await this.requireCollaborationRole(principal, projectId, false);
+    const version = await this.dependencies.repository.findNamedVersion(
+      projectId,
+      versionId,
+    );
+    if (!version)
+      throw new ApiError("not_found", "Named version not found", 404);
+    return version;
+  }
+
+  async restoreNamedVersion(
+    principal: Principal,
+    projectId: string,
+    versionId: string,
+    input: RestoreNamedVersionRequest,
+    traceId: string,
+  ): Promise<NamedVersion> {
+    await this.requireCollaborationRole(principal, projectId, true);
+    return this.dependencies.repository.transaction(async (repository) => {
+      await this.requireCollaborationRole(
+        principal,
+        projectId,
+        true,
+        repository,
+      );
+      const version = await repository.findNamedVersion(projectId, versionId);
+      if (!version)
+        throw new ApiError("not_found", "Named version not found", 404);
+      const candidate = new Y.Doc();
+      applyCollaborationState(candidate, version.state);
+      const validated = encodeCollaborationState(candidate);
+      const current = await repository.findProjectDocument(projectId);
+      const restoredDocument = await repository.upsertProjectDocument({
+        projectId,
+        ...validated,
+        now: this.dependencies.now(),
+        expectedRevision: current?.revision ?? 0,
+      });
+      const restored = await repository.createNamedVersion({
+        projectId,
+        actorId: principal.user.id,
+        name: input.name,
+        state: restoredDocument.state,
+        stateVector: restoredDocument.stateVector,
+        revision: restoredDocument.revision,
+        restoredFromId: version.id,
+        now: this.dependencies.now(),
+      });
+      await this.auditWith(
+        repository,
+        principal.user.id,
+        "project.version.restore",
+        "named_version",
+        restored.id,
+        projectId,
+        traceId,
+        { restoredFromId: version.id, revision: restored.revision },
+      );
+      return restored;
+    });
+  }
+
+  async createComment(
+    principal: Principal,
+    projectId: string,
+    input: CreateCommentRequest,
+    traceId: string,
+  ): Promise<ProjectComment> {
+    await this.requireCommentRole(principal, projectId);
+    return this.dependencies.repository.transaction(async (repository) => {
+      await this.requireCommentRole(principal, projectId, repository);
+      await this.validateMentions(repository, projectId, input.mentionUserIds);
+      if (input.nodeId)
+        await this.validateNodeAnchor(repository, projectId, input.nodeId);
+      const comment = await repository.createComment({
+        projectId,
+        authorId: principal.user.id,
+        body: input.body,
+        nodeId: input.nodeId ?? null,
+        positionX: input.position?.x ?? null,
+        positionY: input.position?.y ?? null,
+        mentionUserIds: input.mentionUserIds,
+        resolvedAt: null,
+        resolvedById: null,
+        now: this.dependencies.now(),
+      });
+      await this.auditWith(
+        repository,
+        principal.user.id,
+        "project.comment.create",
+        "comment",
+        comment.id,
+        projectId,
+        traceId,
+        { nodeId: comment.nodeId, mentions: comment.mentionUserIds.length },
+      );
+      return comment;
+    });
+  }
+
+  async listComments(
+    principal: Principal,
+    projectId: string,
+  ): Promise<ProjectComment[]> {
+    await this.requireCollaborationRole(principal, projectId, false);
+    return this.dependencies.repository.listComments(projectId);
+  }
+
+  async getComment(
+    principal: Principal,
+    projectId: string,
+    commentId: string,
+  ): Promise<ProjectComment> {
+    await this.requireCollaborationRole(principal, projectId, false);
+    const comment = await this.dependencies.repository.findComment(
+      projectId,
+      commentId,
+    );
+    if (!comment) throw new ApiError("not_found", "Comment not found", 404);
+    return comment;
+  }
+
+  async updateComment(
+    principal: Principal,
+    projectId: string,
+    commentId: string,
+    input: UpdateCommentRequest,
+    traceId: string,
+  ): Promise<ProjectComment> {
+    await this.requireCommentRole(principal, projectId);
+    return this.dependencies.repository.transaction(async (repository) => {
+      await this.requireCommentRole(principal, projectId, repository);
+      const current = await repository.findComment(projectId, commentId);
+      if (!current) throw new ApiError("not_found", "Comment not found", 404);
+      if (current.authorId !== principal.user.id)
+        throw new ApiError(
+          "forbidden",
+          "Only the comment author can edit it",
+          403,
+        );
+      if (input.mentionUserIds)
+        await this.validateMentions(
+          repository,
+          projectId,
+          input.mentionUserIds,
+        );
+      const updated = await repository.updateComment(projectId, commentId, {
+        ...(input.body === undefined ? {} : { body: input.body }),
+        ...(input.mentionUserIds === undefined
+          ? {}
+          : { mentionUserIds: input.mentionUserIds }),
+        now: this.dependencies.now(),
+      });
+      if (!updated) throw new ApiError("not_found", "Comment not found", 404);
+      await this.auditWith(
+        repository,
+        principal.user.id,
+        "project.comment.update",
+        "comment",
+        commentId,
+        projectId,
+        traceId,
+        {},
+      );
+      return updated;
+    });
+  }
+
+  async resolveComment(
+    principal: Principal,
+    projectId: string,
+    commentId: string,
+    input: ResolveCommentRequest,
+    traceId: string,
+  ): Promise<ProjectComment> {
+    await this.requireCommentRole(principal, projectId);
+    return this.dependencies.repository.transaction(async (repository) => {
+      await this.requireCommentRole(principal, projectId, repository);
+      const updated = await repository.resolveComment(projectId, commentId, {
+        resolvedAt: input.resolved ? this.dependencies.now() : null,
+        resolvedById: input.resolved ? principal.user.id : null,
+        now: this.dependencies.now(),
+      });
+      if (!updated) throw new ApiError("not_found", "Comment not found", 404);
+      await this.auditWith(
+        repository,
+        principal.user.id,
+        input.resolved ? "project.comment.resolve" : "project.comment.reopen",
+        "comment",
+        commentId,
+        projectId,
+        traceId,
+        {},
+      );
+      return updated;
+    });
+  }
+
   private async issueSession(
     userId: string,
     repository = this.dependencies.repository,
@@ -833,6 +1119,96 @@ export class ApplicationService {
       csrfToken: csrfSecret.raw,
       expiresAt,
     };
+  }
+
+  private async requireCollaborationRole(
+    principal: Principal,
+    projectId: string,
+    write: boolean,
+    repository: RepositoryPort = this.dependencies.repository,
+  ): Promise<ProjectMember> {
+    const project = await repository.findProjectById(projectId);
+    if (!project) throw new ApiError("not_found", "Project not found", 404);
+    if (project.archivedAt)
+      throw new ApiError(
+        "project_archived",
+        "Archived projects are read-only",
+        409,
+      );
+    const member = await repository.findProjectMember(
+      projectId,
+      principal.user.id,
+    );
+    if (
+      !member ||
+      (write && member.role !== "owner" && member.role !== "editor")
+    )
+      throw new ApiError("forbidden", "Project access denied", 403);
+    return member;
+  }
+
+  private async requireCommentRole(
+    principal: Principal,
+    projectId: string,
+    repository: RepositoryPort = this.dependencies.repository,
+  ): Promise<ProjectMember> {
+    const member = await this.requireCollaborationRole(
+      principal,
+      projectId,
+      false,
+      repository,
+    );
+    if (member.role === "viewer")
+      throw new ApiError("forbidden", "Comment access denied", 403);
+    return member;
+  }
+
+  private async validateMentions(
+    repository: RepositoryPort,
+    projectId: string,
+    userIds: string[],
+  ): Promise<void> {
+    if (userIds.length === 0) return;
+    const members = await repository.findProjectMembers(projectId);
+    const eligible = new Set(members.map(({ userId }) => userId));
+    for (const userId of userIds) {
+      const user = await repository.findUserById(userId);
+      if (!eligible.has(userId) || !user || user.status !== "active")
+        throw new ApiError(
+          "invalid_mentions",
+          "Mentioned users must be active project members",
+          400,
+        );
+    }
+  }
+
+  private async validateNodeAnchor(
+    repository: RepositoryPort,
+    projectId: string,
+    nodeId: string,
+  ): Promise<void> {
+    const persisted = await repository.findProjectDocument(projectId);
+    if (!persisted)
+      throw new ApiError(
+        "invalid_node_anchor",
+        "Comment node does not exist",
+        400,
+      );
+    const yDocument = new Y.Doc();
+    applyCollaborationState(yDocument, persisted.state);
+    const semantic = readSemanticDocument(yDocument);
+    const roots = [
+      ...semantic.components.map(({ root }) => root),
+      ...semantic.pages.flatMap(({ artboards }) =>
+        artboards.map(({ root }) => root),
+      ),
+    ];
+    if (!roots.some((root) => nodeTreeContains(root, nodeId)))
+      throw new ApiError(
+        "invalid_node_anchor",
+        "Comment node does not exist",
+        400,
+      );
   }
 
   private async activeUser(userId: string): Promise<User> {
@@ -913,4 +1289,15 @@ export function publicUser(user: User): PublicUser {
     locale: user.locale,
     isAdmin: user.isAdmin,
   };
+}
+
+function nodeTreeContains(root: DesignNode, nodeId: string): boolean {
+  const pending: DesignNode[] = [root];
+  while (pending.length > 0) {
+    const current = pending.pop();
+    if (!current) continue;
+    if (current.id === nodeId) return true;
+    pending.push(...getNodeChildren(current));
+  }
+  return false;
 }

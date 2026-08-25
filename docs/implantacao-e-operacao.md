@@ -2,10 +2,10 @@
 
 ## Estado operacional
 
-O repositório entrega atualmente a API compilada e migrations. O Compose é
-voltado ao banco de desenvolvimento, não é uma topologia de produção. Reverse
-proxy, serviço Windows, backup/restore automatizado, frontend, colaboração e MCP
-ainda não foram entregues.
+O repositório entrega atualmente a API compilada, o endpoint WebSocket de
+colaboração e migrations. O Compose é voltado ao banco de desenvolvimento, não é
+uma topologia de produção. Reverse proxy, serviço Windows, backup/restore
+automatizado, frontend e MCP ainda não foram entregues.
 
 ## Sequência de implantação da API
 
@@ -28,6 +28,7 @@ TypeScript e Prisma CLI são ferramentas de build/migration em `devDependencies`
 
 - Termine TLS no proxy e encaminhe para a interface privada da API.
 - Preserve `Host` e defina limites coerentes de corpo e timeout.
+- Habilite upgrade WebSocket em `/api/v1/collaboration` e preserve cookies.
 - Não publique `ASSET_STORAGE_ROOT` como diretório estático.
 - Restrinja a API à rede corporativa e mantenha o banco fora da rede pública.
 - Monitore `health`, `ready`, status HTTP e logs estruturados.

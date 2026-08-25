@@ -37,26 +37,35 @@ caracteres. Locales aceitos atualmente: `en-US`, `pt-BR` e `ko-KR`.
 
 Todas as rotas abaixo são relativas a `/api/v1`.
 
-| Método   | Rota                                   | Regra principal                                     | Escopo PAT               |
-| -------- | -------------------------------------- | --------------------------------------------------- | ------------------------ |
-| `GET`    | `/auth/me`                             | Sessão ou PAT válido                                | Nenhum escopo específico |
-| `POST`   | `/auth/logout`                         | Somente sessão e CSRF                               | Não permitido            |
-| `POST`   | `/invitations`                         | Administrador                                       | `admin`                  |
-| `POST`   | `/projects`                            | Usuário autenticado                                 | `projects:write`         |
-| `GET`    | `/projects`                            | Usuário autenticado                                 | `projects:read`          |
-| `GET`    | `/projects/:projectId`                 | Membro do projeto                                   | `projects:read`          |
-| `PATCH`  | `/projects/:projectId`                 | Owner/editor para nome; somente owner para arquivar | `projects:write`         |
-| `POST`   | `/projects/:projectId/archive`         | Somente owner                                       | `projects:write`         |
-| `POST`   | `/projects/:projectId/members`         | Somente owner                                       | `projects:write`         |
-| `POST`   | `/projects/:projectId/invitations`     | Somente owner                                       | `projects:write`         |
-| `PATCH`  | `/projects/:projectId/members/:userId` | Somente owner                                       | `projects:write`         |
-| `DELETE` | `/projects/:projectId/members/:userId` | Somente owner; owner não pode ser removido          | `projects:write`         |
-| `POST`   | `/personal-access-tokens`              | Somente sessão e CSRF                               | Não permitido            |
-| `GET`    | `/personal-access-tokens`              | Somente sessão                                      | Não permitido            |
-| `DELETE` | `/personal-access-tokens/:tokenId`     | Somente sessão e CSRF                               | Não permitido            |
-| `GET`    | `/audit-events`                        | Administrador                                       | `admin`                  |
-| `GET`    | `/projects/:projectId/audit-events`    | Somente owner                                       | `projects:read`          |
-| `POST`   | `/projects/:projectId/assets`          | Owner/editor                                        | `assets:write`           |
+| Método   | Rota                                        | Regra principal                                     | Escopo PAT               |
+| -------- | ------------------------------------------- | --------------------------------------------------- | ------------------------ |
+| `GET`    | `/auth/me`                                  | Sessão ou PAT válido                                | Nenhum escopo específico |
+| `POST`   | `/auth/logout`                              | Somente sessão e CSRF                               | Não permitido            |
+| `POST`   | `/invitations`                              | Administrador                                       | `admin`                  |
+| `POST`   | `/projects`                                 | Usuário autenticado                                 | `projects:write`         |
+| `GET`    | `/projects`                                 | Usuário autenticado                                 | `projects:read`          |
+| `GET`    | `/projects/:projectId`                      | Membro do projeto                                   | `projects:read`          |
+| `PATCH`  | `/projects/:projectId`                      | Owner/editor para nome; somente owner para arquivar | `projects:write`         |
+| `POST`   | `/projects/:projectId/archive`              | Somente owner                                       | `projects:write`         |
+| `POST`   | `/projects/:projectId/members`              | Somente owner                                       | `projects:write`         |
+| `POST`   | `/projects/:projectId/invitations`          | Somente owner                                       | `projects:write`         |
+| `PATCH`  | `/projects/:projectId/members/:userId`      | Somente owner                                       | `projects:write`         |
+| `DELETE` | `/projects/:projectId/members/:userId`      | Somente owner; owner não pode ser removido          | `projects:write`         |
+| `POST`   | `/personal-access-tokens`                   | Somente sessão e CSRF                               | Não permitido            |
+| `GET`    | `/personal-access-tokens`                   | Somente sessão                                      | Não permitido            |
+| `DELETE` | `/personal-access-tokens/:tokenId`          | Somente sessão e CSRF                               | Não permitido            |
+| `GET`    | `/audit-events`                             | Administrador                                       | `admin`                  |
+| `GET`    | `/projects/:projectId/audit-events`         | Somente owner                                       | `projects:read`          |
+| `POST`   | `/projects/:projectId/assets`               | Owner/editor                                        | `assets:write`           |
+| `GET`    | `/projects/:projectId/versions`             | Qualquer membro; projeto ativo                      | `projects:read`          |
+| `POST`   | `/projects/:projectId/versions`             | Owner/editor                                        | `projects:write`         |
+| `GET`    | `/projects/:projectId/versions/:id`         | Qualquer membro; projeto ativo                      | `projects:read`          |
+| `POST`   | `/projects/:projectId/versions/:id/restore` | Owner/editor; cria nova versão                      | `projects:write`         |
+| `GET`    | `/projects/:projectId/comments`             | Qualquer membro; projeto ativo                      | `projects:read`          |
+| `POST`   | `/projects/:projectId/comments`             | Owner/editor/commenter                              | `projects:write`         |
+| `GET`    | `/projects/:projectId/comments/:id`         | Qualquer membro; projeto ativo                      | `projects:read`          |
+| `PATCH`  | `/projects/:projectId/comments/:id`         | Autor owner/editor/commenter                        | `projects:write`         |
+| `POST`   | `/projects/:projectId/comments/:id/resolve` | Owner/editor/commenter                              | `projects:write`         |
 
 Escopos PAT disponíveis: `projects:read`, `projects:write`, `assets:read`,
 `assets:write` e `admin`. O escopo `assets:read` está reservado: ainda não há
@@ -71,9 +80,15 @@ endpoint de leitura/download de assets.
 | Arquivar/desarquivar                 | Sim   | Não    | Não       | Não    |
 | Gerenciar membros/convites/auditoria | Sim   | Não    | Não       | Não    |
 | Enviar assets                        | Sim   | Sim    | Não       | Não    |
+| Editar documento em tempo real       | Sim   | Sim    | Não       | Não    |
+| Presença e leitura colaborativa      | Sim   | Sim    | Sim       | Sim    |
+| Criar/resolver comentários           | Sim   | Sim    | Sim       | Não    |
+| Criar/restaurar versão               | Sim   | Sim    | Não       | Não    |
 
-Permissões de edição semântica e comentários serão adicionadas com a camada de
-colaboração. Elas não existem na API atual.
+Projetos arquivados não aceitam conexões de colaboração, comentários nem
+versões. O autor é o único usuário que pode editar o texto e as menções de um
+comentário; owner, editor e commenter podem resolver ou reabrir comentários.
+Detalhes do protocolo WebSocket estão em [Colaboração](colaboracao.md).
 
 ## Exemplos mínimos
 

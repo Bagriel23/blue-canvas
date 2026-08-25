@@ -2,7 +2,13 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import {
+  applyCollaborationState,
+  createInitialCollaborationDocument,
+  encodeCollaborationState,
+} from "@blue-canvas/collaboration";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import * as Y from "yjs";
 
 import { buildApp } from "../src/app.js";
 import { ApiError } from "../src/core.js";
@@ -26,6 +32,10 @@ const repository = new PrismaRepository(prisma);
 const now = new Date("2026-08-24T12:00:00.000Z");
 
 beforeEach(async () => {
+  await prisma.commentMention.deleteMany();
+  await prisma.projectComment.deleteMany();
+  await prisma.namedVersion.deleteMany();
+  await prisma.projectDocument.deleteMany();
   await prisma.auditEvent.deleteMany();
   await prisma.asset.deleteMany();
   await prisma.personalAccessToken.deleteMany();
@@ -41,6 +51,98 @@ afterAll(async () => {
 });
 
 describe("Prisma repository", () => {
+  it("persists compact collaboration state, versions, comments, and mentions", async () => {
+    const owner = await repository.createUser({
+      email: "collaboration-owner@example.com",
+      displayName: "Owner",
+      passwordHash: "$argon2id$test",
+      locale: "pt-BR",
+      isAdmin: false,
+      now,
+    });
+    const mentioned = await repository.createUser({
+      email: "mentioned@example.com",
+      displayName: "Mentioned",
+      passwordHash: "$argon2id$test",
+      locale: "pt-BR",
+      isAdmin: false,
+      now,
+    });
+    const project = await repository.createProject({
+      name: "Persistent collaboration",
+      ownerId: owner.id,
+      now,
+    });
+    await repository.addProjectMember({
+      projectId: project.id,
+      userId: mentioned.id,
+      role: "commenter",
+      now,
+    });
+    const yDocument = createInitialCollaborationDocument(
+      project.id,
+      project.name,
+    );
+    yDocument.getMap("content").set("persisted", true);
+    const encoded = encodeCollaborationState(yDocument);
+    const stored = await repository.upsertProjectDocument({
+      projectId: project.id,
+      ...encoded,
+      expectedRevision: 0,
+      now,
+    });
+    const version = await repository.createNamedVersion({
+      projectId: project.id,
+      actorId: owner.id,
+      name: "Initial",
+      state: stored.state,
+      stateVector: stored.stateVector,
+      revision: stored.revision,
+      restoredFromId: null,
+      now,
+    });
+    const comment = await repository.createComment({
+      projectId: project.id,
+      authorId: owner.id,
+      body: "Review",
+      nodeId: null,
+      positionX: 0.5,
+      positionY: 0.25,
+      mentionUserIds: [mentioned.id],
+      resolvedAt: null,
+      resolvedById: null,
+      now,
+    });
+
+    const restartedRepository = new PrismaRepository(prisma);
+    const reloaded = await restartedRepository.findProjectDocument(project.id);
+    const restored = new Y.Doc();
+    if (!reloaded) throw new Error("project document was not persisted");
+    applyCollaborationState(restored, reloaded.state);
+    expect(restored.getMap("content").get("persisted")).toBe(true);
+    await expect(
+      restartedRepository.upsertProjectDocument({
+        projectId: project.id,
+        ...encoded,
+        expectedRevision: 0,
+        now,
+      }),
+    ).rejects.toMatchObject({ code: "revision_conflict" });
+    await expect(
+      restartedRepository.findNamedVersion(project.id, version.id),
+    ).resolves.toMatchObject({
+      name: "Initial",
+      revision: 1,
+    });
+    await expect(
+      restartedRepository.findComment(project.id, comment.id),
+    ).resolves.toMatchObject({
+      mentionUserIds: [mentioned.id],
+      positionX: 0.5,
+      positionY: 0.25,
+    });
+  });
+
   it("rolls back a mutation when its audit insert fails", async () => {
     const owner = await repository.createUser({
       email: "transaction-owner@example.com",

@@ -5,8 +5,8 @@ compartilhar projetos e exportar código determinístico. O produto é inspirado
 Pen e no Claude Design, mas foi desenhado para operar sem tokens de serviços
 externos, telemetria, CDNs ou serviços de IA externos.
 
-> Estado atual: o modelo de documento, o motor de comandos, os exportadores e a
-> fundação da API estão implementados. Editor web, colaboração em tempo real,
+> Estado atual: o modelo de documento, o motor de comandos, os exportadores, a
+> API e a colaboração em tempo real estão implementados. Editor web,
 > kits/templates e MCP ainda estão em desenvolvimento. Consulte
 > [Status e roadmap](docs/status-e-roadmap.md).
 
@@ -38,6 +38,7 @@ desenvolvimento. Ainda não há um servidor de frontend utilizável.
 - [Desenvolvimento local, npm, Docker e Laragon](docs/desenvolvimento.md)
 - [Configuração e variáveis de ambiente](docs/configuracao.md)
 - [API, autenticação, autorização e segurança](docs/api-e-seguranca.md)
+- [Colaboração em tempo real, versões e comentários](docs/colaboracao.md)
 - [Documento semântico e motor de comandos](docs/documento-e-comandos.md)
 - [Exportadores HTML, React e Preact](docs/exportadores.md)
 - [Testes e qualidade](docs/testes-e-qualidade.md)
