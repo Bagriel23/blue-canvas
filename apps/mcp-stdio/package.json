@@ -3,7 +3,12 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "bin": {
+    "blue-canvas-mcp-stdio": "dist/index.js"
+  },
   "scripts": {
-    "build": "tsc --build --pretty false"
-  }
+    "build": "tsc --build --pretty false",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {}
 }

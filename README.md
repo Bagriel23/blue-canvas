@@ -43,6 +43,7 @@ Vite em `http://127.0.0.1:5173` fazendo proxy de `/api` para a API Fastify.
 - [API, autenticação, autorização e segurança](docs/api-e-seguranca.md)
 - [Colaboração em tempo real, versões e comentários](docs/colaboracao.md)
 - [Kits e templates](docs/kits-e-templates.md)
+- [MCP e skill](docs/mcp-e-skill.md)
 - [Documento semântico e motor de comandos](docs/documento-e-comandos.md)
 - [Exportadores HTML, React e Preact](docs/exportadores.md)
 - [Testes e qualidade](docs/testes-e-qualidade.md)

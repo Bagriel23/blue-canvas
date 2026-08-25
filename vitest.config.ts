@@ -6,6 +6,7 @@ const workspaceDirectories = [
   "apps/server",
   "apps/mcp-server",
   "apps/mcp-stdio",
+  // Kept order stable — see tsconfig.json references.
   "packages/contracts",
   "packages/document",
   "packages/commands",

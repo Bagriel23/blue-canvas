@@ -32,16 +32,16 @@ Este documento descreve o estado observado no código. O plano completo está em
   Product) e seis templates (dashboard, CRUD, formulário, auth, settings,
   mobile) já são publicados na inicialização. Detalhes em
   [Kits e templates](kits-e-templates.md).
+- Serviço MCP em `apps/mcp-server` com transporte JSON-RPC/HTTP, resources para
+  projetos/kits/templates, tools `list_projects`, `get_project`,
+  `create_project` e `apply_commands`, ponte stdio em `apps/mcp-stdio` e skill
+  portável `apps/mcp-server/SKILL.md`. Toda operação delega o PAT do usuário e o
+  serviço não acessa banco ou storage diretamente. Detalhes em
+  [MCP e skill](mcp-e-skill.md).
 - Testes unitários, propriedades, contrato, export build, componente (happy-dom
   \+ Testing Library) e integração em MariaDB 10.6/MySQL 8.0.
 
 ## Em desenvolvimento
-
-### MCP e skill
-
-Servidor MCP Streamable HTTP, bridge stdio e skill portável para ClineSR e
-outros agentes. Esses workspaces são apenas scaffolds e não devem ser
-configurados em clientes ainda.
 
 ### Operação e aceite
 
