@@ -136,3 +136,23 @@ test("windows script bundle covers start, stop, migrate, backup, restore and smo
     assert.match(contents, /Requires -Version 5\.1|Import-Module/u);
   }
 });
+
+test("library documentation matches the API's admin-only draft mutations", async () => {
+  const docs = await readFile("docs/kits-e-templates.md", "utf8");
+  const app = await readFile("apps/server/src/app.ts", "utf8");
+
+  assert.match(
+    app,
+    /app\.post\("\/api\/v1\/library\/kits"[\s\S]+?libraryAdmin/u,
+  );
+  assert.match(
+    app,
+    /app\.post\("\/api\/v1\/library\/templates"[\s\S]+?libraryAdmin/u,
+  );
+  assert.match(
+    docs,
+    /Somente administradores podem criar ou duplicar rascunhos/iu,
+  );
+  assert.doesNotMatch(docs, /Qualquer usuário autenticado pode criar/iu);
+  assert.match(docs, /toda mutação[\s\S]+exige.*admin/iu);
+});

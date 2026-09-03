@@ -31,6 +31,13 @@ test("restore scripts validate the asset target before recursive deletion", asyn
   assert.match(unix, /ASSET_STORAGE_ROOT/);
   assert.match(windows, /ASSET_STORAGE_ROOT/);
   assert.match(windows, /Resolve-Path|Get-Item/);
+  assert.match(windows, /IsPathRooted/);
+  assert.match(windows, /Get-Acl/);
+  assert.match(windows, /ReparsePoint/);
+  assert.match(windows, /UserProfile/);
+  assert.match(windows, /FileIndex|GetFileIdentity|identity/u);
+  assert.match(windows, /Assert-AssetRootIdentity/);
+  assert.match(windows, /Assert-NoReparseTree/);
 });
 
 test("restore rejects root, relative, and symlink asset targets before touching the database", async () => {

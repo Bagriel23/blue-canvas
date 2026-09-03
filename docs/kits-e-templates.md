@@ -21,7 +21,8 @@ seja compatível — mesmo major e igual ou maior que a requerida.
 
 Cada registro passa por três estados: `draft`, `published` e `deprecated`.
 
-- Qualquer usuário autenticado pode criar um rascunho.
+- Somente administradores podem criar ou duplicar rascunhos pela API. O autor do
+  rascunho e os administradores conseguem visualizá-lo durante a revisão.
 - Somente administradores promovem rascunhos a `published`; a promoção bloqueia
   rascunhos já publicados (`AlreadyPublishedError`) e recusa operadores sem
   privilégio (`NotAdminError`).
@@ -50,21 +51,22 @@ O `LibraryService` popula três kits e seis templates ao iniciar:
 
 ## Endpoints
 
-Todas as rotas exigem sessão autenticada. `GET` responde a qualquer papel de
-projeto; `POST /publish` e `POST /deprecate` exigem `user.isAdmin`; `POST` e
-`POST /duplicate` são liberados a qualquer usuário.
+Todas as rotas exigem autenticação. `GET` responde a qualquer usuário
+autenticado; toda mutação (`POST` de criação, publicação, duplicação ou
+depreciação) exige `user.isAdmin` e, quando a autenticação usa PAT, o escopo
+`admin`.
 
 | Método | Rota                                      | Descrição                                                                |
 | ------ | ----------------------------------------- | ------------------------------------------------------------------------ |
 | `GET`  | `/api/v1/library/kits`                    | Lista kits publicados; rascunhos aparecem apenas para o autor ou admins. |
-| `POST` | `/api/v1/library/kits`                    | Registra um novo rascunho de kit a partir do manifesto enviado.          |
+| `POST` | `/api/v1/library/kits`                    | Registra um novo rascunho de kit (admin).                                |
 | `POST` | `/api/v1/library/kits/:id/publish`        | Publica o rascunho (admin).                                              |
-| `POST` | `/api/v1/library/kits/:id/duplicate`      | Clona o kit num novo rascunho.                                           |
+| `POST` | `/api/v1/library/kits/:id/duplicate`      | Clona o kit num novo rascunho (admin).                                   |
 | `POST` | `/api/v1/library/kits/:id/deprecate`      | Marca um kit publicado como deprecated (admin).                          |
 | `GET`  | `/api/v1/library/templates`               | Lista templates com diagnóstico de compatibilidade.                      |
-| `POST` | `/api/v1/library/templates`               | Registra um novo rascunho de template.                                   |
+| `POST` | `/api/v1/library/templates`               | Registra um novo rascunho de template (admin).                           |
 | `POST` | `/api/v1/library/templates/:id/publish`   | Publica o template (admin).                                              |
-| `POST` | `/api/v1/library/templates/:id/duplicate` | Clona o template num novo rascunho.                                      |
+| `POST` | `/api/v1/library/templates/:id/duplicate` | Clona o template num novo rascunho (admin).                              |
 
 ## Limitações atuais
 

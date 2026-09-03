@@ -13,7 +13,10 @@ Há dois modos:
 
 Requisições mutáveis autenticadas por cookie precisam enviar o token retornado
 no login em `X-CSRF-Token`. PATs não usam CSRF, mas precisam do escopo exigido e
-continuam sujeitos ao papel do usuário no projeto.
+continuam sujeitos ao papel do usuário no projeto. O endpoint somente leitura
+`/auth/me` aceita ambos os modos: para uma sessão ele renova o `csrfToken`; para
+um PAT retorna a mesma identidade com `csrfToken: null`, sem emitir ou persistir
+segredo de CSRF.
 
 Tokens brutos de sessão, convite, CSRF e PAT não são persistidos. O servidor
 armazena hashes SHA-256. Senhas usam Argon2id. Convites e PATs são exibidos em

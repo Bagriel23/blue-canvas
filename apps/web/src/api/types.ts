@@ -11,7 +11,7 @@ export interface UserSummary {
 
 export interface SessionInfo {
   user: UserSummary;
-  csrfToken: string;
+  csrfToken: string | null;
   bootstrapRequired: boolean;
 }
 

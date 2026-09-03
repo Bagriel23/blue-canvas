@@ -765,6 +765,29 @@ describe("application server", () => {
     expect(afterLogout.statusCode).toBe(401);
   });
 
+  it("returns PAT identity from auth/me without issuing a CSRF token", async () => {
+    const admin = await bootstrap();
+    const tokenResponse = await admin.app.inject({
+      method: "POST",
+      url: "/api/v1/personal-access-tokens",
+      headers: { cookie: admin.cookie, "x-csrf-token": admin.csrf },
+      payload: { name: "identity", scopes: ["projects:read"] },
+    });
+    expect(tokenResponse.statusCode).toBe(201);
+
+    const response = await admin.app.inject({
+      method: "GET",
+      url: "/api/v1/auth/me",
+      headers: { authorization: `Bearer ${tokenResponse.json().token}` },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      user: { email: "admin@example.com" },
+      csrfToken: null,
+    });
+  });
+
   it("requires the admin scope for every library mutation", async () => {
     const admin = await bootstrap();
     const kits = await admin.app.inject({

@@ -249,14 +249,10 @@ export class ApplicationService {
 
   async currentSession(principal: Principal): Promise<{
     user: PublicUser;
-    csrfToken: string;
+    csrfToken: string | null;
   }> {
-    if (principal.kind !== "session") {
-      throw new ApiError(
-        "invalid_auth_method",
-        "A cookie session is required",
-        400,
-      );
+    if (principal.kind === "pat") {
+      return { user: publicUser(principal.user), csrfToken: null };
     }
     const csrf = issueSecret();
     await this.dependencies.repository.updateSessionCsrf(
