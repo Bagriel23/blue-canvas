@@ -41,20 +41,50 @@ ASSET_MODE=$(stat -c '%a' -- "$ASSET_ROOT_REAL")
   exit 2
 }
 ASSET_MARKER="$ASSET_ROOT_REAL/.blue-canvas-assets-root"
-[[ -f "$ASSET_MARKER" && ! -L "$ASSET_MARKER" ]] || {
+ASSET_MARKER_CONTENT='blue-canvas-assets-v1
+'
+
+assert_asset_marker() {
+  local marker=$1
+  [[ -f "$marker" && ! -L "$marker" ]] || return 1
+  [[ "$(stat -c '%F' -- "$marker")" = 'regular file' ]] || return 1
+  cmp -s -- "$marker" <(printf '%s' "$ASSET_MARKER_CONTENT")
+}
+
+[[ -d "$ASSET_ROOT_REAL" && ! -L "$ASSET_ROOT_REAL" ]] || {
+  echo "ASSET_STORAGE_ROOT must be a real directory" >&2
+  exit 2
+}
+[[ "$(stat -c '%F' -- "$ASSET_ROOT_REAL")" = 'directory' ]] || {
+  echo "ASSET_STORAGE_ROOT must be a real directory" >&2
+  exit 2
+}
+assert_asset_marker "$ASSET_MARKER" || {
   echo "Missing Blue Canvas asset root marker" >&2
   exit 2
 }
 ASSET_DEVICE=$(stat -c '%d' -- "$ASSET_ROOT_REAL")
 ASSET_INODE=$(stat -c '%i' -- "$ASSET_ROOT_REAL")
+ASSET_MARKER_DEVICE=$(stat -c '%d' -- "$ASSET_MARKER")
+ASSET_MARKER_INODE=$(stat -c '%i' -- "$ASSET_MARKER")
 
 assert_asset_root_identity() {
-  local current device inode
+  local current device inode marker marker_device marker_inode
   current=$(realpath -e -- "$ASSET_STORAGE_ROOT") || return 1
   [[ "$current" = "$ASSET_ROOT_REAL" ]] || return 1
+  [[ "$ASSET_STORAGE_ROOT" = "$ASSET_ROOT_REAL" ]] || return 1
+  [[ -d "$current" && ! -L "$current" ]] || return 1
+  [[ "$(stat -c '%F' -- "$current")" = 'directory' ]] || return 1
+  [[ "$(stat -c '%a' -- "$current")" = '700' ]] || return 1
   device=$(stat -c '%d' -- "$current") || return 1
   inode=$(stat -c '%i' -- "$current") || return 1
-  [[ "$device" = "$ASSET_DEVICE" && "$inode" = "$ASSET_INODE" ]]
+  [[ "$device" = "$ASSET_DEVICE" && "$inode" = "$ASSET_INODE" ]] || return 1
+  marker="$current/.blue-canvas-assets-root"
+  assert_asset_marker "$marker" || return 1
+  marker_device=$(stat -c '%d' -- "$marker") || return 1
+  marker_inode=$(stat -c '%i' -- "$marker") || return 1
+  [[ "$marker_device" = "$ASSET_MARKER_DEVICE" &&
+    "$marker_inode" = "$ASSET_MARKER_INODE" ]]
 }
 
 MAX_ARCHIVE_ENTRIES=100000
@@ -134,18 +164,17 @@ assert_staging_root() {
   local marker=$1
   [[ "$(stat -c '%a' -- "$STAGING_DIR")" =~ ^7?00$ ]] || fail_archive 'staging directory is not private'
   assert_safe_tree "$STAGING_DIR"
-  [[ -f "$marker" && ! -L "$marker" ]] || fail_archive 'missing asset root marker'
-  [[ "$(<"$marker")" = 'blue-canvas-assets-v1' ]] || fail_archive 'invalid asset root marker'
+  assert_asset_marker "$marker" || fail_archive 'invalid asset root marker'
 }
 
 assert_promoted_root() {
   local current marker unsafe
   current=$(realpath -e -- "$ASSET_ROOT_REAL") || return 1
   [[ "$current" = "$ASSET_ROOT_REAL" && -d "$current" && ! -L "$current" ]] || return 1
-  [[ "$(stat -c '%a' -- "$current")" =~ ^7?00$ ]] || return 1
+  [[ "$(stat -c '%F' -- "$current")" = 'directory' ]] || return 1
+  [[ "$(stat -c '%a' -- "$current")" = '700' ]] || return 1
   marker="$current/.blue-canvas-assets-root"
-  [[ -f "$marker" && ! -L "$marker" ]] || return 1
-  [[ "$(<"$marker")" = 'blue-canvas-assets-v1' ]] || return 1
+  assert_asset_marker "$marker" || return 1
   unsafe=$(find -P "$current" -mindepth 1 \( -type l -o -type b -o -type c -o -type p -o -type s \) -print -quit)
   [[ -z "$unsafe" ]]
 }

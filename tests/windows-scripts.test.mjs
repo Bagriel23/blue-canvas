@@ -229,3 +229,96 @@ test("restore rejects symlink archive entries before database or asset cleanup",
     "must-survive",
   );
 });
+
+test("restore fails closed when the live asset root changes before promotion", async () => {
+  for (const mutation of ["mode", "marker"]) {
+    const parent = await mkdtemp(
+      join(tmpdir(), `blue-canvas-restore-${mutation}-`),
+    );
+    const assetRoot = join(parent, "assets");
+    const payload = join(parent, "payload");
+    const fakeBin = join(parent, "bin");
+    const backup = join(parent, "backup");
+    const outsideSentinel = join(parent, "outside-sentinel");
+    await mkdir(assetRoot, { mode: 0o700 });
+    await chmod(assetRoot, 0o700);
+    await writeFile(
+      join(assetRoot, ".blue-canvas-assets-root"),
+      "blue-canvas-assets-v1\n",
+      { mode: 0o600 },
+    );
+    await writeFile(join(assetRoot, "old.txt"), "must-survive");
+    await writeFile(outsideSentinel, "outside-must-survive");
+    await mkdir(payload);
+    await writeFile(
+      join(payload, ".blue-canvas-assets-root"),
+      "blue-canvas-assets-v1\n",
+      { mode: 0o600 },
+    );
+    await writeFile(join(payload, "new.txt"), "archive-content");
+    await mkdir(fakeBin);
+    await mkdir(backup);
+    const archive = join(backup, "assets.tar.gz");
+    await execFileAsync("tar", ["-czf", archive, "-C", payload, "."]);
+    const database = join(backup, "database.sql.gz");
+    await writeFile(database, gzipSync("-- restore mutation test\n"));
+    const checksum = (file) => createHash("sha256").update(file).digest("hex");
+    await writeFile(
+      join(backup, "SHA256SUMS"),
+      `${checksum(await readFile(database))}  database.sql.gz\n${checksum(await readFile(archive))}  assets.tar.gz\n`,
+    );
+    const mysqlLog = join(parent, "mysql-invoked");
+    const fakeMysql = join(fakeBin, "mysql");
+    await writeFile(
+      fakeMysql,
+      `#!/bin/sh
+is_count=0
+for arg do
+  if [ "$arg" = "--execute" ]; then is_count=1; fi
+done
+if [ "$is_count" -eq 1 ]; then
+  printf '0'
+  exit 0
+fi
+case "$RESTORE_MUTATION" in
+  mode) chmod 755 "$ASSET_STORAGE_ROOT" ;;
+  marker) printf 'tampered-marker\\n' > "$ASSET_STORAGE_ROOT/.blue-canvas-assets-root" ;;
+esac
+printf invoked > "$MYSQL_LOG"
+cat >/dev/null
+`,
+    );
+    await chmod(fakeMysql, 0o700);
+
+    await assert.rejects(
+      execFileAsync(
+        "bash",
+        [new URL("scripts/restore.sh", root).pathname, backup],
+        {
+          env: {
+            ...process.env,
+            PATH: `${fakeBin}:${process.env.PATH}`,
+            MYSQL_LOG: mysqlLog,
+            RESTORE_MUTATION: mutation,
+            ASSET_STORAGE_ROOT: assetRoot,
+            DATABASE_HOST: "127.0.0.1",
+            DATABASE_PORT: "3306",
+            DATABASE_NAME: "blue_canvas",
+            DATABASE_USER: "blue_canvas",
+            DATABASE_PASSWORD: "not-used",
+          },
+        },
+      ),
+      /changed during restore/i,
+    );
+    assert.equal(
+      await readFile(outsideSentinel, "utf8"),
+      "outside-must-survive",
+    );
+    assert.equal(
+      await readFile(join(assetRoot, "old.txt"), "utf8"),
+      "must-survive",
+    );
+    assert.equal(await readFile(mysqlLog, "utf8"), "invoked");
+  }
+});
