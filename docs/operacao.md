@@ -64,11 +64,20 @@ containers do Compose. O backup produz três arquivos por execução:
 - `SHA256SUMS` — checksums para verificação antes do restore.
 
 `restore.sh` compara os checksums, recusa restaurar sobre um banco não vazio
-salvo com `BLUE_CANVAS_FORCE_RESTORE=1`, valida o diretório dedicado e seu
-marcador `.blue-canvas-assets-root`, limpa somente os filhos desse diretório
-preservando o marcador e restaura o tarball dos assets. Automatize com cron/
-Task Scheduler tomando cuidado para armazenar os backups fora da máquina de
-produção.
+salvo com `BLUE_CANVAS_FORCE_RESTORE=1` e valida o diretório dedicado, seu
+marcador `.blue-canvas-assets-root`, permissões privadas e identidade de inode.
+Antes de consultar ou alterar o banco, o tarball é listado em modo NUL e só
+aceita arquivos regulares e diretórios: caminhos absolutos, componentes `..`,
+symlinks, hardlinks, dispositivos e FIFOs são recusados. O conteúdo é extraído
+em um staging privado ao lado do root, revalidado (incluindo links/reparse,
+marcador, quantidade de entradas e tamanho), e promovido por troca de
+diretórios. O root anterior fica disponível durante a promoção e é removido
+somente depois da validação final; falhas restauram o root anterior.
+
+Os equivalentes PowerShell aplicam as mesmas validações usando `tar`, recusam
+reparse points/junctions e usam `System.IO.Directory.Move` para a troca no mesmo
+volume. Automatize com cron/Task Scheduler tomando cuidado para armazenar os
+backups fora da máquina de produção.
 
 ## Observabilidade e sanitização
 

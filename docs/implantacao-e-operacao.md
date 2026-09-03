@@ -56,10 +56,15 @@ Um backup consistente precisa incluir:
 - versão da aplicação e migrations usadas.
 
 Os scripts `scripts/backup.sh` e `scripts/restore.sh` e seus equivalentes
-PowerShell automatizam o fluxo. Teste restaurações em ambiente isolado, mantenha
-retenção compatível com a política interna e preserve o marcador exigido no
-diretório de assets. Restaurar somente o banco ou somente assets pode deixar
-metadados sem arquivo ou arquivos órfãos.
+PowerShell automatizam o fluxo. O restore valida o listing do tar antes de
+qualquer alteração, recusando caminhos absolutos ou com `..`, symlinks,
+hardlinks, devices, FIFOs e reparse points/junctions. O tar é extraído em um
+staging privado, com limite de entradas/tamanho e validação do marcador; a
+promoção usa troca de diretórios e só remove o root anterior após a validação
+final. Em falhas de promoção, o root anterior é restaurado. Teste restaurações
+em ambiente isolado, mantenha retenção compatível com a política interna e
+preserve o marcador exigido no diretório de assets. Restaurar somente o banco ou
+somente assets pode deixar metadados sem arquivo ou arquivos órfãos.
 
 ## Atualização e rollback
 

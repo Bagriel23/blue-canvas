@@ -107,6 +107,79 @@ function Assert-NoReparseTree {
   }
 }
 
+$MaxArchiveEntries = 100000
+$MaxAssetBytes = 1GB
+$stagingPath = $null
+$swapPath = $null
+
+function Assert-SafeTarArchive {
+  Param([string]$Archive)
+
+  $listingPath = Join-Path ([System.IO.Path]::GetTempPath()) "blue-canvas-tar-$([guid]::NewGuid()).list"
+  try {
+    # Keep the archive listing as bytes so NUL-delimited names cannot be
+    # confused with lines or hide a traversal through an embedded newline.
+    & tar --null --list --file $Archive --gzip > $listingPath
+    if ($LASTEXITCODE -ne 0) { throw 'Cannot read asset archive listing' }
+    $listingText = [System.Text.Encoding]::UTF8.GetString([System.IO.File]::ReadAllBytes($listingPath))
+    $entries = @($listingText -split [char]0 | Where-Object { $_ -ne '' })
+    if ($entries.Count -gt $MaxArchiveEntries) { throw 'Asset archive contains too many entries' }
+    foreach ($entry in $entries) {
+      if ([System.IO.Path]::IsPathRooted($entry) -or $entry -match '^[A-Za-z]:' -or $entry.Contains('\')) {
+        throw "Refusing absolute or platform path in asset archive: $entry"
+      }
+      foreach ($component in ($entry -split '/')) {
+        if ($component -eq '..') { throw "Refusing parent traversal in asset archive: $entry" }
+      }
+    }
+  } finally {
+    if (Test-Path -LiteralPath $listingPath) {
+      Remove-Item -LiteralPath $listingPath -Force
+    }
+  }
+
+  $verboseListing = @(& tar --list --verbose --file $Archive --gzip 2>&1)
+  if ($LASTEXITCODE -ne 0) { throw 'Cannot read asset archive entry types' }
+  foreach ($line in $verboseListing) {
+    if ([string]::IsNullOrWhiteSpace([string]$line)) { continue }
+    $entryType = ([string]$line).Substring(0, 1)
+    if ($entryType -ne '-' -and $entryType -ne 'd') {
+      throw 'Refusing link, device, FIFO, or other special entry in asset archive'
+    }
+  }
+}
+
+function Assert-SafeExtractedTree {
+  Param([string]$Path)
+  Assert-NoReparseTree $Path
+  $items = @(Get-ChildItem -LiteralPath $Path -Force -Recurse)
+  if ($items.Count -gt $MaxArchiveEntries) { throw 'Extracted asset tree contains too many entries' }
+  [int64]$totalBytes = 0
+  foreach ($item in $items) {
+    if (($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) {
+      throw "Refusing reparse point in extracted asset tree: $($item.FullName)"
+    }
+    if (-not $item.PSIsContainer) {
+      $totalBytes += $item.Length
+      if ($totalBytes -gt $MaxAssetBytes) { throw 'Extracted assets exceed size limit' }
+    }
+  }
+}
+
+function Assert-StagingRoot {
+  Param([string]$Path)
+  Assert-PrivateDirectory $Path
+  Assert-SafeExtractedTree $Path
+  $stagingMarker = Join-Path $Path '.blue-canvas-assets-root'
+  $item = Get-Item -LiteralPath $stagingMarker -Force -ErrorAction Stop
+  if ($item.PSIsContainer -or ($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) {
+    throw 'Staged asset root marker must be a regular file'
+  }
+  if ((Get-Content -LiteralPath $stagingMarker -Raw).TrimEnd("`r", "`n") -ne 'blue-canvas-assets-v1') {
+    throw 'Unexpected staged Blue Canvas asset root marker'
+  }
+}
+
 function Assert-PrivateDirectory {
   Param([string]$Path)
   $acl = Get-Acl -LiteralPath $Path
@@ -203,7 +276,20 @@ try {
   Pop-Location
 }
 
-$tableCount = & mysql `
+Assert-SafeTarArchive $assetsFile
+
+$assetParent = Split-Path -Parent $assetRootFull
+Assert-NoReparseComponents $assetParent
+$stagingPath = Join-Path $assetParent ".blue-canvas-assets.restore-$([guid]::NewGuid())"
+New-Item -ItemType Directory -Path $stagingPath -Force | Out-Null
+try {
+  Assert-PrivateDirectory $stagingPath
+  & tar --extract --gzip --file $assetsFile --directory $stagingPath `
+    --no-same-owner --no-same-permissions --no-overwrite-dir
+  if ($LASTEXITCODE -ne 0) { throw 'Asset archive extraction failed' }
+  Assert-StagingRoot $stagingPath
+
+  $tableCount = & mysql `
   --host $env:DATABASE_HOST `
   --port $env:DATABASE_PORT `
   --user $env:DATABASE_USER `
@@ -215,33 +301,44 @@ if ([int]$tableCount -gt 0 -and -not $Force) {
   throw 'Target database is not empty. Re-run with -Force to overwrite.'
 }
 
-& gunzip -c $dumpFile | & mysql `
+  & gunzip -c $dumpFile | & mysql `
   --host $env:DATABASE_HOST `
   --port $env:DATABASE_PORT `
   --user $env:DATABASE_USER `
   --password=$env:DATABASE_PASSWORD `
   $env:DATABASE_NAME
 
-Assert-AssetRootIdentity
-Assert-NoReparseTree $assetRootFull
-$children = @(Get-ChildItem -LiteralPath $assetRootFull -Force)
-foreach ($child in $children) {
-  if ($child.FullName.Equals($marker, [System.StringComparison]::OrdinalIgnoreCase)) { continue }
   Assert-AssetRootIdentity
-  $currentChild = Get-Item -LiteralPath $child.FullName -Force -ErrorAction Stop
-  if (($currentChild.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) {
-    throw "Refusing reparse point during asset cleanup: $($currentChild.FullName)"
+  Assert-NoReparseTree $assetRootFull
+  $swapPath = Join-Path $assetParent ".blue-canvas-assets.previous-$([guid]::NewGuid())"
+  # Revalidate the live root immediately before the first rename. The old
+  # root remains available at $swapPath until the promoted tree is checked.
+  Assert-AssetRootIdentity
+  [System.IO.Directory]::Move($assetRootFull, $swapPath)
+  try {
+    [System.IO.Directory]::Move($stagingPath, $assetRootFull)
+    $stagingPath = $null
+  } catch {
+    [System.IO.Directory]::Move($swapPath, $assetRootFull)
+    throw 'Could not promote restored assets; original root was restored'
   }
-  if ($currentChild.PSIsContainer) {
-    [System.IO.Directory]::Delete($currentChild.FullName, $true)
-  } else {
-    [System.IO.File]::Delete($currentChild.FullName)
+
+  try {
+    Assert-NoReparseComponents $assetRootFull
+    Assert-StagingRoot $assetRootFull
+  } catch {
+    $failedPath = Join-Path $assetParent ".blue-canvas-assets.failed-$([guid]::NewGuid())"
+    [System.IO.Directory]::Move($assetRootFull, $failedPath)
+    [System.IO.Directory]::Move($swapPath, $assetRootFull)
+    throw 'Promoted asset root failed validation; original root was restored'
+  }
+
+  [System.IO.Directory]::Delete($swapPath, $true)
+  $swapPath = $null
+} finally {
+  if ($null -ne $stagingPath -and (Test-Path -LiteralPath $stagingPath)) {
+    Remove-Item -LiteralPath $stagingPath -Force -Recurse
   }
 }
-Assert-AssetRootIdentity
-& tar -xzf $assetsFile -C $assetRootFull
-if ($LASTEXITCODE -ne 0) { throw 'Asset archive extraction failed' }
-Assert-AssetRootIdentity
-Assert-NoReparseTree $assetRootFull
 
 Write-Host "Restored from $sourceFull into $env:DATABASE_NAME"
