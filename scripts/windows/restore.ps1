@@ -193,6 +193,55 @@ function Assert-PrivateDirectory {
   }
 }
 
+function Invoke-MySqlDump {
+  Param([string]$DumpFile)
+
+  $temporarySqlPath = Join-Path ([System.IO.Path]::GetTempPath()) "blue-canvas-dump-$([guid]::NewGuid()).sql"
+  $inputStream = $null
+  $gzipStream = $null
+  $outputStream = $null
+  try {
+    $inputStream = [System.IO.File]::Open(
+      $DumpFile,
+      [System.IO.FileMode]::Open,
+      [System.IO.FileAccess]::Read,
+      [System.IO.FileShare]::Read)
+    # CreateNew makes the random temporary path fail closed if it ever collides.
+    $outputStream = [System.IO.File]::Open(
+      $temporarySqlPath,
+      [System.IO.FileMode]::CreateNew,
+      [System.IO.FileAccess]::Write,
+      [System.IO.FileShare]::None)
+    $gzipStream = New-Object -TypeName System.IO.Compression.GZipStream -ArgumentList @(
+      $inputStream,
+      [System.IO.Compression.CompressionMode]::Decompress)
+    $gzipStream.CopyTo($outputStream)
+  } finally {
+    if ($null -ne $gzipStream) { $gzipStream.Dispose() }
+    if ($null -ne $outputStream) { $outputStream.Dispose() }
+    if ($null -ne $inputStream) { $inputStream.Dispose() }
+  }
+
+  try {
+    $mysqlArguments = @(
+      '--host', $env:DATABASE_HOST,
+      '--port', $env:DATABASE_PORT,
+      '--user', $env:DATABASE_USER,
+      "--password=$env:DATABASE_PASSWORD",
+      $env:DATABASE_NAME
+    )
+    $mysqlProcess = Start-Process -FilePath 'mysql' -ArgumentList $mysqlArguments `
+      -RedirectStandardInput $temporarySqlPath -NoNewWindow -Wait -PassThru
+    if ($mysqlProcess.ExitCode -ne 0) {
+      throw "mysql exited with code $($mysqlProcess.ExitCode)"
+    }
+  } finally {
+    if (Test-Path -LiteralPath $temporarySqlPath) {
+      Remove-Item -LiteralPath $temporarySqlPath -Force
+    }
+  }
+}
+
 $assetRootInput = $env:ASSET_STORAGE_ROOT
 $assetRoot = Get-Item -LiteralPath $assetRootInput -Force
 if (-not $assetRoot.PSIsContainer) { throw 'ASSET_STORAGE_ROOT must be a real directory' }
@@ -301,12 +350,7 @@ if ([int]$tableCount -gt 0 -and -not $Force) {
   throw 'Target database is not empty. Re-run with -Force to overwrite.'
 }
 
-  & gunzip -c $dumpFile | & mysql `
-  --host $env:DATABASE_HOST `
-  --port $env:DATABASE_PORT `
-  --user $env:DATABASE_USER `
-  --password=$env:DATABASE_PASSWORD `
-  $env:DATABASE_NAME
+  Invoke-MySqlDump $dumpFile
 
   Assert-AssetRootIdentity
   Assert-NoReparseTree $assetRootFull

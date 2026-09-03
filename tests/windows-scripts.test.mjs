@@ -40,6 +40,11 @@ test("restore scripts validate the asset target before recursive deletion", asyn
   assert.match(windows, /FileIndex|GetFileIdentity|identity/u);
   assert.match(windows, /Assert-AssetRootIdentity/);
   assert.match(windows, /Assert-NoReparseTree/);
+  assert.match(windows, /GZipStream/u);
+  assert.match(windows, /RedirectStandardInput/u);
+  assert.match(windows, /FileMode\]::CreateNew/u);
+  assert.match(windows, /CopyTo/u);
+  assert.doesNotMatch(windows, /gunzip\s+-c[\s\S]*\|/u);
   assert.match(unix, /tar[\s\S]*--null[\s\S]*--list/);
   assert.match(unix, /STAGING_DIR|staging/i);
   assert.match(unix, /\.\.|absolute|symlink|hardlink|FIFO/i);
@@ -56,6 +61,19 @@ test("restore scripts validate the asset target before recursive deletion", asyn
     windows.indexOf("Assert-SafeTarArchive $assetsFile") <
       windows.indexOf("$tableCount"),
   );
+});
+
+test("Windows restore decompresses SQL through a byte-preserving temporary file", async () => {
+  const windows = await readFile(
+    new URL("scripts/windows/restore.ps1", root),
+    "utf8",
+  );
+  assert.match(windows, /function Invoke-MySqlDump/u);
+  assert.match(windows, /GZipStream/u);
+  assert.match(windows, /FileMode\]::CreateNew/u);
+  assert.match(windows, /RedirectStandardInput/u);
+  assert.match(windows, /finally[\s\S]*Remove-Item/u);
+  assert.doesNotMatch(windows, /gunzip\s+-c[\s\S]*\|\s*&?\s*mysql/u);
 });
 
 test("restore rejects root, relative, and symlink asset targets before touching the database", async () => {
@@ -162,6 +180,96 @@ test("restore rejects malicious tar listings before database or asset cleanup", 
   assert.equal(
     await readFile(join(assetRoot, "old.txt"), "utf8"),
     "must-survive",
+  );
+});
+
+test("restore rejects archives over the declared asset size before extraction or database access", async () => {
+  const parent = await mkdtemp(join(tmpdir(), "blue-canvas-restore-size-"));
+  const assetRoot = join(parent, "assets");
+  const payload = join(parent, "payload");
+  const fakeBin = join(parent, "bin");
+  const backup = join(parent, "backup");
+  const tarLog = join(parent, "tar-invocations");
+  await mkdir(assetRoot, { mode: 0o700 });
+  await chmod(assetRoot, 0o700);
+  await writeFile(
+    join(assetRoot, ".blue-canvas-assets-root"),
+    "blue-canvas-assets-v1\n",
+  );
+  await writeFile(join(assetRoot, "old.txt"), "must-survive");
+  await mkdir(payload);
+  await writeFile(
+    join(payload, ".blue-canvas-assets-root"),
+    "blue-canvas-assets-v1\n",
+  );
+  await execFileAsync("truncate", [
+    "-s",
+    "1073741825",
+    join(payload, "large.bin"),
+  ]);
+  await mkdir(fakeBin);
+  await mkdir(backup);
+  const archive = join(backup, "assets.tar.gz");
+  await execFileAsync("tar", [
+    "--sparse",
+    "-czf",
+    archive,
+    "-C",
+    payload,
+    ".blue-canvas-assets-root",
+    "large.bin",
+  ]);
+  const tarBinary = (await execFileAsync("which", ["tar"])).stdout.trim();
+  await writeFile(
+    join(fakeBin, "tar"),
+    `#!/bin/sh\nprintf '%s\\n' "$*" >> "$TAR_LOG"\nexec ${tarBinary} "$@"\n`,
+  );
+  await chmod(join(fakeBin, "tar"), 0o700);
+  const database = join(backup, "database.sql.gz");
+  await writeFile(database, gzipSync("-- oversized archive test\n"));
+  const checksum = (file) => createHash("sha256").update(file).digest("hex");
+  await writeFile(
+    join(backup, "SHA256SUMS"),
+    `${checksum(await readFile(database))}  database.sql.gz\n${checksum(await readFile(archive))}  assets.tar.gz\n`,
+  );
+  const mysqlLog = join(parent, "mysql-invoked");
+  const fakeMysql = join(fakeBin, "mysql");
+  await writeFile(
+    fakeMysql,
+    `#!/bin/sh\nprintf invoked > "$MYSQL_LOG"\nexit 0\n`,
+  );
+  await chmod(fakeMysql, 0o700);
+
+  await assert.rejects(
+    execFileAsync(
+      "bash",
+      [new URL("scripts/restore.sh", root).pathname, backup],
+      {
+        env: {
+          ...process.env,
+          PATH: `${fakeBin}:${process.env.PATH}`,
+          TAR_LOG: tarLog,
+          MYSQL_LOG: mysqlLog,
+          ASSET_STORAGE_ROOT: assetRoot,
+          DATABASE_HOST: "127.0.0.1",
+          DATABASE_PORT: "3306",
+          DATABASE_NAME: "blue_canvas",
+          DATABASE_USER: "blue_canvas",
+          DATABASE_PASSWORD: "not-used",
+        },
+      },
+    ),
+    /size|limit|archive|unsafe/i,
+  );
+  await assert.rejects(readFile(mysqlLog));
+  assert.doesNotMatch(await readFile(tarLog, "utf8"), /--extract/u);
+  assert.equal(
+    await readFile(join(assetRoot, "old.txt"), "utf8"),
+    "must-survive",
+  );
+  assert.equal(
+    await readFile(join(assetRoot, ".blue-canvas-assets-root"), "utf8"),
+    "blue-canvas-assets-v1\n",
   );
 });
 

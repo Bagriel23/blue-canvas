@@ -135,11 +135,58 @@ validate_asset_archive() {
   rm -f -- "$listing"
 
   # Only regular files and directories are accepted. This rejects symlinks,
-  # hardlinks, device nodes, FIFOs and other tar entry types.
-  if ! tar --list --verbose --file "$archive" --gzip --quoting-style=escape |
-    awk 'substr($0, 1, 1) != "-" && substr($0, 1, 1) != "d" { exit 1 }'; then
-    fail_archive 'non-regular entry (link, device or special file)'
+  # hardlinks, device nodes, FIFOs and other tar entry types. Parse the
+  # declared regular-file sizes before extraction so sparse archives cannot
+  # bypass the asset limit. Numeric fields are validated as decimal strings
+  # before entering shell arithmetic, which keeps malformed/overflow values
+  # fail-closed.
+  local verbose_listing line mode owner size date time name normalized_size
+  local declared_total=0
+  verbose_listing=$(mktemp)
+  if ! LC_ALL=C tar --list --verbose --numeric-owner --file "$archive" --gzip \
+    --quoting-style=escape > "$verbose_listing"; then
+    rm -f -- "$verbose_listing"
+    fail_archive 'cannot read archive entry metadata'
   fi
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    [[ -n "$line" ]] || {
+      rm -f -- "$verbose_listing"
+      fail_archive 'malformed archive entry metadata'
+    }
+    read -r mode owner size date time name <<< "$line"
+    if [[ "$mode" =~ ^-[rwxXsStT-]{9}$ ]]; then
+      [[ "$owner" =~ ^[0-9]+/[0-9]+$ && "$size" =~ ^[0-9]+$ &&
+        "$date" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ &&
+        "$time" =~ ^[0-9]{2}:[0-9]{2}(:[0-9]{2})?$ && -n "$name" ]] || {
+        rm -f -- "$verbose_listing"
+        fail_archive 'malformed regular-file metadata'
+      }
+      normalized_size=${size#${size%%[!0]*}}
+      [[ -n "$normalized_size" ]] || normalized_size=0
+      if [[ ${#normalized_size} -gt ${#MAX_ASSET_BYTES} ||
+        ( ${#normalized_size} -eq ${#MAX_ASSET_BYTES} &&
+          "$normalized_size" > "$MAX_ASSET_BYTES" ) ]]; then
+        rm -f -- "$verbose_listing"
+        fail_archive 'declared regular-file sizes exceed limit'
+      fi
+      (( declared_total <= MAX_ASSET_BYTES - 10#$normalized_size )) || {
+        rm -f -- "$verbose_listing"
+        fail_archive 'declared regular-file sizes exceed limit'
+      }
+      declared_total=$((declared_total + 10#$normalized_size))
+    elif [[ "$mode" =~ ^d[rwxXsStT-]{9}$ ]]; then
+      [[ "$owner" =~ ^[0-9]+/[0-9]+$ && "$size" = 0 &&
+        "$date" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ &&
+        "$time" =~ ^[0-9]{2}:[0-9]{2}(:[0-9]{2})?$ && -n "$name" ]] || {
+        rm -f -- "$verbose_listing"
+        fail_archive 'malformed directory metadata'
+      }
+    else
+      rm -f -- "$verbose_listing"
+      fail_archive 'non-regular entry (link, device or special file)'
+    fi
+  done < "$verbose_listing"
+  rm -f -- "$verbose_listing"
 }
 
 assert_safe_tree() {
