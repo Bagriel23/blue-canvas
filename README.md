@@ -5,11 +5,11 @@ compartilhar projetos e exportar código determinístico. O produto é inspirado
 Pen e no Claude Design, mas foi desenhado para operar sem tokens de serviços
 externos, telemetria, CDNs ou serviços de IA externos.
 
-> Estado atual: o modelo de documento, o motor de comandos, os exportadores, a
-> API, a colaboração em tempo real e o esqueleto do cliente web React (login,
-> home, biblioteca, workspace de três painéis com canvas DOM semântico) já
-> existem no branch. Ainda faltam a integração Yjs no cliente, kits/templates,
-> exportação HTTP e MCP. Consulte [Status e roadmap](docs/status-e-roadmap.md).
+> Estado atual: o modelo semântico, motor de comandos, exportadores, API,
+> colaboração Yjs/Hocuspocus, cliente web React, biblioteca de kits/templates,
+> MCP HTTP/stdio e scripts operacionais estão no branch. Persistência Prisma da
+> biblioteca, IA externa, offline persistente, OpenAPI e hardening de produção
+> permanecem fora do v1. Consulte [Status e roadmap](docs/status-e-roadmap.md).
 
 ## Início rápido
 

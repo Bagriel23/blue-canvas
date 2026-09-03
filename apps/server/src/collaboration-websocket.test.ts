@@ -9,6 +9,7 @@ import {
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
 import * as Y from "yjs";
+import { applyCollaborationState } from "@blue-canvas/collaboration";
 
 import { buildApp, type ServerDependencies } from "./app.js";
 import { InMemoryRepository } from "./memory-repository.js";
@@ -204,7 +205,7 @@ describe("Hocuspocus collaboration", () => {
       Y.encodeStateAsUpdate(secondDocument),
     );
 
-    await new Promise((resolve) => setTimeout(resolve, 150));
+    firstDocument.getMap("content").set("immediate", "latest");
     const versionResponse = await app.inject({
       method: "POST",
       url: `/api/v1/projects/${projectId}/versions`,
@@ -213,6 +214,16 @@ describe("Hocuspocus collaboration", () => {
     });
     expect(versionResponse.statusCode).toBe(201);
     const versionId = versionResponse.json().version.id as string;
+    const version = await dependencies.repository.findNamedVersion(
+      projectId,
+      versionId,
+    );
+    expect(version).toBeDefined();
+    const versionDocument = new Y.Doc();
+    if (!version) throw new Error("version was not persisted");
+    applyCollaborationState(versionDocument, version.state);
+    expect(versionDocument.getMap("content").get("immediate")).toBe("latest");
+    versionDocument.destroy();
     firstDocument.getMap("content").set("later", "discard me");
     await waitUntil(
       () => secondDocument.getMap("content").get("later") === "discard me",
@@ -247,6 +258,7 @@ describe("Hocuspocus collaboration", () => {
     expect(restoredDocument.getMap("content").toJSON()).toEqual({
       left: "A",
       right: "B",
+      immediate: "latest",
     });
     restored.destroy();
     await restarted.close();

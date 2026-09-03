@@ -103,6 +103,16 @@ export interface ProjectDocument {
   updatedAt: Date;
 }
 
+export interface CommandReceipt {
+  id: string;
+  projectId: string;
+  idempotencyKey: string;
+  fingerprint: string;
+  revision: number;
+  document: unknown;
+  createdAt: Date;
+}
+
 export interface NamedVersion {
   id: string;
   projectId: string;
@@ -161,6 +171,7 @@ export interface RepositoryPort {
     now: Date;
   }): Promise<Session>;
   findSessionByTokenHash(tokenHash: string): Promise<Session | undefined>;
+  updateSessionCsrf(id: string, csrfHash: string, now: Date): Promise<void>;
   touchSession(id: string, now: Date): Promise<void>;
   revokeSession(id: string, now: Date): Promise<void>;
   createInvitation(input: {
@@ -250,6 +261,13 @@ export interface RepositoryPort {
     now: Date;
     expectedRevision?: number;
   }): Promise<ProjectDocument>;
+  findCommandReceipt(
+    projectId: string,
+    idempotencyKey: string,
+  ): Promise<CommandReceipt | undefined>;
+  createCommandReceipt(
+    input: Omit<CommandReceipt, "id">,
+  ): Promise<CommandReceipt>;
   createNamedVersion(
     input: Omit<NamedVersion, "id" | "createdAt"> & { now: Date },
   ): Promise<NamedVersion>;

@@ -5,8 +5,8 @@ export interface UserSummary {
   email: string;
   displayName: string;
   locale: UiLocale;
-  role: "member" | "admin";
-  status: "active" | "invited" | "revoked";
+  status: "active" | "disabled";
+  isAdmin: boolean;
 }
 
 export interface SessionInfo {

@@ -8,7 +8,7 @@ banco de dados e interface. Essa separação permite que, futuramente, editor we
 e MCP usem o mesmo contrato sem duplicar regras.
 
 ```text
-Editor React (pendente)       MCP HTTP/stdio (pendente)
+Editor React                  MCP HTTP/stdio
             |                           |
             +-------- API /api/v1 ------+
                            |
@@ -21,18 +21,18 @@ Editor React (pendente)       MCP HTTP/stdio (pendente)
        packages/commands   packages/exporters
 ```
 
-A API é a autoridade para identidade, ACL, projetos, auditoria, persistência e
-assets. O MCP planejado deverá chamar a API com credenciais delegadas, sem
-acesso direto ao MariaDB ou ao diretório de assets.
+A API é a autoridade para identidade, ACL, projetos, comandos, auditoria,
+persistência e assets. O MCP chama a API com credenciais delegadas, sem acesso
+direto ao MariaDB ou ao diretório de assets.
 
 ## Aplicações
 
-| Workspace         | Responsabilidade                                         | Estado          |
-| ----------------- | -------------------------------------------------------- | --------------- |
-| `apps/server`     | API Fastify, Hocuspocus, domínio, Prisma e storage local | Implementado    |
-| `apps/web`        | Editor React/Vite e shell do produto                     | Apenas scaffold |
-| `apps/mcp-server` | Servidor MCP HTTP separado                               | Apenas scaffold |
-| `apps/mcp-stdio`  | Ponte MCP para clientes locais como ClineSR              | Apenas scaffold |
+| Workspace         | Responsabilidade                                         | Estado       |
+| ----------------- | -------------------------------------------------------- | ------------ |
+| `apps/server`     | API Fastify, Hocuspocus, domínio, Prisma e storage local | Implementado |
+| `apps/web`        | Editor React/Vite e shell do produto                     | Implementado |
+| `apps/mcp-server` | Servidor MCP HTTP separado                               | Implementado |
+| `apps/mcp-stdio`  | Ponte MCP para clientes locais como ClineSR              | Implementado |
 
 ## Pacotes
 
@@ -62,8 +62,9 @@ acesso direto ao MariaDB ou ao diretório de assets.
 
 As migrations criam usuários, sessões, convites, projetos, membros, personal
 access tokens, auditoria, assets, locks de sistema, snapshots Yjs compactados,
-versões nomeadas, comentários e menções. O estado colaborativo atual ocupa uma
-linha por projeto; atualizações incrementais não formam um log sem limite.
+versões nomeadas, comentários, menções e receipts de comandos. O estado
+colaborativo atual ocupa uma linha por projeto; atualizações incrementais não
+formam um log sem limite.
 
 Para decisões de produto e requisitos não implementados, consulte a
 [especificação aprovada](superpowers/specs/2026-08-24-blue-canvas-design.md) e o

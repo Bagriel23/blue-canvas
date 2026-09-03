@@ -10,6 +10,18 @@ Import-Module "$PSScriptRoot/_common.ps1"
 
 Invoke-BlueCanvasEnvGuard
 
+$assetRoot = Get-Item -LiteralPath $env:ASSET_STORAGE_ROOT -Force
+if (-not $assetRoot.PSIsContainer -or $assetRoot.LinkType) { throw 'ASSET_STORAGE_ROOT must be a real directory' }
+$assetRootFull = $assetRoot.FullName
+if ($assetRootFull -eq [System.IO.Path]::GetPathRoot($assetRootFull)) { throw 'Refusing filesystem root' }
+$repoRoot = (git rev-parse --show-toplevel 2>$null)
+if ($LASTEXITCODE -eq 0 -and $repoRoot) {
+  $repoFull = [System.IO.Path]::GetFullPath($repoRoot.Trim())
+  if ($assetRootFull -eq $repoFull -or $assetRootFull.StartsWith($repoFull + [System.IO.Path]::DirectorySeparatorChar)) { throw 'Refusing a path inside the repository' }
+}
+$marker = Join-Path $assetRootFull '.blue-canvas-assets-root'
+if (-not (Test-Path -LiteralPath $marker -PathType Leaf)) { throw 'Missing Blue Canvas asset root marker' }
+
 $sourceFull = Resolve-Path $Source
 $dumpFile = Join-Path $sourceFull 'database.sql.gz'
 $assetsFile = Join-Path $sourceFull 'assets.tar.gz'
@@ -55,7 +67,9 @@ if ([int]$tableCount -gt 0 -and -not $Force) {
   --password=$env:DATABASE_PASSWORD `
   $env:DATABASE_NAME
 
-Remove-Item -Recurse -Force -Path (Join-Path $env:ASSET_STORAGE_ROOT '*')
-& tar -xzf $assetsFile -C $env:ASSET_STORAGE_ROOT
+if (-not (Test-Path -LiteralPath $marker -PathType Leaf)) { throw 'Asset root changed during restore' }
+Get-ChildItem -LiteralPath $assetRootFull -Force | Where-Object { $_.FullName -ne $marker } | Remove-Item -Recurse -Force
+if (-not (Test-Path -LiteralPath $marker -PathType Leaf)) { throw 'Asset root changed during restore' }
+& tar -xzf $assetsFile -C $assetRootFull
 
 Write-Host "Restored from $sourceFull into $env:DATABASE_NAME"

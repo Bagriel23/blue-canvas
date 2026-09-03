@@ -737,6 +737,7 @@ describe("application server", () => {
       headers: { cookie: admin.cookie },
     });
     expect(me.json().user.email).toBe("admin@example.com");
+    expect(me.json().csrfToken).toEqual(expect.any(String));
 
     const withoutCsrf = await admin.app.inject({
       method: "POST",
@@ -747,10 +748,12 @@ describe("application server", () => {
     expect(withoutCsrf.statusCode).toBe(403);
     expect(withoutCsrf.json().error.code).toBe("csrf_mismatch");
 
+    const currentCsrf = me.json().csrfToken as string;
+
     const logout = await admin.app.inject({
       method: "POST",
       url: "/api/v1/auth/logout",
-      headers: { cookie: admin.cookie, "x-csrf-token": admin.csrf },
+      headers: { cookie: admin.cookie, "x-csrf-token": currentCsrf },
     });
     expect(logout.statusCode).toBe(204);
 
@@ -760,6 +763,112 @@ describe("application server", () => {
       headers: { cookie: admin.cookie },
     });
     expect(afterLogout.statusCode).toBe(401);
+  });
+
+  it("requires the admin scope for every library mutation", async () => {
+    const admin = await bootstrap();
+    const kits = await admin.app.inject({
+      method: "GET",
+      url: "/api/v1/library/kits",
+      headers: { cookie: admin.cookie },
+    });
+    const kitIds = kits
+      .json()
+      .kits.map((kit: { id: string }) => kit.id) as string[];
+    expect(kitIds.length).toBeGreaterThanOrEqual(2);
+
+    const limited = await admin.app.inject({
+      method: "POST",
+      url: "/api/v1/personal-access-tokens",
+      headers: { cookie: admin.cookie, "x-csrf-token": admin.csrf },
+      payload: { name: "read-only", scopes: ["projects:read"] },
+    });
+    const limitedToken = limited.json().token as string;
+    const denied = await admin.app.inject({
+      method: "POST",
+      url: `/api/v1/library/kits/${kitIds[0]}/deprecate`,
+      headers: { authorization: `Bearer ${limitedToken}` },
+    });
+    expect(denied.statusCode).toBe(403);
+    expect(denied.json().error.code).toBe("insufficient_scope");
+
+    const allowed = await admin.app.inject({
+      method: "POST",
+      url: `/api/v1/library/kits/${kitIds[1]}/deprecate`,
+      headers: { cookie: admin.cookie, "x-csrf-token": admin.csrf },
+    });
+    expect(allowed.statusCode).toBe(200);
+
+    const adminPat = await admin.app.inject({
+      method: "POST",
+      url: "/api/v1/personal-access-tokens",
+      headers: { cookie: admin.cookie, "x-csrf-token": admin.csrf },
+      payload: { name: "library-admin", scopes: ["admin"] },
+    });
+    const adminToken = adminPat.json().token as string;
+    const patAllowed = await admin.app.inject({
+      method: "POST",
+      url: `/api/v1/library/kits/${kitIds[0]}/deprecate`,
+      headers: { authorization: `Bearer ${adminToken}` },
+    });
+    expect(patAllowed.statusCode).toBe(200);
+  });
+
+  it("applies MCP command batches through the document engine with revision idempotency", async () => {
+    const admin = await bootstrap();
+    const projectResponse = await admin.app.inject({
+      method: "POST",
+      url: "/api/v1/projects",
+      headers: { cookie: admin.cookie, "x-csrf-token": admin.csrf },
+      payload: { name: "Commands" },
+    });
+    const projectId = projectResponse.json().project.id as string;
+    const payload = {
+      baseRevision: 0,
+      idempotencyKey: "mcp-command-123456",
+      commands: [
+        {
+          type: "set-token",
+          name: "brand",
+          value: { type: "color", value: "#1428A0" },
+        },
+      ],
+    };
+    const first = await admin.app.inject({
+      method: "POST",
+      url: `/api/v1/projects/${projectId}/commands`,
+      headers: { cookie: admin.cookie, "x-csrf-token": admin.csrf },
+      payload,
+    });
+    expect(first.statusCode).toBe(201);
+    expect(first.json()).toMatchObject({ revision: 1, idempotent: false });
+
+    const repeated = await admin.app.inject({
+      method: "POST",
+      url: `/api/v1/projects/${projectId}/commands`,
+      headers: { cookie: admin.cookie, "x-csrf-token": admin.csrf },
+      payload,
+    });
+    expect(repeated.statusCode).toBe(200);
+    expect(repeated.json()).toMatchObject({ revision: 1, idempotent: true });
+
+    const conflict = await admin.app.inject({
+      method: "POST",
+      url: `/api/v1/projects/${projectId}/commands`,
+      headers: { cookie: admin.cookie, "x-csrf-token": admin.csrf },
+      payload: {
+        ...payload,
+        commands: [
+          {
+            type: "set-token",
+            name: "brand",
+            value: { type: "color", value: "#ffffff" },
+          },
+        ],
+      },
+    });
+    expect(conflict.statusCode).toBe(409);
+    expect(conflict.json().error.code).toBe("idempotency_conflict");
   });
 
   it("enforces project membership and reserves member management for owners", async () => {

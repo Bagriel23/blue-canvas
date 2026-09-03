@@ -50,10 +50,10 @@ export function SessionProvider({
     setError(null);
     try {
       const result = await apiClient.request<SessionInfo>({
-        path: "/api/v1/sessions/current",
+        path: "/api/v1/auth/me",
       });
-      apiClient.setCsrfToken(result.data.csrfToken);
-      setSession(result.data);
+      apiClient.setCsrfToken(result.data.csrfToken ?? null);
+      setSession({ ...result.data, bootstrapRequired: false });
     } catch (raw) {
       if (raw instanceof ApiError && raw.status === 401) {
         setSession(null);
@@ -81,7 +81,7 @@ export function SessionProvider({
       try {
         const result = await apiClient.request<SessionInfo>({
           method: "POST",
-          path: "/api/v1/sessions",
+          path: "/api/v1/auth/login",
           body: { email, password },
         });
         apiClient.setCsrfToken(result.data.csrfToken);
@@ -101,7 +101,7 @@ export function SessionProvider({
     try {
       await apiClient.request({
         method: "POST",
-        path: "/api/v1/sessions/logout",
+        path: "/api/v1/auth/logout",
       });
     } finally {
       apiClient.setCsrfToken(null);
@@ -121,7 +121,7 @@ export function SessionProvider({
       try {
         const result = await apiClient.request<SessionInfo>({
           method: "POST",
-          path: "/api/v1/invitations/accept",
+          path: "/api/v1/auth/invitations/accept",
           body: input,
         });
         apiClient.setCsrfToken(result.data.csrfToken);

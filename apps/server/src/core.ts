@@ -20,7 +20,14 @@ import {
   createInitialCollaborationDocument,
   encodeCollaborationState,
   readSemanticDocument,
+  replaceSemanticDocument,
 } from "@blue-canvas/collaboration";
+import {
+  applyCommandBatch,
+  CommandError,
+  createCommandState,
+} from "@blue-canvas/commands";
+import { deterministicSerialize } from "@blue-canvas/document";
 import { getNodeChildren, type DesignNode } from "@blue-canvas/document";
 import * as Y from "yjs";
 
@@ -89,6 +96,13 @@ export interface CoreDependencies {
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const DUMMY_PASSWORD_HASH =
   "$argon2id$v=19$m=19456,t=2,p=1$BwcHBwcHBwcHBwcHBwcHBw$6MTKjeUTHbOBOlmg3n1f3ayBLZgkhcSVPNhhcBlX4uk";
+
+function commandBatchId(idempotencyKey: string): string {
+  const hex = sha256(idempotencyKey).slice(0, 32).split("");
+  hex[12] = "5";
+  hex[16] = ((Number.parseInt(hex[16] ?? "8", 16) & 0x3) | 0x8).toString(16);
+  return `${hex.slice(0, 8).join("")}-${hex.slice(8, 12).join("")}-${hex.slice(12, 16).join("")}-${hex.slice(16, 20).join("")}-${hex.slice(20).join("")}`;
+}
 
 export class ApplicationService {
   constructor(private readonly dependencies: CoreDependencies) {}
@@ -233,6 +247,26 @@ export class ApplicationService {
     });
   }
 
+  async currentSession(principal: Principal): Promise<{
+    user: PublicUser;
+    csrfToken: string;
+  }> {
+    if (principal.kind !== "session") {
+      throw new ApiError(
+        "invalid_auth_method",
+        "A cookie session is required",
+        400,
+      );
+    }
+    const csrf = issueSecret();
+    await this.dependencies.repository.updateSessionCsrf(
+      principal.session.id,
+      csrf.hash,
+      this.dependencies.now(),
+    );
+    return { user: publicUser(principal.user), csrfToken: csrf.raw };
+  }
+
   async acceptInvitation(
     input: AcceptInvitationRequest,
     traceId: string,
@@ -347,6 +381,13 @@ export class ApplicationService {
       throw new ApiError("csrf_mismatch", "CSRF token does not match", 403);
     }
     const user = await this.activeUser(session.userId);
+    if (input.requiredScope === "admin" && !user.isAdmin) {
+      throw new ApiError(
+        "insufficient_scope",
+        "Administrator access is required",
+        403,
+      );
+    }
     await this.dependencies.repository.touchSession(session.id, now);
     return { kind: "session", user, session };
   }
@@ -490,6 +531,130 @@ export class ApplicationService {
 
   async listProjects(principal: Principal): Promise<Project[]> {
     return this.dependencies.repository.listProjectsForUser(principal.user.id);
+  }
+
+  async applyCommands(
+    principal: Principal,
+    projectId: string,
+    input: {
+      baseRevision: number;
+      idempotencyKey: string;
+      commands: unknown[];
+    },
+    traceId: string,
+  ): Promise<{ revision: number; document: unknown; idempotent: boolean }> {
+    await this.requireCollaborationRole(principal, projectId, true);
+    return this.dependencies.repository.transaction(async (repository) => {
+      await this.requireCollaborationRole(
+        principal,
+        projectId,
+        true,
+        repository,
+      );
+      const receipt = await repository.findCommandReceipt(
+        projectId,
+        input.idempotencyKey,
+      );
+      const fingerprint = sha256(
+        deterministicSerialize({
+          actorId: principal.user.id,
+          baseRevision: input.baseRevision,
+          commands: input.commands,
+        }),
+      );
+      if (receipt) {
+        if (receipt.fingerprint !== fingerprint)
+          throw new ApiError(
+            "idempotency_conflict",
+            "Idempotency key was already used with different commands",
+            409,
+          );
+        return {
+          revision: receipt.revision,
+          document: receipt.document,
+          idempotent: true,
+        };
+      }
+
+      const current = await repository.findProjectDocument(projectId);
+      const currentRevision = current?.revision ?? 0;
+      if (input.baseRevision !== currentRevision)
+        throw new ApiError(
+          "revision_conflict",
+          "Document revision changed",
+          409,
+        );
+      const yDocument = new Y.Doc();
+      if (current) applyCollaborationState(yDocument, current.state);
+      else {
+        const project = await repository.findProjectById(projectId);
+        if (!project) throw new ApiError("not_found", "Project not found", 404);
+        const initial = createInitialCollaborationDocument(
+          project.id,
+          project.name,
+        );
+        applyCollaborationState(
+          yDocument,
+          encodeCollaborationState(initial).state,
+        );
+        initial.destroy();
+      }
+      let result;
+      try {
+        const batchId = commandBatchId(input.idempotencyKey);
+        result = applyCommandBatch(
+          createCommandState(readSemanticDocument(yDocument)),
+          {
+            id: batchId,
+            actorId: principal.user.id,
+            baseRevision: 0,
+            commands: input.commands,
+          },
+        );
+      } catch (error) {
+        yDocument.destroy();
+        if (error instanceof CommandError)
+          throw new ApiError("invalid_command_batch", error.message, 400, {
+            code: error.code,
+          });
+        throw error;
+      }
+      replaceSemanticDocument(yDocument, result.document);
+      const encoded = encodeCollaborationState(yDocument);
+      const updated = await repository.upsertProjectDocument({
+        projectId,
+        ...encoded,
+        expectedRevision: currentRevision,
+        now: this.dependencies.now(),
+      });
+      yDocument.destroy();
+      await repository.createCommandReceipt({
+        projectId,
+        idempotencyKey: input.idempotencyKey,
+        fingerprint,
+        revision: updated.revision,
+        document: result.document,
+        createdAt: this.dependencies.now(),
+      });
+      await this.auditWith(
+        repository,
+        principal.user.id,
+        "project.commands.apply",
+        "project",
+        projectId,
+        projectId,
+        traceId,
+        {
+          revision: updated.revision,
+          commandCount: input.commands.length,
+        },
+      );
+      return {
+        revision: updated.revision,
+        document: result.document,
+        idempotent: false,
+      };
+    });
   }
 
   async collaborationAccess(

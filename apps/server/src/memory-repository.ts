@@ -9,6 +9,7 @@ import type {
   Project,
   ProjectComment,
   ProjectDocument,
+  CommandReceipt,
   ProjectMember,
   NamedVersion,
   RepositoryPort,
@@ -26,6 +27,7 @@ export class InMemoryRepository implements RepositoryPort {
   private auditEvents = new Map<string, AuditEvent>();
   private assets = new Map<string, Asset>();
   private projectDocuments = new Map<string, ProjectDocument>();
+  private commandReceipts = new Map<string, CommandReceipt>();
   private namedVersions = new Map<string, NamedVersion>();
   private comments = new Map<string, ProjectComment>();
   private transactionTail: Promise<void> = Promise.resolve();
@@ -102,6 +104,17 @@ export class InMemoryRepository implements RepositoryPort {
     return [...this.sessions.values()].find(
       (session) => session.tokenHash === tokenHash,
     );
+  }
+
+  async updateSessionCsrf(
+    id: string,
+    csrfHash: string,
+    now: Date,
+  ): Promise<void> {
+    const session = this.sessions.get(id);
+    if (!session) return;
+    session.csrfHash = csrfHash;
+    session.lastSeenAt = now;
   }
 
   async touchSession(id: string, now: Date): Promise<void> {
@@ -424,6 +437,29 @@ export class InMemoryRepository implements RepositoryPort {
     return document;
   }
 
+  async findCommandReceipt(
+    projectId: string,
+    idempotencyKey: string,
+  ): Promise<CommandReceipt | undefined> {
+    const receipt = this.commandReceipts.get(`${projectId}:${idempotencyKey}`);
+    return receipt ? { ...receipt } : undefined;
+  }
+
+  async createCommandReceipt(
+    input: Omit<CommandReceipt, "id">,
+  ): Promise<CommandReceipt> {
+    const key = `${input.projectId}:${input.idempotencyKey}`;
+    if (this.commandReceipts.has(key))
+      throw new ApiError(
+        "idempotency_conflict",
+        "Idempotency key already exists",
+        409,
+      );
+    const receipt = { ...input, id: randomUUID() };
+    this.commandReceipts.set(key, receipt);
+    return { ...receipt };
+  }
+
   async createNamedVersion(
     input: Parameters<RepositoryPort["createNamedVersion"]>[0],
   ): Promise<NamedVersion> {
@@ -539,6 +575,7 @@ export class InMemoryRepository implements RepositoryPort {
       auditEvents: [...this.auditEvents.values()],
       assets: [...this.assets.values()],
       projectDocuments: [...this.projectDocuments.values()],
+      commandReceipts: [...this.commandReceipts.values()],
       namedVersions: [...this.namedVersions.values()],
       comments: [...this.comments.values()],
     };
@@ -581,6 +618,7 @@ export class InMemoryRepository implements RepositoryPort {
       auditEvents: this.auditEvents,
       assets: this.assets,
       projectDocuments: this.projectDocuments,
+      commandReceipts: [...this.commandReceipts.values()],
       namedVersions: this.namedVersions,
       comments: this.comments,
     });
@@ -596,6 +634,12 @@ export class InMemoryRepository implements RepositoryPort {
     this.auditEvents = snapshot.auditEvents;
     this.assets = snapshot.assets;
     this.projectDocuments = snapshot.projectDocuments;
+    this.commandReceipts = new Map(
+      snapshot.commandReceipts.map((receipt) => [
+        `${receipt.projectId}:${receipt.idempotencyKey}`,
+        receipt,
+      ]),
+    );
     this.namedVersions = snapshot.namedVersions;
     this.comments = snapshot.comments;
   }

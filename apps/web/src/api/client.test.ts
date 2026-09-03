@@ -22,7 +22,7 @@ function firstCall<T extends unknown[]>(fetcher: { mock: { calls: T[] } }): T {
 describe("ApiClient", () => {
   it("sends CSRF header on mutating requests when a token is present", async () => {
     const fetcher = vi.fn(async () =>
-      jsonResponse(200, { ok: true }, { "x-blue-canvas-csrf": "rotated" }),
+      jsonResponse(200, { ok: true }, { "x-csrf-token": "rotated" }),
     );
     const client = new ApiClient({ fetch: fetcher, csrfToken: "initial" });
     const result = await client.request({
@@ -32,9 +32,9 @@ describe("ApiClient", () => {
     });
     expect(result.status).toBe(200);
     const [, init] = firstCall(fetcher);
-    expect(
-      (init?.headers as Record<string, string>)["x-blue-canvas-csrf"],
-    ).toBe("initial");
+    expect((init?.headers as Record<string, string>)["x-csrf-token"]).toBe(
+      "initial",
+    );
     expect(client.getCsrfToken()).toBe("rotated");
   });
 
@@ -44,7 +44,7 @@ describe("ApiClient", () => {
     await client.request({ path: "/api/v1/projects" });
     const [, init] = firstCall(fetcher);
     expect(
-      (init?.headers as Record<string, string>)["x-blue-canvas-csrf"],
+      (init?.headers as Record<string, string>)["x-csrf-token"],
     ).toBeUndefined();
   });
 

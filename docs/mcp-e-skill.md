@@ -70,4 +70,7 @@ acesso ao PAT herda todas as permissões do usuário.
   pelo usuário e nunca compartilhado com terceiros.
 - Escopos são validados pela API upstream, não pelo MCP; ferramentas cujo PAT
   não carrega o escopo esperado retornam `403` embalado como erro upstream.
+- `apply_commands` delega para `POST /api/v1/projects/:id/commands`; a API
+  valida o batch com `@blue-canvas/commands`, aplica ACL, revisão e receipts de
+  idempotência persistentes antes de atualizar o snapshot Yjs.
 - Não há suporte a `prompts/*` e `logging/*` do MCP.

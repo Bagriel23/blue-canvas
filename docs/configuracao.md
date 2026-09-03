@@ -51,7 +51,11 @@ quando o Compose é usado.
 - Gere segredos exclusivos e injete-os pelo gerenciador autorizado.
 - Não versionar `.env`, tokens, cookies, links de convite ou backups.
 - Use um diretório absoluto dedicado para `ASSET_STORAGE_ROOT`, fora da pasta
-  pública do servidor HTTP.
+  pública do servidor HTTP, com permissões privadas (`700`). O restore exige
+  também o marcador `.blue-canvas-assets-root` nesse diretório:
+  `printf 'blue-canvas-assets-v1\n' > "$ASSET_STORAGE_ROOT/.blue-canvas-assets-root"`
+  seguido de `chmod 600` no marcador. O script recusa raiz, `HOME`, worktree,
+  componentes simbólicos e diretórios cuja identidade (device/inode) mudou.
 - Conceda ao processo apenas leitura/escrita nesse diretório e o mínimo de
   permissões no banco.
 - Altere `SETUP_SECRET` depois do bootstrap. O endpoint também se bloqueia

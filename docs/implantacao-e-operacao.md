@@ -2,10 +2,11 @@
 
 ## Estado operacional
 
-O repositório entrega atualmente a API compilada, o endpoint WebSocket de
-colaboração e migrations. O Compose é voltado ao banco de desenvolvimento, não é
-uma topologia de produção. Reverse proxy, serviço Windows, backup/restore
-automatizado, frontend e MCP ainda não foram entregues.
+O repositório entrega a API compilada, o endpoint WebSocket de colaboração, o
+cliente web, MCP HTTP/stdio, migrations e scripts de backup/restore. O Compose é
+voltado ao banco de desenvolvimento, não é uma topologia de produção. Reverse
+proxy, hardening completo e observabilidade corporativa ainda exigem
+configuração do ambiente.
 
 ## Sequência de implantação da API
 
@@ -54,10 +55,11 @@ Um backup consistente precisa incluir:
 - cópia de `ASSET_STORAGE_ROOT` preservando conteúdo e permissões;
 - versão da aplicação e migrations usadas.
 
-Automação de backup/restore ainda está pendente. Até ela existir, defina um
-runbook corporativo, teste restaurações em ambiente isolado e mantenha retenção
-compatível com a política interna. Restaurar somente o banco ou somente assets
-pode deixar metadados sem arquivo ou arquivos órfãos.
+Os scripts `scripts/backup.sh` e `scripts/restore.sh` e seus equivalentes
+PowerShell automatizam o fluxo. Teste restaurações em ambiente isolado, mantenha
+retenção compatível com a política interna e preserve o marcador exigido no
+diretório de assets. Restaurar somente o banco ou somente assets pode deixar
+metadados sem arquivo ou arquivos órfãos.
 
 ## Atualização e rollback
 
@@ -65,6 +67,6 @@ Faça backup antes da migration. O projeto ainda não fornece migrations de
 rollback automáticas. Para reverter, restaure banco e assets do mesmo ponto e
 execute a versão correspondente da aplicação.
 
-Para Windows/Laragon, faltam scripts PowerShell de start, stop, migrate, health,
+Para Windows/Laragon, os scripts PowerShell cobrem start, stop, migrate, health,
 backup e restore. O fluxo manual de desenvolvimento está descrito em
 [Desenvolvimento local](desenvolvimento.md).

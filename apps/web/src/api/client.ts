@@ -1,6 +1,6 @@
 import { errorEnvelopeSchema } from "@blue-canvas/contracts";
 
-const CSRF_HEADER = "x-blue-canvas-csrf";
+export const CSRF_HEADER = "x-csrf-token";
 
 export type Fetcher = typeof globalThis.fetch;
 

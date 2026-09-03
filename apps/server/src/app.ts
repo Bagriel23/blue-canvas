@@ -21,6 +21,7 @@ import {
   updateCommentRequestSchema,
   type PersonalAccessTokenScope,
 } from "@blue-canvas/contracts";
+import { z } from "zod";
 import Fastify, {
   LogController,
   type FastifyInstance,
@@ -29,12 +30,7 @@ import Fastify, {
 } from "fastify";
 import { ZodError, type ZodType } from "zod";
 
-import {
-  ApiError,
-  ApplicationService,
-  publicUser,
-  type Principal,
-} from "./core.js";
+import { ApiError, ApplicationService, type Principal } from "./core.js";
 import { CollaborationManager } from "./collaboration.js";
 import {
   LibraryError,
@@ -48,6 +44,11 @@ import type { PasswordHasher } from "./security.js";
 import { MAX_ASSET_BYTES, type AssetStorage } from "./storage.js";
 
 const SESSION_COOKIE = "blue_canvas_session";
+const applyCommandsRequestSchema = z.strictObject({
+  baseRevision: z.number().int().nonnegative(),
+  idempotencyKey: z.string().trim().min(8).max(128),
+  commands: z.array(z.unknown()).min(1).max(50),
+});
 
 export interface ServerDependencies {
   repository: RepositoryPort;
@@ -406,7 +407,7 @@ export function buildApp(dependencies: ServerDependencies): FastifyInstance {
 
   app.get("/api/v1/auth/me", async (request) => {
     const principal = await authenticate(request);
-    return { user: publicUser(principal.user) };
+    return service.currentSession(principal);
   });
 
   app.post("/api/v1/auth/logout", async (request, reply) => {
@@ -617,13 +618,31 @@ export function buildApp(dependencies: ServerDependencies): FastifyInstance {
       mutating: true,
       scope: "projects:write",
     });
+    const projectId = identifier(request, "projectId");
+    await collaboration.flushProject(projectId);
     const version = await service.createNamedVersion(
       principal,
-      identifier(request, "projectId"),
+      projectId,
       parse(createNamedVersionRequestSchema, request.body),
       request.id,
     );
     return reply.code(201).send({ version: versionResponse(version) });
+  });
+
+  app.post("/api/v1/projects/:projectId/commands", async (request, reply) => {
+    const principal = await authenticate(request, {
+      mutating: true,
+      scope: "projects:write",
+    });
+    const projectId = identifier(request, "projectId");
+    await collaboration.flushProject(projectId);
+    const result = await service.applyCommands(
+      principal,
+      projectId,
+      parse(applyCommandsRequestSchema, request.body),
+      request.id,
+    );
+    return reply.code(result.idempotent ? 200 : 201).send(result);
   });
 
   app.get("/api/v1/projects/:projectId/versions", async (request) => {
@@ -774,6 +793,16 @@ export function buildApp(dependencies: ServerDependencies): FastifyInstance {
     return { id: principal.user.id, isAdmin: principal.user.isAdmin };
   }
 
+  function libraryAdmin(principal: Principal): Principal {
+    if (!principal.user.isAdmin)
+      throw new ApiError(
+        "insufficient_scope",
+        "Administrator access is required",
+        403,
+      );
+    return principal;
+  }
+
   function libraryManifest(request: FastifyRequest): unknown {
     const body = request.body;
     if (
@@ -794,7 +823,12 @@ export function buildApp(dependencies: ServerDependencies): FastifyInstance {
   });
 
   app.post("/api/v1/library/kits", async (request, reply) => {
-    const principal = await authenticate(request, { mutating: true });
+    const principal = libraryAdmin(
+      await authenticate(request, {
+        mutating: true,
+        scope: "admin",
+      }),
+    );
     const record = library.createKitDraft(
       libraryActor(principal),
       libraryManifest(request),
@@ -803,7 +837,12 @@ export function buildApp(dependencies: ServerDependencies): FastifyInstance {
   });
 
   app.post("/api/v1/library/kits/:kitId/publish", async (request) => {
-    const principal = await authenticate(request, { mutating: true });
+    const principal = libraryAdmin(
+      await authenticate(request, {
+        mutating: true,
+        scope: "admin",
+      }),
+    );
     const record = library.publishKit(
       libraryActor(principal),
       identifier(request, "kitId"),
@@ -812,7 +851,12 @@ export function buildApp(dependencies: ServerDependencies): FastifyInstance {
   });
 
   app.post("/api/v1/library/kits/:kitId/duplicate", async (request, reply) => {
-    const principal = await authenticate(request, { mutating: true });
+    const principal = libraryAdmin(
+      await authenticate(request, {
+        mutating: true,
+        scope: "admin",
+      }),
+    );
     const record = library.duplicateKit(
       libraryActor(principal),
       identifier(request, "kitId"),
@@ -821,7 +865,12 @@ export function buildApp(dependencies: ServerDependencies): FastifyInstance {
   });
 
   app.post("/api/v1/library/kits/:kitId/deprecate", async (request) => {
-    const principal = await authenticate(request, { mutating: true });
+    const principal = libraryAdmin(
+      await authenticate(request, {
+        mutating: true,
+        scope: "admin",
+      }),
+    );
     const record = library.deprecateKit(
       libraryActor(principal),
       identifier(request, "kitId"),
@@ -841,7 +890,12 @@ export function buildApp(dependencies: ServerDependencies): FastifyInstance {
   });
 
   app.post("/api/v1/library/templates", async (request, reply) => {
-    const principal = await authenticate(request, { mutating: true });
+    const principal = libraryAdmin(
+      await authenticate(request, {
+        mutating: true,
+        scope: "admin",
+      }),
+    );
     const record = library.createTemplateDraft(
       libraryActor(principal),
       libraryManifest(request),
@@ -850,7 +904,12 @@ export function buildApp(dependencies: ServerDependencies): FastifyInstance {
   });
 
   app.post("/api/v1/library/templates/:templateId/publish", async (request) => {
-    const principal = await authenticate(request, { mutating: true });
+    const principal = libraryAdmin(
+      await authenticate(request, {
+        mutating: true,
+        scope: "admin",
+      }),
+    );
     const record = library.publishTemplate(
       libraryActor(principal),
       identifier(request, "templateId"),
@@ -861,7 +920,12 @@ export function buildApp(dependencies: ServerDependencies): FastifyInstance {
   app.post(
     "/api/v1/library/templates/:templateId/duplicate",
     async (request, reply) => {
-      const principal = await authenticate(request, { mutating: true });
+      const principal = libraryAdmin(
+        await authenticate(request, {
+          mutating: true,
+          scope: "admin",
+        }),
+      );
       const record = library.duplicateTemplate(
         libraryActor(principal),
         identifier(request, "templateId"),

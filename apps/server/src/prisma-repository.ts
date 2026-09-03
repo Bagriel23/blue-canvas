@@ -15,6 +15,7 @@ import type {
   Project,
   ProjectComment,
   ProjectDocument,
+  CommandReceipt,
   ProjectMember,
   NamedVersion,
   RepositoryPort,
@@ -79,6 +80,18 @@ function projectDocument(value: {
     state: new Uint8Array(value.state),
     stateVector: new Uint8Array(value.stateVector),
   };
+}
+
+function commandReceipt(value: {
+  id: string;
+  projectId: string;
+  idempotencyKey: string;
+  fingerprint: string;
+  revision: number;
+  document: unknown;
+  createdAt: Date;
+}): CommandReceipt {
+  return { ...value };
 }
 
 function prismaBytes(value: Uint8Array): Uint8Array<ArrayBuffer> {
@@ -237,6 +250,17 @@ export class PrismaRepository implements RepositoryPort {
       (await this.client.session.findUnique({ where: { tokenHash } })) ??
       undefined
     );
+  }
+
+  async updateSessionCsrf(
+    id: string,
+    csrfHash: string,
+    now: Date,
+  ): Promise<void> {
+    await this.client.session.update({
+      where: { id },
+      data: { csrfHash, lastSeenAt: now },
+    });
   }
 
   async touchSession(id: string, now: Date): Promise<void> {
@@ -679,6 +703,44 @@ export class PrismaRepository implements RepositoryPort {
       },
     });
     return projectDocument(value);
+  }
+
+  async findCommandReceipt(
+    projectId: string,
+    idempotencyKey: string,
+  ): Promise<CommandReceipt | undefined> {
+    const value = await this.client.commandReceipt.findUnique({
+      where: { projectId_idempotencyKey: { projectId, idempotencyKey } },
+    });
+    return value ? commandReceipt(value) : undefined;
+  }
+
+  async createCommandReceipt(
+    input: Omit<CommandReceipt, "id">,
+  ): Promise<CommandReceipt> {
+    try {
+      const value = await this.client.commandReceipt.create({
+        data: {
+          id: randomUUID(),
+          projectId: input.projectId,
+          idempotencyKey: input.idempotencyKey,
+          fingerprint: input.fingerprint,
+          revision: input.revision,
+          document: input.document as Prisma.InputJsonValue,
+          createdAt: input.createdAt,
+        },
+      });
+      return commandReceipt(value);
+    } catch (error) {
+      if (isPrismaError(error, "P2002")) {
+        throw new ApiError(
+          "idempotency_conflict",
+          "Idempotency key already exists",
+          409,
+        );
+      }
+      throw error;
+    }
   }
 
   async createNamedVersion(

@@ -49,7 +49,7 @@ Este documento descreve o estado observado no código. O plano completo está em
 
 ### Ainda pendente
 
-Reverse-proxy padrão do Compose, testes Playwright, testes visuais, E2E com dois
+Reverse-proxy padrão do Compose, testes Playwright/visuais, E2E com dois
 usuários simultâneos, cenários de carga e cobertura CI para o smoke test
 Windows.
 
@@ -58,17 +58,16 @@ Windows.
 - A biblioteca de kits e templates ainda armazena registros em memória; os
   drafts criados por usuários somem quando o processo é reiniciado. A camada
   Prisma para library ainda não existe.
-- A aplicação web ainda não consome Hocuspocus/Yjs: o workspace opera com um
-  documento fixture local em `apps/web/src/fixtures/demo.ts` e as edições não
-  são persistidas no servidor.
-- Não há endpoint de exportação ou empacotamento ZIP no servidor; existe a
-  biblioteca em `packages/exporters` e o diálogo web já constrói a requisição
-  esperada.
+- O workspace web ainda usa fixture local para o canvas; a integração do cliente
+  com Hocuspocus/Yjs e a persistência de edições do inspetor estão pendentes.
+- O endpoint HTTP de exportação e o empacotamento ZIP ainda estão pendentes; a
+  biblioteca determinística em `packages/exporters` e o diálogo web existem.
 - Não há download/listagem de assets na API.
 - Não há transformações estilo Moveable/Selecto no canvas — a seleção é por
   clique e navegação por teclado.
 - Não há Playwright, screenshots de referência ou testes visuais automatizados.
-- Não há MCP funcional nem integração com agente de IA.
+- O MCP funcional não inclui ainda integração com um agente de IA; o PAT é
+  delegado ao upstream e os guardrails ficam na skill portável.
 - Não há recursos offline persistentes.
 - A API ainda não tem OpenAPI, rate limiting ou automação operacional de
   produção.

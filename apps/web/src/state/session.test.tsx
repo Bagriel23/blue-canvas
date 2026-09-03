@@ -36,7 +36,12 @@ describe("SessionProvider", () => {
       csrfToken: "csrf-1",
       bootstrapRequired: false,
     };
-    const fetcher = vi.fn(async () => jsonResponse(200, session));
+    const fetcher = vi.fn(async () =>
+      jsonResponse(200, {
+        ...session,
+        user: { ...session.user, isAdmin: false },
+      }),
+    );
     const client = new ApiClient({ fetch: fetcher });
     render(
       <SessionProvider client={client}>
@@ -47,6 +52,7 @@ describe("SessionProvider", () => {
       expect(screen.getByText("user:Test User")).toBeTruthy(),
     );
     expect(client.getCsrfToken()).toBe("csrf-1");
+    expect(fetcher.mock.calls[0]?.[0]).toBe("/api/v1/auth/me");
   });
 
   it("shows anonymous state on 401", async () => {
@@ -89,7 +95,7 @@ describe("SessionProvider", () => {
             csrfToken: "csrf-2",
             bootstrapRequired: false,
           },
-          { "x-blue-canvas-csrf": "csrf-2" },
+          { "x-csrf-token": "csrf-2" },
         ),
       );
     const client = new ApiClient({ fetch: fetcher });
@@ -116,5 +122,48 @@ describe("SessionProvider", () => {
     });
     expect(screen.getByText("user:Signed User")).toBeTruthy();
     expect(client.getCsrfToken()).toBe("csrf-2");
+    expect(fetcher.mock.calls[1]?.[0]).toBe("/api/v1/auth/login");
+  });
+
+  it("uses the auth logout endpoint and sends the server CSRF header", async () => {
+    const fetcher = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse(200, {
+          user: {
+            id: "u1",
+            email: "u@example.com",
+            displayName: "User",
+            locale: "en-US",
+            status: "active",
+            isAdmin: false,
+          },
+          csrfToken: "csrf-1",
+        }),
+      )
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+    const client = new ApiClient({ fetch: fetcher });
+    const providerRef: { current: ReturnType<typeof useSession> | null } = {
+      current: null,
+    };
+    function Capture() {
+      providerRef.current = useSession();
+      return null;
+    }
+    render(
+      <SessionProvider client={client}>
+        <Capture />
+      </SessionProvider>,
+    );
+    await waitFor(() => expect(providerRef.current?.session).not.toBeNull());
+    await act(async () => {
+      await providerRef.current?.signOut();
+    });
+    expect(fetcher.mock.calls[1]?.[0]).toBe("/api/v1/auth/logout");
+    expect(
+      (fetcher.mock.calls[1]?.[1]?.headers as Record<string, string>)[
+        "x-csrf-token"
+      ],
+    ).toBe("csrf-1");
   });
 });

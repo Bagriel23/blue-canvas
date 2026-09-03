@@ -64,9 +64,11 @@ containers do Compose. O backup produz três arquivos por execução:
 - `SHA256SUMS` — checksums para verificação antes do restore.
 
 `restore.sh` compara os checksums, recusa restaurar sobre um banco não vazio
-salvo com `BLUE_CANVAS_FORCE_RESTORE=1`, limpa `ASSET_STORAGE_ROOT` e restaura o
-tarball dos assets. Automatize com cron/Task Scheduler tomando cuidado para
-armazenar os backups fora da máquina de produção.
+salvo com `BLUE_CANVAS_FORCE_RESTORE=1`, valida o diretório dedicado e seu
+marcador `.blue-canvas-assets-root`, limpa somente os filhos desse diretório
+preservando o marcador e restaura o tarball dos assets. Automatize com cron/
+Task Scheduler tomando cuidado para armazenar os backups fora da máquina de
+produção.
 
 ## Observabilidade e sanitização
 

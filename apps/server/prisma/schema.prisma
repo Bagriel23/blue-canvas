@@ -96,6 +96,7 @@ model Project {
   assets      Asset[]
   invitations Invitation[]
   document    ProjectDocument?
+  commandReceipts CommandReceipt[]
   versions    NamedVersion[]
   comments    ProjectComment[]
 
@@ -180,6 +181,21 @@ model ProjectDocument {
   project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@map("project_documents")
+}
+
+model CommandReceipt {
+  id             String   @id @db.VarChar(36)
+  projectId      String   @db.VarChar(36)
+  idempotencyKey String   @db.VarChar(128)
+  fingerprint    String   @db.Char(64)
+  revision       Int      @db.UnsignedInt
+  document       Json
+  createdAt      DateTime @db.DateTime(3)
+  project        Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, idempotencyKey], map: "command_receipts_project_key")
+  @@index([projectId, createdAt], map: "command_receipts_project_created_idx")
+  @@map("command_receipts")
 }
 
 model NamedVersion {

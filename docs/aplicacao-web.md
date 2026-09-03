@@ -40,12 +40,13 @@ mesmas chaves — o teste `i18n.test.ts` reprova acréscimos em um único idioma
 
 `apps/web/src/api/client.ts` define `ApiClient`, que envia o cookie
 `blue_canvas_session` com `credentials: "include"` e propaga o CSRF token pelo
-cabeçalho `x-blue-canvas-csrf`, rotacionando quando o servidor devolve um novo
-valor. Envelopes de erro são convertidos em `ApiError` tipados.
+cabeçalho `x-csrf-token`, rotacionando quando o servidor devolve um novo valor.
+Envelopes de erro são convertidos em `ApiError` tipados.
 
-`SessionProvider` busca `/api/v1/sessions/current`, armazena o CSRF token e
-oferece `signIn`, `signOut` e `acceptInvitation`. `401` é tratado como sessão
-anônima — a UI mostra a tela de login em vez de propagar erro.
+`SessionProvider` busca `/api/v1/auth/me`, armazena o CSRF token e oferece
+`signIn`, `signOut` e `acceptInvitation` nos endpoints `/auth/*`. `401` é
+tratado como sessão anônima — a UI mostra a tela de login em vez de propagar
+erro.
 
 ## Workspace e canvas
 
