@@ -13,7 +13,8 @@ externos, telemetria, CDNs ou serviços de IA externos.
 
 ## Início rápido
 
-Requisitos: Node.js 24, npm 11.19.0 e Docker com Compose.
+Requisitos: Node.js 24, npm 11.19.0 e um banco MySQL/MariaDB. Docker Compose,
+Laragon e XAMPP são opções suportadas para o banco.
 
 ```bash
 nvm install
@@ -33,6 +34,45 @@ npm run start -w @blue-canvas/server
 A API escuta em `http://127.0.0.1:3000/api/v1` com a configuração de
 desenvolvimento. Em outro terminal, `npm run dev -w @blue-canvas/web` sobe o
 Vite em `http://127.0.0.1:5173` fazendo proxy de `/api` para a API Fastify.
+
+### Usando XAMPP no Windows
+
+O XAMPP fornece apenas o MySQL/MariaDB para o Blue Canvas; Apache não é
+necessário para o desenvolvimento, porque a API roda em Node/Fastify e o
+frontend em Vite. Inicie o módulo **MySQL** no XAMPP Control Panel e execute
+PowerShell na raiz do repositório:
+
+```powershell
+npm ci
+New-Item -ItemType Directory -Force C:\BlueCanvas\assets | Out-Null
+$env:NODE_ENV = "development"
+$env:APP_HOST = "127.0.0.1"
+$env:APP_PORT = "3000"
+$env:SETUP_SECRET = "troque-por-um-segredo-local-com-16-caracteres"
+$env:ASSET_STORAGE_ROOT = "C:\BlueCanvas\assets"
+$env:DATABASE_HOST = "127.0.0.1"
+$env:DATABASE_PORT = "3306"
+$env:DATABASE_NAME = "blue_canvas"
+$env:DATABASE_USER = "blue_canvas"
+$env:DATABASE_PASSWORD = "senha-do-usuario-blue-canvas"
+npm run db:migrate
+npm run build
+```
+
+Crie o database e o usuário dedicado no phpMyAdmin do XAMPP ou no cliente
+`mysql` antes de executar `db:migrate`. O script SQL e os casos de porta
+alternativa estão em
+[Desenvolvimento local](docs/desenvolvimento.md#banco-com-xampp). Depois, em
+terminais separados, inicie a API e o frontend:
+
+```powershell
+npm run start -w @blue-canvas/server
+$env:VITE_API_UPSTREAM = "http://127.0.0.1:3000"
+npm run dev -w @blue-canvas/web
+```
+
+Abra `http://127.0.0.1:5173`. Se o XAMPP usar outra porta, altere apenas
+`DATABASE_PORT`; Apache pode permanecer parado.
 
 ## Documentação
 

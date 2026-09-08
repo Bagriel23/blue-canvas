@@ -71,6 +71,70 @@ FLUSH PRIVILEGES;
 Não execute os testes de integração contra dados que precisem ser preservados: a
 suíte limpa as tabelas da aplicação antes de cada teste.
 
+## Banco com XAMPP
+
+O XAMPP é suportado como provedor local de MySQL/MariaDB no Windows. O Apache do
+XAMPP é opcional: o Blue Canvas continua usando Node/Fastify para a API e Vite
+para o frontend. No XAMPP Control Panel, inicie o módulo **MySQL** e confirme a
+porta exibida (normalmente `3306`).
+
+### Criar database e usuário
+
+Use o phpMyAdmin (`http://127.0.0.1/phpmyadmin`) ou o cliente `mysql` incluído
+no XAMPP. Prefira um usuário dedicado com senha; a configuração do servidor
+recusa senha vazia, mesmo que o XAMPP venha com `root` sem senha em instalações
+locais.
+
+```sql
+CREATE DATABASE blue_canvas
+  CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER 'blue_canvas'@'127.0.0.1' IDENTIFIED BY 'senha-local-forte';
+CREATE USER 'blue_canvas'@'localhost' IDENTIFIED BY 'senha-local-forte';
+GRANT ALL PRIVILEGES ON blue_canvas.* TO 'blue_canvas'@'127.0.0.1';
+GRANT ALL PRIVILEGES ON blue_canvas.* TO 'blue_canvas'@'localhost';
+FLUSH PRIVILEGES;
+```
+
+Se o usuário ou database já existir, não repita `CREATE`; ajuste a senha e as
+permissões no painel do XAMPP. Não use a database de outro projeto para os
+testes de integração.
+
+### Configurar no PowerShell
+
+Na raiz do repositório, configure as variáveis no mesmo terminal que executará
+as migrações e a API:
+
+```powershell
+$env:NODE_ENV = "development"
+$env:APP_HOST = "127.0.0.1"
+$env:APP_PORT = "3000"
+$env:SETUP_SECRET = "troque-por-um-segredo-local-com-16-caracteres"
+$env:ASSET_STORAGE_ROOT = "C:\BlueCanvas\assets"
+$env:DATABASE_HOST = "127.0.0.1"
+$env:DATABASE_PORT = "3306"
+$env:DATABASE_NAME = "blue_canvas"
+$env:DATABASE_USER = "blue_canvas"
+$env:DATABASE_PASSWORD = "senha-local-forte"
+
+New-Item -ItemType Directory -Force $env:ASSET_STORAGE_ROOT | Out-Null
+npm ci
+npm run db:migrate
+npm run build
+npm run start -w @blue-canvas/server
+```
+
+Em outro PowerShell, na mesma raiz:
+
+```powershell
+$env:VITE_API_UPSTREAM = "http://127.0.0.1:3000"
+npm run dev -w @blue-canvas/web
+```
+
+Abra `http://127.0.0.1:5173`. Se o XAMPP estiver configurado em outra porta,
+altere `DATABASE_PORT` antes de executar `db:migrate`; a porta da API e a do
+frontend não precisam mudar. Se a porta `3306` estiver ocupada, use a porta real
+mostrada pelo XAMPP Control Panel.
+
 ## Compilar e iniciar a API
 
 ```bash

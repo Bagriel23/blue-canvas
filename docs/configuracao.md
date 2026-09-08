@@ -33,6 +33,12 @@ URL MySQL internamente e codifica usuário e senha.
 O alvo local versionado é MariaDB 10.6.28. A matriz de CI aplica migrations e
 testes de repositório em MariaDB 10.6.28 e MySQL 8.0.46.
 
+XAMPP é compatível quando seu módulo MySQL/MariaDB aceita conexões TCP no
+`DATABASE_HOST`/`DATABASE_PORT` configurado. O Blue Canvas não usa Apache nem
+integração PHP; Apache é opcional e o processo Node continua sendo a autoridade
+da API. Em instalações XAMPP com `root` sem senha, crie um usuário dedicado com
+senha antes de iniciar, pois `DATABASE_PASSWORD` não aceita valor vazio.
+
 ## Variáveis do Docker Compose
 
 | Variável                | Uso                                        |
