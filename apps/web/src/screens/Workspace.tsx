@@ -6,7 +6,7 @@ import {
   type DesignCommand,
 } from "@blue-canvas/commands";
 import type { DesignDocument } from "@blue-canvas/document";
-import { Download, Eye, RefreshCw, Share2 } from "lucide-react";
+import { Download, Eye, RefreshCw, Share2, X } from "lucide-react";
 
 import { ApiError } from "../api/client.js";
 import type { ProjectDocumentResponse, ProjectSummary } from "../api/types.js";
@@ -210,9 +210,11 @@ export function Workspace({ projectId, editable = true }: WorkspaceProps) {
         } catch (raw) {
           if (editorRef.current.generation !== generation) break;
           if (!(raw instanceof ApiError) || raw.code !== "revision_conflict") {
+            const irreconcilable =
+              raw instanceof ApiError && raw.status >= 400 && raw.status < 500;
             updateDocument(
               editor.document,
-              "error",
+              irreconcilable ? "conflict" : "error",
               raw instanceof ApiError
                 ? raw.message
                 : messages.workspace.loadError,
@@ -277,6 +279,10 @@ export function Workspace({ projectId, editable = true }: WorkspaceProps) {
   }
 
   const { document: doc, project } = resource;
+  const canEdit =
+    editable &&
+    !project.archived &&
+    (project.role === "owner" || project.role === "editor");
   const activePage =
     doc.pages.find((page) => page.id === activePageId) ?? doc.pages[0];
   const pageId = activePage?.id ?? "";
@@ -289,10 +295,11 @@ export function Workspace({ projectId, editable = true }: WorkspaceProps) {
 
   const queueCommand = (command: DesignCommand) => {
     const editor = editorRef.current;
-    if (!editable || !editor.document) return;
+    if (!canEdit || !editor.document) return;
     try {
       editor.document = applyLocalCommand(editor.document, command);
     } catch {
+      updateDocument(editor.document, "conflict", messages.workspace.conflict);
       return;
     }
     editor.pending.push({ command, idempotencyKey: randomId() });
@@ -351,22 +358,37 @@ export function Workspace({ projectId, editable = true }: WorkspaceProps) {
                   : resource.sync === "saved"
                     ? messages.workspace.saved
                     : resource.sync === "conflict"
-                      ? messages.workspace.conflict
+                      ? (resource.syncMessage ?? messages.workspace.conflict)
                       : (resource.syncMessage ?? messages.workspace.loadError)}
               </p>
-              {resource.sync === "error" ? (
-                <button
-                  type="button"
-                  className="bc-icon-btn bc-icon-btn--small"
-                  aria-label={messages.workspace.retry}
-                  title={messages.workspace.retry}
-                  onClick={() => {
-                    updateDocument(resource.document, "saving");
-                    void syncQueue();
-                  }}
-                >
-                  <RefreshCw size={14} aria-hidden="true" />
-                </button>
+              {resource.sync === "error" || resource.sync === "conflict" ? (
+                <>
+                  <button
+                    type="button"
+                    className="bc-icon-btn bc-icon-btn--small"
+                    aria-label={messages.workspace.retry}
+                    title={messages.workspace.retry}
+                    onClick={() => {
+                      if (editorRef.current.pending.length === 0) {
+                        void refresh();
+                        return;
+                      }
+                      updateDocument(resource.document, "saving");
+                      void syncQueue();
+                    }}
+                  >
+                    <RefreshCw size={14} aria-hidden="true" />
+                  </button>
+                  <button
+                    type="button"
+                    className="bc-icon-btn bc-icon-btn--small"
+                    aria-label={messages.workspace.discard}
+                    title={messages.workspace.discard}
+                    onClick={() => void refresh()}
+                  >
+                    <X size={14} aria-hidden="true" />
+                  </button>
+                </>
               ) : null}
             </div>
           </header>
@@ -435,7 +457,7 @@ export function Workspace({ projectId, editable = true }: WorkspaceProps) {
             node={selectedNode}
             onRename={handleRename}
             onEditText={handleEditText}
-            editable={editable && !previewing}
+            editable={canEdit && !previewing}
           />
         </aside>
       </div>

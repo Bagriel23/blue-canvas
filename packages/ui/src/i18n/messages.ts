@@ -67,6 +67,7 @@ export interface UiMessages {
     loading: string;
     loadError: string;
     retry: string;
+    discard: string;
     saving: string;
     saved: string;
     conflict: string;
@@ -161,6 +162,7 @@ const enUs: UiMessages = {
     loading: "Loading workspace…",
     loadError: "Could not load this workspace.",
     retry: "Retry",
+    discard: "Discard",
     saving: "Saving…",
     saved: "Saved",
     conflict:
@@ -257,6 +259,7 @@ const ptBr: UiMessages = {
     loading: "Carregando workspace…",
     loadError: "Não foi possível carregar este workspace.",
     retry: "Tentar novamente",
+    discard: "Descartar",
     saving: "Salvando…",
     saved: "Salvo",
     conflict:
@@ -351,6 +354,7 @@ const koKr: UiMessages = {
     loading: "워크스페이스 로드 중…",
     loadError: "이 워크스페이스를 불러올 수 없습니다.",
     retry: "다시 시도",
+    discard: "삭제",
     saving: "저장 중…",
     saved: "저장됨",
     conflict:

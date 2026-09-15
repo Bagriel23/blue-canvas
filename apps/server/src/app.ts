@@ -160,6 +160,26 @@ function versionResponse(version: {
   };
 }
 
+function projectSummaryResponse(
+  project: {
+    id: string;
+    name: string;
+    archivedAt: Date | null;
+    createdAt: Date;
+    updatedAt: Date;
+  },
+  role: "owner" | "editor" | "commenter" | "viewer",
+) {
+  return {
+    id: project.id,
+    name: project.name,
+    archived: project.archivedAt !== null,
+    createdAt: project.createdAt.toISOString(),
+    updatedAt: project.updatedAt.toISOString(),
+    role,
+  };
+}
+
 function commentResponse(comment: {
   id: string;
   projectId: string;
@@ -468,11 +488,18 @@ export function buildApp(dependencies: ServerDependencies): FastifyInstance {
   app.get("/api/v1/projects/:projectId/document", async (request) => {
     const principal = await authenticate(request, { scope: "projects:read" });
     const projectId = identifier(request, "projectId");
-    const [project, document] = await Promise.all([
-      service.getProject(principal, projectId),
-      service.getProjectDocument(principal, projectId),
-    ]);
-    return { project, ...document };
+    const project = await service.getProject(principal, projectId);
+    const member = await service.collaborationAccess(
+      principal,
+      projectId,
+      false,
+    );
+    await collaboration.flushProject(projectId);
+    const document = await service.getProjectDocument(principal, projectId);
+    return {
+      project: projectSummaryResponse(project, member.role),
+      ...document,
+    };
   });
 
   app.patch("/api/v1/projects/:projectId", async (request) => {

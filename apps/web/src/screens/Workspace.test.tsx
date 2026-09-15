@@ -47,7 +47,12 @@ describe("Workspace persistence", () => {
     const fetcher = vi.fn(async (input: RequestInfo | URL) => {
       expect(String(input)).toBe("/api/v1/projects/project-1/document");
       return jsonResponse({
-        project: { id: "project-1", name: persisted.name, archived: false },
+        project: {
+          id: "project-1",
+          name: persisted.name,
+          archived: false,
+          role: "owner",
+        },
         revision: 4,
         document: persisted,
       });
@@ -76,6 +81,7 @@ describe("Workspace persistence", () => {
             id: "project-1",
             name: "Recovered project",
             archived: false,
+            role: "owner",
           },
           revision: 0,
           document: loadDemoDocument(),
@@ -102,6 +108,7 @@ describe("Workspace persistence", () => {
           id: "project-1",
           name: "Persisted project",
           archived: false,
+          role: "owner",
         },
         revision: 2,
         document: persisted,
@@ -143,6 +150,34 @@ describe("Workspace persistence", () => {
     ]);
   });
 
+  it("keeps viewer projects read-only even when the workspace is editable", async () => {
+    const persisted = loadDemoDocument();
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(
+      jsonResponse({
+        project: {
+          id: "project-1",
+          name: "Viewer project",
+          archived: false,
+          role: "viewer",
+        },
+        revision: 2,
+        document: persisted,
+      }),
+    );
+
+    renderWorkspace(fetcher);
+    await waitFor(() =>
+      expect(screen.getByText("Viewer project")).toBeTruthy(),
+    );
+    fireEvent.click(
+      screen.getByText("Design internal tools together, offline."),
+    );
+    const input = await screen.findByLabelText("Name");
+    expect(input.hasAttribute("readonly")).toBe(true);
+    fireEvent.change(input, { target: { value: "Must stay unchanged" } });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
   it("reuses the queued idempotency key after a revision conflict", async () => {
     const persisted = loadDemoDocument();
     const conflict = jsonResponse(
@@ -159,7 +194,12 @@ describe("Workspace persistence", () => {
       .fn<typeof fetch>()
       .mockResolvedValueOnce(
         jsonResponse({
-          project: { id: "project-1", name: "Project", archived: false },
+          project: {
+            id: "project-1",
+            name: "Project",
+            archived: false,
+            role: "owner",
+          },
           revision: 2,
           document: persisted,
         }),
@@ -167,7 +207,12 @@ describe("Workspace persistence", () => {
       .mockResolvedValueOnce(conflict)
       .mockResolvedValueOnce(
         jsonResponse({
-          project: { id: "project-1", name: "Project", archived: false },
+          project: {
+            id: "project-1",
+            name: "Project",
+            archived: false,
+            role: "owner",
+          },
           revision: 3,
           document: persisted,
         }),
@@ -198,7 +243,12 @@ describe("Workspace persistence", () => {
       .fn<typeof fetch>()
       .mockResolvedValueOnce(
         jsonResponse({
-          project: { id: "project-1", name: "Project", archived: false },
+          project: {
+            id: "project-1",
+            name: "Project",
+            archived: false,
+            role: "owner",
+          },
           revision: 2,
           document: persisted,
         }),
@@ -269,7 +319,12 @@ describe("Workspace persistence", () => {
     );
     second.resolve(
       jsonResponse({
-        project: { id: "project-b", name: "Project B", archived: false },
+        project: {
+          id: "project-b",
+          name: "Project B",
+          archived: false,
+          role: "owner",
+        },
         revision: 1,
         document: { ...loadDemoDocument(), name: "Project B" },
       }),
@@ -277,7 +332,12 @@ describe("Workspace persistence", () => {
     await waitFor(() => expect(screen.getByText("Project B")).toBeTruthy());
     first.resolve(
       jsonResponse({
-        project: { id: "project-a", name: "Project A", archived: false },
+        project: {
+          id: "project-a",
+          name: "Project A",
+          archived: false,
+          role: "owner",
+        },
         revision: 1,
         document: { ...loadDemoDocument(), name: "Project A" },
       }),
@@ -297,7 +357,12 @@ describe("Workspace persistence", () => {
         if (projectACalls === 1) {
           return Promise.resolve(
             jsonResponse({
-              project: { id: "project-a", name: "Project A", archived: false },
+              project: {
+                id: "project-a",
+                name: "Project A",
+                archived: false,
+                role: "owner",
+              },
               revision: 1,
               document: loadDemoDocument(),
             }),
@@ -321,7 +386,12 @@ describe("Workspace persistence", () => {
       }
       return Promise.resolve(
         jsonResponse({
-          project: { id: "project-b", name: "Project B", archived: false },
+          project: {
+            id: "project-b",
+            name: "Project B",
+            archived: false,
+            role: "owner",
+          },
           revision: 2,
           document: { ...loadDemoDocument(), name: "Project B" },
         }),
@@ -364,6 +434,80 @@ describe("Workspace persistence", () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(screen.getByText("Project B")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
+  });
+
+  it("marks client errors as an irreconcilable conflict with retry and discard actions", async () => {
+    const persisted = loadDemoDocument();
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        jsonResponse({
+          project: {
+            id: "project-1",
+            name: "Project",
+            archived: false,
+            role: "owner",
+          },
+          revision: 2,
+          document: persisted,
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse(
+          {
+            error: {
+              code: "invalid_command_batch",
+              message: "Command rejected",
+              traceId: "trace-command",
+            },
+          },
+          400,
+        ),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse(
+          {
+            error: {
+              code: "invalid_command_batch",
+              message: "Command rejected",
+              traceId: "trace-command-retry",
+            },
+          },
+          400,
+        ),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          project: {
+            id: "project-1",
+            name: "Project",
+            archived: false,
+            role: "owner",
+          },
+          revision: 2,
+          document: persisted,
+        }),
+      );
+
+    renderWorkspace(fetcher);
+    await waitFor(() => expect(screen.getByText("Project")).toBeTruthy());
+    fireEvent.click(
+      screen.getByText("Design internal tools together, offline."),
+    );
+    fireEvent.change(await screen.findByLabelText("Name"), {
+      target: { value: "Rejected heading" },
+    });
+
+    await waitFor(() =>
+      expect(screen.getByText("Command rejected")).toBeTruthy(),
+    );
+    expect(screen.getByRole("button", { name: "Retry" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Discard" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(3));
+    expect(screen.getByText("Rejected heading")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Discard" }));
+    await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(4));
   });
 });
 

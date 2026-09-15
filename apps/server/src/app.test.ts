@@ -3,9 +3,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import type { InjectOptions } from "fastify";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { buildApp, type ServerDependencies } from "./app.js";
+import { CollaborationManager } from "./collaboration.js";
 import type { AuditEvent, RepositoryPort, Session } from "./domain.js";
 import { InMemoryRepository } from "./memory-repository.js";
 import { ArgonPasswordHasher, type PasswordHasher } from "./security.js";
@@ -261,11 +262,27 @@ describe("application server", () => {
       headers: { cookie: admin.cookie },
     });
     expect(first.statusCode).toBe(200);
-    expect(first.json()).toMatchObject({
-      project: { id: projectId, name: "Persisted canvas" },
+    const firstBody = first.json();
+    expect(firstBody).toMatchObject({
+      project: {
+        id: projectId,
+        name: "Persisted canvas",
+        archived: false,
+        role: "owner",
+        createdAt: "2026-08-24T12:00:00.000Z",
+        updatedAt: "2026-08-24T12:00:00.000Z",
+      },
       revision: 1,
       document: { name: "Persisted canvas", schemaVersion: 1 },
     });
+    expect(Object.keys(firstBody.project).sort()).toEqual([
+      "archived",
+      "createdAt",
+      "id",
+      "name",
+      "role",
+      "updatedAt",
+    ]);
 
     const second = await admin.app.inject({
       method: "GET",
@@ -274,6 +291,46 @@ describe("application server", () => {
     });
     expect(second.json().revision).toBe(1);
     expect(second.json().document.id).toBe(projectId);
+  });
+
+  it("flushes the active collaboration document before reading its snapshot", async () => {
+    const admin = await bootstrap();
+    const projectResponse = await admin.app.inject({
+      method: "POST",
+      url: "/api/v1/projects",
+      headers: { cookie: admin.cookie, "x-csrf-token": admin.csrf },
+      payload: { name: "Collaborative canvas" },
+    });
+    const projectId = projectResponse.json().project.id as string;
+    const events: string[] = [];
+    const flush = vi
+      .spyOn(CollaborationManager.prototype, "flushProject")
+      .mockImplementation(async () => {
+        events.push("flush");
+      });
+    const read = vi
+      .spyOn(repository, "findProjectDocument")
+      .mockImplementation(async (id) => {
+        events.push("read");
+        return InMemoryRepository.prototype.findProjectDocument.call(
+          repository,
+          id,
+        );
+      });
+
+    try {
+      const response = await admin.app.inject({
+        method: "GET",
+        url: `/api/v1/projects/${projectId}/document`,
+        headers: { cookie: admin.cookie },
+      });
+      expect(response.statusCode).toBe(200);
+      expect(events.indexOf("flush")).toBeGreaterThanOrEqual(0);
+      expect(events.indexOf("flush")).toBeLessThan(events.indexOf("read"));
+    } finally {
+      flush.mockRestore();
+      read.mockRestore();
+    }
   });
 
   it("reports repository readiness failures as unavailable", async () => {

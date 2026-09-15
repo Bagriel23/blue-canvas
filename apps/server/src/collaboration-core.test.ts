@@ -2,7 +2,8 @@ import {
   createInitialCollaborationDocument,
   encodeCollaborationState,
 } from "@blue-canvas/collaboration";
-import { describe, expect, it } from "vitest";
+import * as Y from "yjs";
+import { describe, expect, it, vi } from "vitest";
 
 import { ApplicationService, type Principal } from "./core.js";
 import { InMemoryRepository } from "./memory-repository.js";
@@ -54,6 +55,65 @@ async function fixture() {
 }
 
 describe("collaboration domain", () => {
+  it("destroys the command document when persistence fails", async () => {
+    const { repository, service, principal, project } = await fixture();
+    const initial = createInitialCollaborationDocument(
+      project.id,
+      project.name,
+    );
+    const encoded = encodeCollaborationState(initial);
+    initial.destroy();
+    await repository.upsertProjectDocument({
+      projectId: project.id,
+      ...encoded,
+      now: NOW,
+    });
+    vi.spyOn(repository, "upsertProjectDocument").mockRejectedValue(
+      new Error("persistence failed"),
+    );
+    const destroy = vi.spyOn(Y.Doc.prototype, "destroy");
+
+    await expect(
+      service.applyCommands(
+        principal,
+        project.id,
+        {
+          baseRevision: 1,
+          idempotencyKey: "cleanup-command-123456",
+          commands: [
+            {
+              type: "set-token",
+              name: "brand",
+              value: { type: "color", value: "#1428A0" },
+            },
+          ],
+        },
+        "cleanup-trace",
+      ),
+    ).rejects.toThrow("persistence failed");
+    expect(destroy).toHaveBeenCalled();
+    destroy.mockRestore();
+  });
+
+  it("destroys the initial version document when persistence fails", async () => {
+    const { repository, service, principal, project } = await fixture();
+    vi.spyOn(repository, "upsertProjectDocument").mockRejectedValue(
+      new Error("persistence failed"),
+    );
+    const destroy = vi.spyOn(Y.Doc.prototype, "destroy");
+
+    await expect(
+      service.createNamedVersion(
+        principal,
+        project.id,
+        { name: "Initial" },
+        "initial-version-trace",
+      ),
+    ).rejects.toThrow("persistence failed");
+    expect(destroy).toHaveBeenCalled();
+    destroy.mockRestore();
+  });
+
   it("creates immutable versions and restores by creating a new revision", async () => {
     const { repository, service, principal, project } = await fixture();
     const initial = encodeCollaborationState(

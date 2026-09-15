@@ -72,7 +72,11 @@ aplicadas de forma otimista e enviadas como comandos `update-node` serializados
 em `POST /api/v1/projects/:id/commands`, com chave de idempotência e revisão
 base. Em um conflito de revisão, o cliente busca a versão atual e reaplica a
 fila local antes de continuar, mantendo a edição do usuário sem colaboração Yjs
-nesta etapa.
+nesta etapa. O papel retornado pelo servidor controla a edição: somente `owner`
+e `editor` de projetos não arquivados podem enfileirar comandos; visualizadores
+e comentaristas continuam com inspeção somente leitura. Rejeições 4xx ficam como
+conflito irreconciliável, com ações explícitas para tentar novamente ou
+descartar a fila.
 
 ## Dependências principais
 

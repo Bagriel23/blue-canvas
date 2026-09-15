@@ -581,75 +581,81 @@ export class ApplicationService {
           409,
         );
       const yDocument = new Y.Doc();
-      if (current) applyCollaborationState(yDocument, current.state);
-      else {
-        const project = await repository.findProjectById(projectId);
-        if (!project) throw new ApiError("not_found", "Project not found", 404);
-        const initial = createInitialCollaborationDocument(
-          project.id,
-          project.name,
-        );
-        applyCollaborationState(
-          yDocument,
-          encodeCollaborationState(initial).state,
-        );
-        initial.destroy();
-      }
-      let result;
       try {
-        const batchId = commandBatchId(input.idempotencyKey);
-        result = applyCommandBatch(
-          createCommandState(readSemanticDocument(yDocument)),
+        if (current) applyCollaborationState(yDocument, current.state);
+        else {
+          const project = await repository.findProjectById(projectId);
+          if (!project)
+            throw new ApiError("not_found", "Project not found", 404);
+          const initial = createInitialCollaborationDocument(
+            project.id,
+            project.name,
+          );
+          try {
+            applyCollaborationState(
+              yDocument,
+              encodeCollaborationState(initial).state,
+            );
+          } finally {
+            initial.destroy();
+          }
+        }
+        let result;
+        try {
+          const batchId = commandBatchId(input.idempotencyKey);
+          result = applyCommandBatch(
+            createCommandState(readSemanticDocument(yDocument)),
+            {
+              id: batchId,
+              actorId: principal.user.id,
+              baseRevision: 0,
+              commands: input.commands,
+            },
+          );
+        } catch (error) {
+          if (error instanceof CommandError)
+            throw new ApiError("invalid_command_batch", error.message, 400, {
+              code: error.code,
+            });
+          throw error;
+        }
+        replaceSemanticDocument(yDocument, result.document);
+        const encoded = encodeCollaborationState(yDocument);
+        const updated = await repository.upsertProjectDocument({
+          projectId,
+          ...encoded,
+          expectedRevision: currentRevision,
+          now: this.dependencies.now(),
+        });
+        await repository.createCommandReceipt({
+          projectId,
+          idempotencyKey: input.idempotencyKey,
+          fingerprint,
+          revision: updated.revision,
+          document: result.document,
+          createdAt: this.dependencies.now(),
+        });
+        await this.auditWith(
+          repository,
+          principal.user.id,
+          "project.commands.apply",
+          "project",
+          projectId,
+          projectId,
+          traceId,
           {
-            id: batchId,
-            actorId: principal.user.id,
-            baseRevision: 0,
-            commands: input.commands,
+            revision: updated.revision,
+            commandCount: input.commands.length,
           },
         );
-      } catch (error) {
-        yDocument.destroy();
-        if (error instanceof CommandError)
-          throw new ApiError("invalid_command_batch", error.message, 400, {
-            code: error.code,
-          });
-        throw error;
-      }
-      replaceSemanticDocument(yDocument, result.document);
-      const encoded = encodeCollaborationState(yDocument);
-      const updated = await repository.upsertProjectDocument({
-        projectId,
-        ...encoded,
-        expectedRevision: currentRevision,
-        now: this.dependencies.now(),
-      });
-      yDocument.destroy();
-      await repository.createCommandReceipt({
-        projectId,
-        idempotencyKey: input.idempotencyKey,
-        fingerprint,
-        revision: updated.revision,
-        document: result.document,
-        createdAt: this.dependencies.now(),
-      });
-      await this.auditWith(
-        repository,
-        principal.user.id,
-        "project.commands.apply",
-        "project",
-        projectId,
-        projectId,
-        traceId,
-        {
+        return {
           revision: updated.revision,
-          commandCount: input.commands.length,
-        },
-      );
-      return {
-        revision: updated.revision,
-        document: result.document,
-        idempotent: false,
-      };
+          document: result.document,
+          idempotent: false,
+        };
+      } finally {
+        yDocument.destroy();
+      }
     });
   }
 
@@ -1065,15 +1071,21 @@ export class ApplicationService {
       if (!current) {
         const project = await repository.findProjectById(projectId);
         if (!project) throw new ApiError("not_found", "Project not found", 404);
-        const initial = encodeCollaborationState(
-          createInitialCollaborationDocument(project.id, project.name),
+        const initialDocument = createInitialCollaborationDocument(
+          project.id,
+          project.name,
         );
-        current = await repository.upsertProjectDocument({
-          projectId,
-          ...initial,
-          now: this.dependencies.now(),
-          expectedRevision: 0,
-        });
+        try {
+          const initial = encodeCollaborationState(initialDocument);
+          current = await repository.upsertProjectDocument({
+            projectId,
+            ...initial,
+            now: this.dependencies.now(),
+            expectedRevision: 0,
+          });
+        } finally {
+          initialDocument.destroy();
+        }
       }
       const version = await repository.createNamedVersion({
         projectId,
@@ -1141,36 +1153,40 @@ export class ApplicationService {
       if (!version)
         throw new ApiError("not_found", "Named version not found", 404);
       const candidate = new Y.Doc();
-      applyCollaborationState(candidate, version.state);
-      const validated = encodeCollaborationState(candidate);
-      const current = await repository.findProjectDocument(projectId);
-      const restoredDocument = await repository.upsertProjectDocument({
-        projectId,
-        ...validated,
-        now: this.dependencies.now(),
-        expectedRevision: current?.revision ?? 0,
-      });
-      const restored = await repository.createNamedVersion({
-        projectId,
-        actorId: principal.user.id,
-        name: input.name,
-        state: restoredDocument.state,
-        stateVector: restoredDocument.stateVector,
-        revision: restoredDocument.revision,
-        restoredFromId: version.id,
-        now: this.dependencies.now(),
-      });
-      await this.auditWith(
-        repository,
-        principal.user.id,
-        "project.version.restore",
-        "named_version",
-        restored.id,
-        projectId,
-        traceId,
-        { restoredFromId: version.id, revision: restored.revision },
-      );
-      return restored;
+      try {
+        applyCollaborationState(candidate, version.state);
+        const validated = encodeCollaborationState(candidate);
+        const current = await repository.findProjectDocument(projectId);
+        const restoredDocument = await repository.upsertProjectDocument({
+          projectId,
+          ...validated,
+          now: this.dependencies.now(),
+          expectedRevision: current?.revision ?? 0,
+        });
+        const restored = await repository.createNamedVersion({
+          projectId,
+          actorId: principal.user.id,
+          name: input.name,
+          state: restoredDocument.state,
+          stateVector: restoredDocument.stateVector,
+          revision: restoredDocument.revision,
+          restoredFromId: version.id,
+          now: this.dependencies.now(),
+        });
+        await this.auditWith(
+          repository,
+          principal.user.id,
+          "project.version.restore",
+          "named_version",
+          restored.id,
+          projectId,
+          traceId,
+          { restoredFromId: version.id, revision: restored.revision },
+        );
+        return restored;
+      } finally {
+        candidate.destroy();
+      }
     });
   }
 
@@ -1411,20 +1427,24 @@ export class ApplicationService {
         400,
       );
     const yDocument = new Y.Doc();
-    applyCollaborationState(yDocument, persisted.state);
-    const semantic = readSemanticDocument(yDocument);
-    const roots = [
-      ...semantic.components.map(({ root }) => root),
-      ...semantic.pages.flatMap(({ artboards }) =>
-        artboards.map(({ root }) => root),
-      ),
-    ];
-    if (!roots.some((root) => nodeTreeContains(root, nodeId)))
-      throw new ApiError(
-        "invalid_node_anchor",
-        "Comment node does not exist",
-        400,
-      );
+    try {
+      applyCollaborationState(yDocument, persisted.state);
+      const semantic = readSemanticDocument(yDocument);
+      const roots = [
+        ...semantic.components.map(({ root }) => root),
+        ...semantic.pages.flatMap(({ artboards }) =>
+          artboards.map(({ root }) => root),
+        ),
+      ];
+      if (!roots.some((root) => nodeTreeContains(root, nodeId)))
+        throw new ApiError(
+          "invalid_node_anchor",
+          "Comment node does not exist",
+          400,
+        );
+    } finally {
+      yDocument.destroy();
+    }
   }
 
   private async activeUser(userId: string): Promise<User> {

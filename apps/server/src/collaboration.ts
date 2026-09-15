@@ -104,8 +104,8 @@ export class CollaborationManager {
           project.id,
           project.name,
         );
-        const encoded = encodeCollaborationState(initial);
         try {
+          const encoded = encodeCollaborationState(initial);
           await dependencies.repository.upsertProjectDocument({
             projectId: documentName,
             ...encoded,
@@ -123,6 +123,8 @@ export class CollaborationManager {
             await dependencies.repository.findProjectDocument(documentName);
           if (!concurrent) throw error;
           applyCollaborationState(document, concurrent.state);
+        } finally {
+          initial.destroy();
         }
         return document;
       },
