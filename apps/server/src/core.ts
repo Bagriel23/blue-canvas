@@ -997,12 +997,16 @@ export class ApplicationService {
     await this.requireCollaborationRole(principal, projectId, true);
     const snapshot = await this.getProjectDocument(principal, projectId);
     return this.dependencies.repository.transaction(async (repository) => {
-      await repository.lockProjectForWrite(projectId, principal.user.id);
+      const lockedMember = await repository.lockProjectForWrite(
+        projectId,
+        principal.user.id,
+      );
       await this.requireCollaborationRole(
         principal,
         projectId,
         true,
         repository,
+        lockedMember,
       );
       const template = await repository.createProjectTemplate({
         ownerId: principal.user.id,
@@ -1129,6 +1133,17 @@ export class ApplicationService {
     );
     if (!user) throw new ApiError("user_not_found", "User not found", 404);
     return this.dependencies.repository.transaction(async (repository) => {
+      const lockedActor = await repository.lockProjectForWrite(
+        projectId,
+        principal.user.id,
+      );
+      await this.requireProject(
+        principal,
+        projectId,
+        "members:manage",
+        repository,
+        lockedActor,
+      );
       const member = await repository.addProjectMember({
         projectId,
         userId: user.id,
@@ -1170,6 +1185,30 @@ export class ApplicationService {
       );
     }
     return this.dependencies.repository.transaction(async (repository) => {
+      const lockedActor = await repository.lockProjectForWrite(
+        projectId,
+        principal.user.id,
+      );
+      await this.requireProject(
+        principal,
+        projectId,
+        "members:manage",
+        repository,
+        lockedActor,
+      );
+      const lockedMember =
+        userId === principal.user.id
+          ? lockedActor
+          : await repository.lockProjectForWrite(projectId, userId);
+      if (!lockedMember)
+        throw new ApiError("not_found", "Member not found", 404);
+      if (lockedMember.role === "owner") {
+        throw new ApiError(
+          "owner_protected",
+          "The project owner role cannot be changed",
+          409,
+        );
+      }
       const member = await repository.updateProjectMember(
         projectId,
         userId,
@@ -1211,6 +1250,30 @@ export class ApplicationService {
       );
     }
     await this.dependencies.repository.transaction(async (repository) => {
+      const lockedActor = await repository.lockProjectForWrite(
+        projectId,
+        principal.user.id,
+      );
+      await this.requireProject(
+        principal,
+        projectId,
+        "members:manage",
+        repository,
+        lockedActor,
+      );
+      const lockedMember =
+        userId === principal.user.id
+          ? lockedActor
+          : await repository.lockProjectForWrite(projectId, userId);
+      if (!lockedMember)
+        throw new ApiError("not_found", "Member not found", 404);
+      if (lockedMember.role === "owner") {
+        throw new ApiError(
+          "owner_protected",
+          "The project owner cannot be removed",
+          409,
+        );
+      }
       const removed = await repository.removeProjectMember(projectId, userId);
       if (!removed) throw new ApiError("not_found", "Member not found", 404);
       await this.auditWith(
@@ -1713,6 +1776,7 @@ export class ApplicationService {
     projectId: string,
     write: boolean,
     repository: RepositoryPort = this.dependencies.repository,
+    lockedMember?: ProjectMember,
   ): Promise<ProjectMember> {
     const project = await repository.findProjectById(projectId);
     if (!project) throw new ApiError("not_found", "Project not found", 404);
@@ -1722,10 +1786,9 @@ export class ApplicationService {
         "Archived projects are read-only",
         409,
       );
-    const member = await repository.findProjectMember(
-      projectId,
-      principal.user.id,
-    );
+    const member =
+      lockedMember ??
+      (await repository.findProjectMember(projectId, principal.user.id));
     if (
       !member ||
       (write && member.role !== "owner" && member.role !== "editor")
@@ -1837,11 +1900,12 @@ export class ApplicationService {
     principal: Principal,
     projectId: string,
     action: ProjectAction,
+    repository: RepositoryPort = this.dependencies.repository,
+    lockedMember?: ProjectMember,
   ): Promise<ProjectMember> {
-    const member = await this.dependencies.repository.findProjectMember(
-      projectId,
-      principal.user.id,
-    );
+    const member =
+      lockedMember ??
+      (await repository.findProjectMember(projectId, principal.user.id));
     if (!member || !canProjectRole(member.role, action)) {
       throw new ApiError("forbidden", "Project access denied", 403);
     }
