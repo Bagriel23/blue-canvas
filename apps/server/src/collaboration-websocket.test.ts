@@ -445,10 +445,33 @@ describe("Hocuspocus collaboration", () => {
         },
       });
       expect(commands.statusCode).toBe(201);
-      await waitUntil(
-        () => readSemanticDocument(document).name === "Concurrent edit",
-      );
-      expect(readSemanticDocument(document).name).toBe("Concurrent edit");
+      expect(commands.json().document).toMatchObject({
+        name: "Concurrent edit",
+        tokens: { brand: { type: "color", value: "#1428A0" } },
+      });
+      await waitUntil(() => {
+        const merged = readSemanticDocument(document);
+        return (
+          merged.name === "Concurrent edit" &&
+          merged.tokens.brand?.value === "#1428A0"
+        );
+      });
+      expect(readSemanticDocument(document)).toMatchObject({
+        name: "Concurrent edit",
+        tokens: { brand: { type: "color", value: "#1428A0" } },
+      });
+      await new Promise((resolve) => setTimeout(resolve, 150));
+      const snapshot = await app.inject({
+        method: "GET",
+        url: `/api/v1/projects/${projectId}/document`,
+        headers: { cookie },
+      });
+      expect(snapshot.statusCode).toBe(200);
+      expect(snapshot.json().document).toMatchObject({
+        name: "Concurrent edit",
+        tokens: { brand: { type: "color", value: "#1428A0" } },
+      });
+      expect(snapshot.json().revision).toBe(commands.json().revision);
     } finally {
       collaborationPrototype.applyProjectSnapshot = originalApply;
       active.destroy();

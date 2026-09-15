@@ -675,21 +675,30 @@ export function buildApp(dependencies: ServerDependencies): FastifyInstance {
     await collaboration.flushProject(projectId);
     const expectedStateVector =
       collaboration.captureProjectStateVector(projectId);
+    const commandInput = parse(applyCommandsRequestSchema, request.body);
     const result = await service.applyCommands(
       principal,
       projectId,
-      parse(applyCommandsRequestSchema, request.body),
+      commandInput,
       request.id,
     );
+    let response = result;
     if (!result.idempotent) {
       const applied = await collaboration.applyProjectSnapshot(
         projectId,
         result.document,
         expectedStateVector,
       );
-      if (!applied) await collaboration.flushProject(projectId);
+      if (!applied) {
+        const rebased = await collaboration.rebaseProjectCommands(
+          projectId,
+          commandInput.commands,
+          principal.user.id,
+        );
+        response = { ...result, ...rebased };
+      }
     }
-    return reply.code(result.idempotent ? 200 : 201).send(result);
+    return reply.code(result.idempotent ? 200 : 201).send(response);
   });
 
   app.get("/api/v1/projects/:projectId/versions", async (request) => {

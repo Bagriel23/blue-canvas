@@ -1,8 +1,11 @@
+import { randomUUID } from "node:crypto";
+
 import {
   applyCollaborationState,
   createInitialCollaborationDocument,
   encodeCollaborationState,
   MAX_COLLABORATION_UPDATE_BYTES,
+  readSemanticDocument,
   replaceSemanticDocument,
   validateProspectiveUpdate,
 } from "@blue-canvas/collaboration";
@@ -12,6 +15,7 @@ import {
   type Connection,
   type Document as HocuspocusDocument,
 } from "@hocuspocus/server";
+import { applyCommandBatch, createCommandState } from "@blue-canvas/commands";
 import type { FastifyRequest } from "fastify";
 import type WebSocket from "ws";
 
@@ -248,6 +252,66 @@ export class CollaborationManager {
       { source: "local", skipStoreHooks: true },
     );
     return true;
+  }
+
+  async rebaseProjectCommands(
+    projectId: string,
+    commands: unknown[],
+    actorId: string,
+  ): Promise<{ revision: number; document: unknown }> {
+    const document = this.hocuspocus.documents.get(projectId);
+    if (!document)
+      throw new ApiError("not_found", "Project document not found", 404);
+
+    const rebased = applyCommandBatch(
+      createCommandState(readSemanticDocument(document)),
+      {
+        id: randomUUID(),
+        actorId,
+        baseRevision: 0,
+        commands,
+      },
+    );
+    document.transact(
+      () => {
+        replaceSemanticDocument(document, rebased.document);
+      },
+      { source: "local", skipStoreHooks: true },
+    );
+
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const encoded = encodeCollaborationState(document);
+      const persisted =
+        await this.dependencies.repository.findProjectDocument(projectId);
+      if (
+        !bytesEqual(
+          encoded.stateVector,
+          encodeCollaborationState(document).stateVector,
+        )
+      )
+        continue;
+      try {
+        const updated =
+          await this.dependencies.repository.upsertProjectDocument({
+            projectId,
+            ...encoded,
+            expectedRevision: persisted?.revision ?? 0,
+            now: this.dependencies.now(),
+          });
+        return {
+          revision: updated.revision,
+          document: readSemanticDocument(document),
+        };
+      } catch (error) {
+        if (!(error instanceof ApiError) || error.code !== "revision_conflict")
+          throw error;
+      }
+    }
+    throw new ApiError(
+      "revision_conflict",
+      "Document changed while applying command",
+      409,
+    );
   }
 
   async close(): Promise<void> {
