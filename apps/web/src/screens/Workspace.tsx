@@ -62,6 +62,8 @@ interface CommandResponse {
 export function Workspace({ projectId, editable = true }: WorkspaceProps) {
   const { client } = useSession();
   const { messages } = useLocale();
+  const workspaceMessagesRef = useRef(messages.workspace);
+  workspaceMessagesRef.current = messages.workspace;
   const [resource, setResource] = useState<WorkspaceResource>({
     status: "loading",
   });
@@ -114,10 +116,12 @@ export function Workspace({ projectId, editable = true }: WorkspaceProps) {
       setResource({
         status: "error",
         message:
-          raw instanceof ApiError ? raw.message : messages.workspace.loadError,
+          raw instanceof ApiError
+            ? raw.message
+            : workspaceMessagesRef.current.loadError,
       });
     }
-  }, [loadDocument, messages.workspace.loadError]);
+  }, [loadDocument]);
 
   useEffect(() => {
     void refresh();
@@ -217,7 +221,7 @@ export function Workspace({ projectId, editable = true }: WorkspaceProps) {
               irreconcilable ? "conflict" : "error",
               raw instanceof ApiError
                 ? raw.message
-                : messages.workspace.loadError,
+                : workspaceMessagesRef.current.loadError,
             );
             break;
           }
@@ -231,7 +235,11 @@ export function Workspace({ projectId, editable = true }: WorkspaceProps) {
               rebased = applyLocalCommand(rebased, queued.command);
             }
             editor.document = rebased;
-            updateDocument(rebased, "conflict", messages.workspace.conflict);
+            updateDocument(
+              rebased,
+              "conflict",
+              workspaceMessagesRef.current.conflict,
+            );
           } catch (recoveryError) {
             if (editorRef.current.generation !== generation) break;
             updateDocument(
@@ -239,7 +247,7 @@ export function Workspace({ projectId, editable = true }: WorkspaceProps) {
               "error",
               recoveryError instanceof ApiError
                 ? recoveryError.message
-                : messages.workspace.loadError,
+                : workspaceMessagesRef.current.loadError,
             );
             break;
           }
@@ -248,15 +256,7 @@ export function Workspace({ projectId, editable = true }: WorkspaceProps) {
     } finally {
       editor.processing = false;
     }
-  }, [
-    applyLocalCommand,
-    client,
-    loadDocument,
-    messages.workspace.conflict,
-    messages.workspace.loadError,
-    projectId,
-    updateDocument,
-  ]);
+  }, [applyLocalCommand, client, loadDocument, projectId, updateDocument]);
 
   if (resource.status === "loading") {
     return (

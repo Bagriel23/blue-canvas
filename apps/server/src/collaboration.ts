@@ -3,6 +3,7 @@ import {
   createInitialCollaborationDocument,
   encodeCollaborationState,
   MAX_COLLABORATION_UPDATE_BYTES,
+  replaceSemanticDocument,
   validateProspectiveUpdate,
 } from "@blue-canvas/collaboration";
 import type { ProjectRole } from "@blue-canvas/contracts";
@@ -153,6 +154,10 @@ export class CollaborationManager {
       },
       onStoreDocument: async ({ document, documentName }) => {
         const encoded = encodeCollaborationState(document);
+        const persisted =
+          await dependencies.repository.findProjectDocument(documentName);
+        if (persisted && bytesEqual(persisted.stateVector, encoded.stateVector))
+          return;
         await dependencies.repository.upsertProjectDocument({
           projectId: documentName,
           ...encoded,
@@ -212,6 +217,20 @@ export class CollaborationManager {
   async flushProject(projectId: string): Promise<void> {
     const document = this.hocuspocus.documents.get(projectId);
     if (document) await this.storeActiveDocument(document);
+  }
+
+  async applyProjectSnapshot(
+    projectId: string,
+    snapshot: unknown,
+  ): Promise<void> {
+    const document = this.hocuspocus.documents.get(projectId);
+    if (!document) return;
+    document.transact(
+      () => {
+        replaceSemanticDocument(document, snapshot);
+      },
+      { source: "local", skipStoreHooks: true },
+    );
   }
 
   async close(): Promise<void> {
@@ -302,6 +321,11 @@ export class CollaborationManager {
     current?.delete(socketId);
     if (current?.size === 0) this.writers.delete(projectId);
   }
+}
+
+function bytesEqual(left: Uint8Array, right: Uint8Array): boolean {
+  if (left.byteLength !== right.byteLength) return false;
+  return left.every((byte, index) => byte === right[index]);
 }
 
 function credentialFrom(

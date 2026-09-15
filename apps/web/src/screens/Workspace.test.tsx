@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { ApiClient } from "../api/client.js";
 import { loadDemoDocument } from "../fixtures/demo.js";
-import { LocaleProvider } from "../state/locale.js";
+import { LocaleProvider, useLocale } from "../state/locale.js";
 import { SessionProvider } from "../state/session.js";
 import { Workspace } from "./Workspace.js";
 
@@ -27,7 +27,11 @@ const session = {
   bootstrapRequired: false,
 };
 
-function renderWorkspace(fetcher: typeof fetch, projectId = "project-1") {
+function renderWorkspace(
+  fetcher: typeof fetch,
+  projectId = "project-1",
+  showLocaleSwitcher = false,
+) {
   return render(
     <SessionProvider
       client={new ApiClient({ fetch: fetcher })}
@@ -35,8 +39,18 @@ function renderWorkspace(fetcher: typeof fetch, projectId = "project-1") {
     >
       <LocaleProvider initialLocale="en-US">
         <Workspace projectId={projectId} />
+        {showLocaleSwitcher ? <LocaleSwitcher /> : null}
       </LocaleProvider>
     </SessionProvider>,
+  );
+}
+
+function LocaleSwitcher() {
+  const { setLocale } = useLocale();
+  return (
+    <button type="button" onClick={() => setLocale("pt-BR")}>
+      Switch locale
+    </button>
   );
 }
 
@@ -176,6 +190,53 @@ describe("Workspace persistence", () => {
     expect(input.hasAttribute("readonly")).toBe(true);
     fireEvent.change(input, { target: { value: "Must stay unchanged" } });
     expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps pending edits when the locale changes", async () => {
+    const persisted = loadDemoDocument();
+    const pendingCommand = deferred<Response>();
+    let documentLoads = 0;
+    const fetcher = vi.fn((input: RequestInfo | URL) => {
+      if (String(input).endsWith("/document")) {
+        documentLoads += 1;
+        return Promise.resolve(
+          jsonResponse({
+            project: {
+              id: "project-1",
+              name: "Project",
+              archived: false,
+              role: "owner",
+            },
+            revision: 2,
+            document: persisted,
+          }),
+        );
+      }
+      return pendingCommand.promise;
+    });
+
+    renderWorkspace(fetcher, "project-1", true);
+    await waitFor(() => expect(screen.getByText("Project")).toBeTruthy());
+    fireEvent.click(
+      screen.getByText("Design internal tools together, offline."),
+    );
+    fireEvent.change(await screen.findByLabelText("Name"), {
+      target: { value: "Pending locale edit" },
+    });
+    await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2));
+
+    fireEvent.click(screen.getByRole("button", { name: "Switch locale" }));
+    expect(documentLoads).toBe(1);
+    expect(screen.getByDisplayValue("Pending locale edit")).toBeTruthy();
+
+    pendingCommand.resolve(
+      jsonResponse({
+        revision: 3,
+        document: persisted,
+        idempotent: false,
+      }),
+    );
+    await waitFor(() => expect(screen.getByText("Salvo")).toBeTruthy());
   });
 
   it("reuses the queued idempotency key after a revision conflict", async () => {

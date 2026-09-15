@@ -264,6 +264,79 @@ describe("Hocuspocus collaboration", () => {
     await restarted.close();
   }, 15_000);
 
+  it("keeps an active Yjs document from overwriting an HTTP command result", async () => {
+    const app = buildApp(dependencies);
+    await app.listen({ host: "127.0.0.1", port: 0 });
+    const bootstrap = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/bootstrap-admin",
+      payload: {
+        email: "admin@example.com",
+        displayName: "Admin",
+        password: PASSWORD,
+        setupSecret: "development setup secret",
+      },
+    });
+    const cookie = cookieFrom(bootstrap);
+    const csrf = bootstrap.json().csrfToken as string;
+    const project = await app.inject({
+      method: "POST",
+      url: "/api/v1/projects",
+      headers: { cookie, "x-csrf-token": csrf },
+      payload: { name: "HTTP commands" },
+    });
+    const projectId = project.json().project.id as string;
+    const address = app.server.address();
+    if (!address || typeof address === "string")
+      throw new Error("missing address");
+    const document = new Y.Doc();
+    const active = provider({
+      url: `ws://127.0.0.1:${address.port}/api/v1/collaboration`,
+      name: projectId,
+      document,
+      token: csrf,
+      WebSocketPolyfill: webSocketWithCookie(cookie),
+    });
+    await waitForProvider(active);
+    const current = await repository.findProjectDocument(projectId);
+    if (!current) throw new Error("missing persisted document");
+
+    const commands = await app.inject({
+      method: "POST",
+      url: `/api/v1/projects/${projectId}/commands`,
+      headers: { cookie, "x-csrf-token": csrf },
+      payload: {
+        baseRevision: current.revision,
+        idempotencyKey: "http-command-123456",
+        commands: [
+          {
+            type: "set-token",
+            name: "brand",
+            value: { type: "color", value: "#1428A0" },
+          },
+        ],
+      },
+    });
+    expect(commands.statusCode).toBe(201);
+    document.getMap("content").set("after-http", true);
+    await new Promise((resolve) => setTimeout(resolve, 150));
+
+    const snapshot = await app.inject({
+      method: "GET",
+      url: `/api/v1/projects/${projectId}/document`,
+      headers: { cookie },
+    });
+    expect(snapshot.statusCode).toBe(200);
+    expect(snapshot.json().document.tokens.brand).toEqual({
+      type: "color",
+      value: "#1428A0",
+    });
+
+    active.destroy();
+    document.destroy();
+    await app.close();
+  }, 15_000);
+
   it("rejects nonmembers and revalidates a downgraded editor before mutation", async () => {
     const app = buildApp(dependencies);
     await app.listen({ host: "127.0.0.1", port: 0 });
