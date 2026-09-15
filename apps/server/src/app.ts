@@ -738,10 +738,12 @@ export function buildApp(dependencies: ServerDependencies): FastifyInstance {
         scope: "projects:write",
       });
       const projectId = identifier(request, "projectId");
+      collaboration.reserveRestore(projectId);
       return collaboration.withProjectLock(projectId, async () => {
-        await service.collaborationAccess(principal, projectId, true);
-        const finishRestore = await collaboration.prepareRestore(projectId);
+        let finishRestore: (() => void) | undefined;
         try {
+          await service.collaborationAccess(principal, projectId, true);
+          finishRestore = await collaboration.prepareRestore(projectId, true);
           const version = await service.restoreNamedVersion(
             principal,
             projectId,
@@ -751,7 +753,8 @@ export function buildApp(dependencies: ServerDependencies): FastifyInstance {
           );
           return reply.code(201).send({ version: versionResponse(version) });
         } finally {
-          finishRestore();
+          if (finishRestore) finishRestore();
+          else collaboration.cancelRestore(projectId);
         }
       });
     },

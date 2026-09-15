@@ -4,6 +4,9 @@ O servidor Fastify hospeda o Hocuspocus 4.6 e o Yjs 13 no mesmo processo da API.
 O endpoint é `ws://HOST/api/v1/collaboration` ou
 `wss://HOST/api/v1/collaboration` atrás de TLS. O nome do documento no protocolo
 Hocuspocus é o UUID do projeto. Credenciais nunca são colocadas na query string.
+Os locks de projeto são locais ao processo; execute uma única instância do
+servidor por conjunto de documentos até que um coordenador distribuído seja
+configurado.
 
 ## Autenticação e autorização
 

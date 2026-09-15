@@ -303,6 +303,61 @@ describe("collaboration domain", () => {
     expect(secondCompleted).toBe(true);
   });
 
+  it("rejects a WebSocket message that was waiting when restore started", async () => {
+    const { repository, service, project } = await fixture();
+    const manager = new CollaborationManager({
+      repository,
+      service,
+      now: () => NOW,
+    });
+    const beforeHandle = manager.hocuspocus.configuration.beforeHandleMessage;
+    if (!beforeHandle) throw new Error("beforeHandleMessage hook missing");
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const held = manager.withProjectLock(project.id, async () => gate);
+    const pending = beforeHandle({
+      documentName: project.id,
+      socketId: "socket-pending",
+    } as never);
+    await Promise.resolve();
+    manager.reserveRestore(project.id);
+    release();
+
+    await expect(pending).rejects.toThrow("document-restoring");
+    await held;
+    manager.cancelRestore(project.id);
+  });
+
+  it("keeps the project lock until a disconnecting message finishes", async () => {
+    const { repository, service, project } = await fixture();
+    const manager = new CollaborationManager({
+      repository,
+      service,
+      now: () => NOW,
+    });
+    const configuration = manager.hocuspocus.configuration;
+    if (!configuration.beforeHandleMessage || !configuration.afterHandleMessage)
+      throw new Error("message hooks missing");
+    await configuration.beforeHandleMessage({
+      documentName: project.id,
+      socketId: "socket-closing",
+    } as never);
+    let acquired = false;
+    const pending = manager.withProjectLock(project.id, async () => {
+      acquired = true;
+    });
+    await Promise.resolve();
+    expect(acquired).toBe(false);
+    await configuration.afterHandleMessage({
+      documentName: project.id,
+      socketId: "socket-closing",
+    } as never);
+    await pending;
+    expect(acquired).toBe(true);
+  });
+
   it("does not persist an unconfirmed command after concurrent rollback", async () => {
     const { repository, service, project } = await fixture();
     const initial = createInitialCollaborationDocument(

@@ -56,6 +56,7 @@ export class CollaborationManager {
   private readonly projectLocks = new Map<string, Promise<void>>();
   private readonly lockContext = new AsyncLocalStorage<Set<string>>();
   private readonly messageReleases = new Map<string, () => void>();
+  private readonly restoreGenerations = new Map<string, number>();
 
   constructor(private readonly dependencies: CollaborationManagerDependencies) {
     this.hocuspocus = new Hocuspocus<CollaborationContext>({
@@ -144,7 +145,15 @@ export class CollaborationManager {
         }),
       beforeHandleMessage: async ({ documentName, socketId }) => {
         const key = messageLockKey(documentName, socketId);
+        const generation = this.restoreGenerations.get(documentName) ?? 0;
         const release = await this.acquireProjectLock(documentName);
+        if (
+          this.restoring.has(documentName) ||
+          generation !== (this.restoreGenerations.get(documentName) ?? 0)
+        ) {
+          release();
+          throw permissionDenied("document-restoring");
+        }
         this.messageReleases.set(key, release);
       },
       afterHandleMessage: async ({ documentName, socketId }) => {
@@ -164,6 +173,10 @@ export class CollaborationManager {
         type,
       }) => {
         const operation = async () => {
+          if (this.restoring.has(documentName)) {
+            connection.close({ code: 1008, reason: "document-restoring" });
+            throw permissionDenied("document-restoring");
+          }
           if (type !== 1 && type !== 2) return;
           const canWrite = await this.revalidate(
             context,
@@ -202,12 +215,6 @@ export class CollaborationManager {
           });
         }),
       onDisconnect: async ({ context, documentName, socketId }) => {
-        const key = messageLockKey(documentName, socketId);
-        const release = this.messageReleases.get(key);
-        if (release) {
-          this.messageReleases.delete(key);
-          release();
-        }
         if (context.writerReserved) this.releaseWriter(documentName, socketId);
       },
     });
@@ -232,13 +239,29 @@ export class CollaborationManager {
     });
   }
 
-  async prepareRestore(projectId: string): Promise<() => void> {
-    return this.withProjectLock(projectId, () =>
-      this.prepareRestoreUnlocked(projectId),
-    );
+  async prepareRestore(
+    projectId: string,
+    reserved = false,
+  ): Promise<() => void> {
+    if (this.restoring.has(projectId) && !reserved)
+      throw new ApiError(
+        "restore_in_progress",
+        "A restore is already in progress",
+        409,
+      );
+    const ownsReservation = !this.restoring.has(projectId);
+    if (ownsReservation) this.reserveRestore(projectId);
+    try {
+      return await this.withProjectLock(projectId, () =>
+        this.prepareRestoreUnlocked(projectId),
+      );
+    } catch (error) {
+      if (ownsReservation) this.cancelRestore(projectId);
+      throw error;
+    }
   }
 
-  private async prepareRestoreUnlocked(projectId: string): Promise<() => void> {
+  reserveRestore(projectId: string): void {
     if (this.restoring.has(projectId))
       throw new ApiError(
         "restore_in_progress",
@@ -246,6 +269,17 @@ export class CollaborationManager {
         409,
       );
     this.restoring.add(projectId);
+    this.restoreGenerations.set(
+      projectId,
+      (this.restoreGenerations.get(projectId) ?? 0) + 1,
+    );
+  }
+
+  cancelRestore(projectId: string): void {
+    this.restoring.delete(projectId);
+  }
+
+  private async prepareRestoreUnlocked(projectId: string): Promise<() => void> {
     try {
       const document = this.hocuspocus.documents.get(projectId);
       if (document) {
