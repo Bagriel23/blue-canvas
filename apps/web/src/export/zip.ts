@@ -12,10 +12,11 @@ interface NormalizedEntry extends ZipEntry {
 const encoder = new TextEncoder();
 
 function normalizePath(path: string): string {
-  const normalized = path.replaceAll("\\\\", "/");
+  const normalized = path.replaceAll("\\", "/");
   if (
     normalized.length === 0 ||
     normalized.startsWith("/") ||
+    /^[A-Za-z]:\//u.test(normalized) ||
     normalized
       .split("/")
       .some((part) => part.length === 0 || part === "." || part === "..")

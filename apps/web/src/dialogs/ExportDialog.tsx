@@ -111,7 +111,9 @@ export function ExportDialog({
   }
 
   const isSelectionUnavailable = scope === "selection" && !currentSelection;
-  const canStart = state.kind !== "loading" && !isSelectionUnavailable;
+  const isPageUnavailable = scope === "page" && !currentPageId;
+  const canStart =
+    state.kind !== "loading" && !isSelectionUnavailable && !isPageUnavailable;
   const action =
     state.kind === "ready" ? (
       <button
@@ -177,7 +179,9 @@ export function ExportDialog({
             <option value="project">
               {messages.exportDialog.scopeProject}
             </option>
-            <option value="page">{messages.exportDialog.scopePage}</option>
+            <option value="page" disabled={!currentPageId}>
+              {messages.exportDialog.scopePage}
+            </option>
             <option value="selection" disabled={!currentSelection}>
               {messages.exportDialog.scopeSelection}
             </option>
@@ -210,7 +214,7 @@ export function ExportDialog({
             aria-live="polite"
             aria-busy="true"
           >
-            <progress value={65} max={100} />
+            <progress max={100} />
             <span>{messages.exportDialog.generating}</span>
           </div>
         ) : null}

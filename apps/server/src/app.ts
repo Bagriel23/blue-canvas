@@ -57,6 +57,8 @@ import type { PasswordHasher } from "./security.js";
 import { MAX_ASSET_BYTES, type AssetStorage } from "./storage.js";
 
 const SESSION_COOKIE = "blue_canvas_session";
+const MAX_EXPORT_ASSETS = 256;
+const MAX_EXPORT_ASSET_BYTES = 100 * 1024 * 1024;
 const applyCommandsRequestSchema = z.strictObject({
   baseRevision: z.number().int().nonnegative(),
   idempotencyKey: z.string().trim().min(8).max(128),
@@ -673,13 +675,17 @@ export function buildApp(dependencies: ServerDependencies): FastifyInstance {
       string,
       { fileName: string; mimeType: string; bytes: Uint8Array }
     > = {};
-    for (const asset of assets) {
+    let exportBytes = 0;
+    for (const asset of assets.slice(0, MAX_EXPORT_ASSETS)) {
+      if (exportBytes + asset.size > MAX_EXPORT_ASSET_BYTES) break;
       try {
+        const bytes = await dependencies.storage.read(asset.storageKey);
         exportAssets[asset.id] = {
           fileName: asset.originalName,
           mimeType: asset.mediaType,
-          bytes: await dependencies.storage.read(asset.storageKey),
+          bytes,
         };
+        exportBytes += bytes.byteLength;
       } catch {
         // The exporter will emit a deterministic missing-asset diagnostic.
       }

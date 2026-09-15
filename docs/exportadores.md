@@ -43,8 +43,9 @@ if (result.diagnostics.some(({ severity }) => severity === "error")) {
 
 `files` contém conteúdo textual ou bytes. `manifest` registra target, escopo,
 media type, tamanho e SHA-256 de cada arquivo. O consumidor ainda precisa
-empacotar esses arquivos em ZIP; não existe endpoint HTTP de exportação nesta
-etapa.
+empacotar esses arquivos em ZIP. A aplicação expõe
+`POST /api/v1/projects/:id/exports`, que gera o resultado com ACL e assets do
+projeto.
 
 ## Garantias e validações
 

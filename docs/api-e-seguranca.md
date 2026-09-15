@@ -54,6 +54,7 @@ Todas as rotas abaixo são relativas a `/api/v1`.
 | `PATCH`  | `/teams/:teamId/members/:userId`            | Owner/admin; owner não pode ser alterado            | `projects:write`         |
 | `DELETE` | `/teams/:teamId/members/:userId`            | Owner/admin; owner não pode ser removido            | `projects:write`         |
 | `GET`    | `/projects/:projectId`                      | Membro do projeto                                   | `projects:read`          |
+| `POST`   | `/projects/:projectId/exports`              | Membro do projeto; gera arquivos determinísticos    | `projects:read`          |
 | `PATCH`  | `/projects/:projectId`                      | Owner/editor para nome; somente owner para arquivar | `projects:write`         |
 | `POST`   | `/projects/:projectId/archive`              | Somente owner                                       | `projects:write`         |
 | `POST`   | `/projects/:projectId/members`              | Somente owner                                       | `projects:write`         |
@@ -78,8 +79,8 @@ Todas as rotas abaixo são relativas a `/api/v1`.
 | `POST`   | `/projects/:projectId/comments/:id/resolve` | Owner/editor/commenter                              | `projects:write`         |
 
 Escopos PAT disponíveis: `projects:read`, `projects:write`, `assets:read`,
-`assets:write` e `admin`. O escopo `assets:read` está reservado: ainda não há
-endpoint de leitura/download de assets.
+`assets:write` e `admin`. O escopo `assets:read` está reservado: o endpoint de
+exportação inclui somente assets prontos do projeto.
 
 ## Papéis de projeto
 

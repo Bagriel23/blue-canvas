@@ -76,9 +76,8 @@ Windows.
   disponível para testes e desenvolvimento sem banco.
 - O workspace web ainda não integra o cliente Hocuspocus/Yjs; a colaboração
   simultânea e a presença permanecem na próxima etapa.
-- O endpoint HTTP de exportação e o empacotamento ZIP ainda estão pendentes; a
-  biblioteca determinística em `packages/exporters` e o diálogo web existem.
-- Não há download/listagem de assets na API.
+- O endpoint HTTP de exportação e o empacotamento ZIP estão disponíveis para
+  HTML, React e Preact; assets prontos do projeto são incluídos com limites.
 - Não há transformações estilo Moveable/Selecto no canvas — a seleção é por
   clique e navegação por teclado.
 - Não há Playwright, screenshots de referência ou testes visuais automatizados.

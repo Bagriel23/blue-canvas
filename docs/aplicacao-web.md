@@ -139,6 +139,5 @@ atrás do mesmo reverse proxy que expõe a API.
 - Sem Playwright, screenshots de referência ou testes visuais automatizados.
 - Sem transformações estilo Moveable/Selecto no canvas. A seleção é por clique e
   teclado; arrastar para mover ainda não está implementado.
-- Sem download real de exportações — o diálogo consome
-  `POST /api/v1/projects/:id/exports`, mas o servidor ainda não expõe esse
-  endpoint (Task 9 do plano).
+- Exportações são geradas por `POST /api/v1/projects/:id/exports`; o diálogo
+  empacota os arquivos retornados em ZIP determinístico para download local.
