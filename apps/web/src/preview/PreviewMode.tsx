@@ -13,7 +13,7 @@ import {
   type PreviewInteractionHandler,
   type PreviewState,
 } from "../canvas/Canvas.js";
-import { currentArtboardRoot, findNodeById } from "../canvas/selection.js";
+import { currentArtboardRoot } from "../canvas/selection.js";
 import { useLocale } from "../state/locale.js";
 
 interface PreviewModeProps {
@@ -39,54 +39,68 @@ export function PreviewMode({
   const activePage =
     document.pages.find((entry) => entry.id === activePageId) ??
     document.pages.find((entry) => entry.id === pageId);
-  const activeArtboard = activePage?.artboards[0] ?? initialArtboard;
+  const activeArtboard =
+    activePage?.artboards.find(
+      (entry) => activePage.id === pageId && entry.id === initialArtboard.id,
+    ) ??
+    activePage?.artboards[0] ??
+    initialArtboard;
   const previewState: PreviewState = { variables, openOverlayIds };
 
   const handleInteraction: PreviewInteractionHandler = useCallback(
-    (nodeId, trigger, inputValue) => {
-      const currentArtboard = activePage?.artboards[0];
+    (nodeId, trigger, inputValue, formValues) => {
+      const currentArtboard = activeArtboard;
       if (!currentArtboard) return;
       const root = currentArtboardRoot(
         document,
         activePage?.id ?? activePageId,
         currentArtboard.id,
       );
-      const node = root ? findNodeById(root, nodeId)?.node : null;
-      if (!root || !node) return;
+      const location = root ? findRenderedNode(document, root, nodeId) : null;
+      if (!root || !location) return;
+      const node = location.node;
       for (const interaction of node.interactions ?? []) {
         if (interaction.trigger !== trigger) continue;
-        runPreviewAction(interaction, root, node, inputValue, {
-          navigate: (nextPageId) => {
-            if (!document.pages.some((page) => page.id === nextPageId)) {
-              return;
-            }
-            setHistory((current) => [...current, activePage?.id ?? pageId]);
-            setActivePageId(nextPageId);
-            setOpenOverlayIds(new Set());
+        runPreviewAction(
+          interaction,
+          document,
+          root,
+          node,
+          location.overlayId,
+          inputValue,
+          formValues,
+          {
+            navigate: (nextPageId) => {
+              if (!document.pages.some((page) => page.id === nextPageId)) {
+                return;
+              }
+              setHistory((current) => [...current, activePage?.id ?? pageId]);
+              setActivePageId(nextPageId);
+              setOpenOverlayIds(new Set());
+            },
+            setVariable: (name, value) => {
+              setVariables((current) => ({ ...current, [name]: value }));
+            },
+            openOverlay: (overlayId) => {
+              setOpenOverlayIds((current) => {
+                const next = new Set(current);
+                next.add(overlayId);
+                return next;
+              });
+            },
+            closeOverlay: (overlayId) => {
+              if (!overlayId) return;
+              setOpenOverlayIds((current) => {
+                const next = new Set(current);
+                next.delete(overlayId);
+                return next;
+              });
+            },
           },
-          setVariable: (name, value) => {
-            setVariables((current) => ({ ...current, [name]: value }));
-          },
-          openOverlay: (overlayId) => {
-            setOpenOverlayIds((current) => {
-              const next = new Set(current);
-              next.add(overlayId);
-              return next;
-            });
-          },
-          closeOverlay: () => {
-            const overlayId = findOverlayAncestor(root, node.id);
-            if (!overlayId) return;
-            setOpenOverlayIds((current) => {
-              const next = new Set(current);
-              next.delete(overlayId);
-              return next;
-            });
-          },
-        });
+        );
       }
     },
-    [activePage, activePageId, document, pageId],
+    [activeArtboard, activePage, activePageId, document, pageId],
   );
 
   const goBack = () => {
@@ -189,14 +203,17 @@ interface PreviewActions {
   navigate: (pageId: string) => void;
   setVariable: (name: string, value: PreviewPrimitive) => void;
   openOverlay: (overlayId: string) => void;
-  closeOverlay: () => void;
+  closeOverlay: (overlayId: string | null) => void;
 }
 
 function runPreviewAction(
   interaction: Interaction,
+  document: DesignDocument,
   root: DesignNode,
   source: DesignNode,
+  overlayId: string | null,
   inputValue: string | undefined,
+  formValues: Readonly<Record<string, string>> | undefined,
   actions: PreviewActions,
 ): void {
   const { action } = interaction;
@@ -208,41 +225,102 @@ function runPreviewAction(
       }
       break;
     case "set-variable":
-      actions.setVariable(
-        action.variable,
-        interaction.trigger === "change" && source.kind === "input"
-          ? (inputValue ?? "")
-          : action.value,
-      );
+      {
+        const input = findInputByVariable(source, action.variable);
+        const rawValue = formValues?.[action.variable] ?? inputValue;
+        actions.setVariable(
+          action.variable,
+          rawValue === undefined
+            ? action.value
+            : coerceInputValue(input, rawValue),
+        );
+      }
       break;
     case "open-overlay":
-      if (findNodeById(root, action.overlayId)?.node.kind === "overlay") {
+      if (
+        findRenderedNode(document, root, action.overlayId)?.node.kind ===
+        "overlay"
+      ) {
         actions.openOverlay(action.overlayId);
       }
       break;
     case "close-overlay":
-      actions.closeOverlay();
+      actions.closeOverlay(overlayId);
       break;
     case "filter-collection":
-      actions.setVariable(action.variable, inputValue ?? "");
+      {
+        const input = findInputByVariable(source, action.variable);
+        const rawValue = formValues?.[action.variable] ?? inputValue;
+        if (rawValue !== undefined) {
+          actions.setVariable(
+            action.variable,
+            coerceInputValue(input, rawValue),
+          );
+        }
+      }
       break;
   }
 }
 
-function findOverlayAncestor(root: DesignNode, nodeId: string): string | null {
-  const walk = (node: DesignNode, overlayId: string | null): string | null => {
+interface PreviewNodeLocation {
+  node: DesignNode;
+  overlayId: string | null;
+}
+
+function findRenderedNode(
+  document: DesignDocument,
+  root: DesignNode,
+  nodeId: string,
+): PreviewNodeLocation | null {
+  const walk = (
+    node: DesignNode,
+    overlayId: string | null,
+    visitedComponents: ReadonlySet<string>,
+  ): PreviewNodeLocation | null => {
     const nextOverlay = node.kind === "overlay" ? node.id : overlayId;
-    if (node.id === nodeId) return nextOverlay;
+    if (node.id === nodeId) return { node, overlayId: nextOverlay };
     for (const child of getNodeChildren(node)) {
-      const found = walk(child, nextOverlay);
+      const found = walk(child, nextOverlay, visitedComponents);
       if (found) return found;
+    }
+    if (node.kind === "component-instance") {
+      if (visitedComponents.has(node.componentId)) return null;
+      const component = document.components.find(
+        (entry) => entry.id === node.componentId,
+      );
+      if (!component) return null;
+      const nextVisited = new Set(visitedComponents);
+      nextVisited.add(node.componentId);
+      return walk(component.root, nextOverlay, nextVisited);
     }
     return null;
   };
-  return walk(root, null);
+  return walk(root, null, new Set());
 }
 
-function isSafePreviewUrl(value: string): boolean {
+function findInputByVariable(
+  source: DesignNode,
+  variable: string,
+): Extract<DesignNode, { kind: "input" }> | null {
+  if (source.kind === "input" && source.variable === variable) return source;
+  for (const child of getNodeChildren(source)) {
+    const input = findInputByVariable(child, variable);
+    if (input) return input;
+  }
+  return null;
+}
+
+function coerceInputValue(
+  input: Extract<DesignNode, { kind: "input" }> | null,
+  value: string,
+): PreviewPrimitive {
+  if (input?.inputType !== "number") return value;
+  if (value.trim() === "") return null;
+  const numberValue = Number(value);
+  return Number.isFinite(numberValue) ? numberValue : null;
+}
+
+export function isSafePreviewUrl(value: string): boolean {
   try {
     const parsed = new URL(value, window.location.href);
     return ["http:", "https:", "mailto:", "tel:"].includes(parsed.protocol);

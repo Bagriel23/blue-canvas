@@ -35,7 +35,8 @@ export interface PreviewState {
 export type PreviewInteractionHandler = (
   nodeId: string,
   trigger: "click" | "submit" | "change",
-  value?: string,
+  value?: string | undefined,
+  formValues?: Readonly<Record<string, string>> | undefined,
 ) => void;
 
 export function Canvas({
@@ -313,15 +314,21 @@ function NodeView({
         <input
           {...commonProps}
           type={node.inputType}
+          key={
+            previewing && node.variable
+              ? `${node.id}:${String(previewState?.variables[node.variable] ?? "")}`
+              : node.id
+          }
+          name={node.variable}
           placeholder={node.placeholder}
           readOnly={!previewing}
-          value={
+          defaultValue={
             previewing && node.variable
               ? String(previewState?.variables[node.variable] ?? "")
               : undefined
           }
           onChange={(event) => {
-            if (previewing) {
+            if (previewing && hasInteraction("change")) {
               onInteraction(node.id, "change", event.currentTarget.value);
             }
           }}
@@ -335,7 +342,16 @@ function NodeView({
             event.preventDefault();
             if (previewing && hasInteraction("submit")) {
               event.stopPropagation();
-              onInteraction(node.id, "submit");
+              const values = Object.fromEntries(
+                Array.from(event.currentTarget.elements)
+                  .filter(
+                    (element): element is HTMLInputElement =>
+                      element.tagName === "INPUT" &&
+                      (element as HTMLInputElement).name.length > 0,
+                  )
+                  .map((element) => [element.name, element.value]),
+              );
+              onInteraction(node.id, "submit", undefined, values);
             }
           }}
         >
