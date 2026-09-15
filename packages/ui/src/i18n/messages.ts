@@ -128,6 +128,17 @@ export interface UiMessages {
     targetStatic: string;
     targetReact: string;
     targetPreact: string;
+    targetDescription: string;
+    scopeLabel: string;
+    targetLabel: string;
+    preview: string;
+    fileCount: string;
+    warnings: string;
+    generating: string;
+    generated: string;
+    generatedDescription: string;
+    noSelection: string;
+    download: string;
     start: string;
     close: string;
   };
@@ -266,6 +277,17 @@ const enUs: UiMessages = {
     targetStatic: "HTML / CSS / JavaScript",
     targetReact: "React (Vite)",
     targetPreact: "Preact (Vite)",
+    targetDescription: "Choose a portable output format.",
+    scopeLabel: "Scope",
+    targetLabel: "Format",
+    preview: "Export summary",
+    fileCount: "{count} files",
+    warnings: "{count} warnings",
+    generating: "Generating export…",
+    generated: "Export ready",
+    generatedDescription: "Your files are ready to download.",
+    noSelection: "Select a node before exporting it.",
+    download: "Download ZIP",
     start: "Start export",
     close: "Close",
   },
@@ -405,6 +427,17 @@ const ptBr: UiMessages = {
     targetStatic: "HTML / CSS / JavaScript",
     targetReact: "React (Vite)",
     targetPreact: "Preact (Vite)",
+    targetDescription: "Escolha um formato portátil de saída.",
+    scopeLabel: "Escopo",
+    targetLabel: "Formato",
+    preview: "Resumo da exportação",
+    fileCount: "{count} arquivos",
+    warnings: "{count} avisos",
+    generating: "Gerando exportação…",
+    generated: "Exportação pronta",
+    generatedDescription: "Seus arquivos estão prontos para baixar.",
+    noSelection: "Selecione um nó antes de exportá-lo.",
+    download: "Baixar ZIP",
     start: "Iniciar exportação",
     close: "Fechar",
   },
@@ -542,6 +575,17 @@ const koKr: UiMessages = {
     targetStatic: "HTML / CSS / JavaScript",
     targetReact: "React (Vite)",
     targetPreact: "Preact (Vite)",
+    targetDescription: "휴대 가능한 출력 형식을 선택하세요.",
+    scopeLabel: "범위",
+    targetLabel: "형식",
+    preview: "내보내기 요약",
+    fileCount: "{count}개 파일",
+    warnings: "{count}개 경고",
+    generating: "내보내는 중…",
+    generated: "내보내기 준비 완료",
+    generatedDescription: "파일을 다운로드할 준비가 되었습니다.",
+    noSelection: "내보내기 전에 노드를 선택하세요.",
+    download: "ZIP 다운로드",
     start: "내보내기 시작",
     close: "닫기",
   },

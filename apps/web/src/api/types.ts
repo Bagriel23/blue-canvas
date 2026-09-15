@@ -64,3 +64,28 @@ export interface PersonalAccessTokenSummary {
   expiresAt?: string | null;
   revokedAt?: string | null;
 }
+
+export type ExportTarget = "html" | "react" | "preact";
+export type ExportScope =
+  | { type: "project" }
+  | { type: "page"; pageId: string }
+  | { type: "selection"; nodeIds: string[] };
+
+export interface ExportFileResponse {
+  path: string;
+  content?: string;
+  base64?: string;
+  bytes: number;
+}
+
+export interface ExportResponse {
+  archiveName: string;
+  files: ExportFileResponse[];
+  diagnostics: Array<{
+    severity: "error" | "warning";
+    code: string;
+    nodeId?: string;
+    message: string;
+  }>;
+  manifest: { files: Array<{ path: string; bytes: number }> };
+}
