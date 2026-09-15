@@ -40,47 +40,48 @@ caracteres. Locales aceitos atualmente: `en-US`, `pt-BR` e `ko-KR`.
 
 Todas as rotas abaixo são relativas a `/api/v1`.
 
-| Método   | Rota                                        | Regra principal                                     | Escopo PAT               |
-| -------- | ------------------------------------------- | --------------------------------------------------- | ------------------------ |
-| `GET`    | `/auth/me`                                  | Sessão ou PAT válido                                | Nenhum escopo específico |
-| `POST`   | `/auth/logout`                              | Somente sessão e CSRF                               | Não permitido            |
-| `POST`   | `/invitations`                              | Administrador                                       | `admin`                  |
-| `POST`   | `/projects`                                 | Usuário autenticado                                 | `projects:write`         |
-| `GET`    | `/projects`                                 | Usuário autenticado                                 | `projects:read`          |
-| `GET`    | `/teams`                                    | Membro do time                                      | `projects:read`          |
-| `POST`   | `/teams`                                    | Somente sessão + CSRF; cria time e adiciona owner   | Não permitido para PAT   |
-| `GET`    | `/teams/:teamId`                            | Membro do time; inclui membros                      | `projects:read`          |
-| `POST`   | `/teams/:teamId/members`                    | Owner/admin do time                                 | `projects:write`         |
-| `PATCH`  | `/teams/:teamId/members/:userId`            | Owner/admin; owner não pode ser alterado            | `projects:write`         |
-| `DELETE` | `/teams/:teamId/members/:userId`            | Owner/admin; owner não pode ser removido            | `projects:write`         |
-| `GET`    | `/projects/:projectId`                      | Membro do projeto                                   | `projects:read`          |
-| `POST`   | `/projects/:projectId/exports`              | Membro do projeto; gera arquivos determinísticos    | `projects:read`          |
-| `PATCH`  | `/projects/:projectId`                      | Owner/editor para nome; somente owner para arquivar | `projects:write`         |
-| `POST`   | `/projects/:projectId/archive`              | Somente owner                                       | `projects:write`         |
-| `POST`   | `/projects/:projectId/members`              | Somente owner                                       | `projects:write`         |
-| `GET`    | `/projects/:projectId/members`              | Somente owner                                       | `projects:read`          |
-| `POST`   | `/projects/:projectId/invitations`          | Somente owner                                       | `projects:write`         |
-| `PATCH`  | `/projects/:projectId/members/:userId`      | Somente owner                                       | `projects:write`         |
-| `DELETE` | `/projects/:projectId/members/:userId`      | Somente owner; owner não pode ser removido          | `projects:write`         |
-| `POST`   | `/personal-access-tokens`                   | Somente sessão e CSRF                               | Não permitido            |
-| `GET`    | `/personal-access-tokens`                   | Somente sessão                                      | Não permitido            |
-| `DELETE` | `/personal-access-tokens/:tokenId`          | Somente sessão e CSRF                               | Não permitido            |
-| `GET`    | `/audit-events`                             | Administrador                                       | `admin`                  |
-| `GET`    | `/projects/:projectId/audit-events`         | Somente owner                                       | `projects:read`          |
-| `POST`   | `/projects/:projectId/assets`               | Owner/editor                                        | `assets:write`           |
-| `GET`    | `/projects/:projectId/versions`             | Qualquer membro; projeto ativo                      | `projects:read`          |
-| `POST`   | `/projects/:projectId/versions`             | Owner/editor                                        | `projects:write`         |
-| `GET`    | `/projects/:projectId/versions/:id`         | Qualquer membro; projeto ativo                      | `projects:read`          |
-| `POST`   | `/projects/:projectId/versions/:id/restore` | Owner/editor; cria nova versão                      | `projects:write`         |
-| `GET`    | `/projects/:projectId/comments`             | Qualquer membro; projeto ativo                      | `projects:read`          |
-| `POST`   | `/projects/:projectId/comments`             | Owner/editor/commenter                              | `projects:write`         |
-| `GET`    | `/projects/:projectId/comments/:id`         | Qualquer membro; projeto ativo                      | `projects:read`          |
-| `PATCH`  | `/projects/:projectId/comments/:id`         | Autor owner/editor/commenter                        | `projects:write`         |
-| `POST`   | `/projects/:projectId/comments/:id/resolve` | Owner/editor/commenter                              | `projects:write`         |
+| Método   | Rota                                        | Regra principal                                     | Escopo PAT                      |
+| -------- | ------------------------------------------- | --------------------------------------------------- | ------------------------------- |
+| `GET`    | `/auth/me`                                  | Sessão ou PAT válido                                | Nenhum escopo específico        |
+| `POST`   | `/auth/logout`                              | Somente sessão e CSRF                               | Não permitido                   |
+| `POST`   | `/invitations`                              | Administrador                                       | `admin`                         |
+| `POST`   | `/projects`                                 | Usuário autenticado                                 | `projects:write`                |
+| `GET`    | `/projects`                                 | Usuário autenticado                                 | `projects:read`                 |
+| `GET`    | `/teams`                                    | Membro do time                                      | `projects:read`                 |
+| `POST`   | `/teams`                                    | Somente sessão + CSRF; cria time e adiciona owner   | Não permitido para PAT          |
+| `GET`    | `/teams/:teamId`                            | Membro do time; inclui membros                      | `projects:read`                 |
+| `POST`   | `/teams/:teamId/members`                    | Owner/admin do time                                 | `projects:write`                |
+| `PATCH`  | `/teams/:teamId/members/:userId`            | Owner/admin; owner não pode ser alterado            | `projects:write`                |
+| `DELETE` | `/teams/:teamId/members/:userId`            | Owner/admin; owner não pode ser removido            | `projects:write`                |
+| `GET`    | `/projects/:projectId`                      | Membro do projeto                                   | `projects:read`                 |
+| `POST`   | `/projects/:projectId/exports`              | Membro do projeto; gera arquivos determinísticos    | `projects:read` + `assets:read` |
+| `PATCH`  | `/projects/:projectId`                      | Owner/editor para nome; somente owner para arquivar | `projects:write`                |
+| `POST`   | `/projects/:projectId/archive`              | Somente owner                                       | `projects:write`                |
+| `POST`   | `/projects/:projectId/members`              | Somente owner                                       | `projects:write`                |
+| `GET`    | `/projects/:projectId/members`              | Somente owner                                       | `projects:read`                 |
+| `POST`   | `/projects/:projectId/invitations`          | Somente owner                                       | `projects:write`                |
+| `PATCH`  | `/projects/:projectId/members/:userId`      | Somente owner                                       | `projects:write`                |
+| `DELETE` | `/projects/:projectId/members/:userId`      | Somente owner; owner não pode ser removido          | `projects:write`                |
+| `POST`   | `/personal-access-tokens`                   | Somente sessão e CSRF                               | Não permitido                   |
+| `GET`    | `/personal-access-tokens`                   | Somente sessão                                      | Não permitido                   |
+| `DELETE` | `/personal-access-tokens/:tokenId`          | Somente sessão e CSRF                               | Não permitido                   |
+| `GET`    | `/audit-events`                             | Administrador                                       | `admin`                         |
+| `GET`    | `/projects/:projectId/audit-events`         | Somente owner                                       | `projects:read`                 |
+| `POST`   | `/projects/:projectId/assets`               | Owner/editor                                        | `assets:write`                  |
+| `GET`    | `/projects/:projectId/versions`             | Qualquer membro; projeto ativo                      | `projects:read`                 |
+| `POST`   | `/projects/:projectId/versions`             | Owner/editor                                        | `projects:write`                |
+| `GET`    | `/projects/:projectId/versions/:id`         | Qualquer membro; projeto ativo                      | `projects:read`                 |
+| `POST`   | `/projects/:projectId/versions/:id/restore` | Owner/editor; cria nova versão                      | `projects:write`                |
+| `GET`    | `/projects/:projectId/comments`             | Qualquer membro; projeto ativo                      | `projects:read`                 |
+| `POST`   | `/projects/:projectId/comments`             | Owner/editor/commenter                              | `projects:write`                |
+| `GET`    | `/projects/:projectId/comments/:id`         | Qualquer membro; projeto ativo                      | `projects:read`                 |
+| `PATCH`  | `/projects/:projectId/comments/:id`         | Autor owner/editor/commenter                        | `projects:write`                |
+| `POST`   | `/projects/:projectId/comments/:id/resolve` | Owner/editor/commenter                              | `projects:write`                |
 
 Escopos PAT disponíveis: `projects:read`, `projects:write`, `assets:read`,
-`assets:write` e `admin`. O escopo `assets:read` está reservado: o endpoint de
-exportação inclui somente assets prontos do projeto.
+`assets:write` e `admin`. Exportações via PAT exigem os escopos combinados
+`projects:read` e `assets:read`; somente assets prontos do projeto são
+incluídos.
 
 ## Papéis de projeto
 
