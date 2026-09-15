@@ -1266,7 +1266,7 @@ describe("application server", () => {
       passwordHash: await dependencies.passwordHasher.hash(PASSWORD),
       locale: "en-US",
       isAdmin: false,
-      now: dependencies.now(),
+      now: dependencies.now?.() ?? new Date(),
     });
     const added = await owner.app.inject({
       method: "POST",
