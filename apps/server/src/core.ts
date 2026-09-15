@@ -669,6 +669,61 @@ export class ApplicationService {
     return project;
   }
 
+  async getProjectDocument(
+    principal: Principal,
+    projectId: string,
+  ): Promise<{ revision: number; document: unknown }> {
+    await this.requireCollaborationRole(principal, projectId, false);
+    return this.dependencies.repository.transaction(async (repository) => {
+      await this.requireCollaborationRole(
+        principal,
+        projectId,
+        false,
+        repository,
+      );
+      const project = await repository.findProjectById(projectId);
+      if (!project) throw new ApiError("not_found", "Project not found", 404);
+
+      let persisted = await repository.findProjectDocument(projectId);
+      if (!persisted) {
+        const initial = createInitialCollaborationDocument(
+          project.id,
+          project.name,
+        );
+        try {
+          const encoded = encodeCollaborationState(initial);
+          persisted = await repository.upsertProjectDocument({
+            projectId,
+            ...encoded,
+            expectedRevision: 0,
+            now: this.dependencies.now(),
+          });
+        } catch (error) {
+          if (
+            !(error instanceof ApiError) ||
+            error.code !== "revision_conflict"
+          )
+            throw error;
+          persisted = await repository.findProjectDocument(projectId);
+          if (!persisted) throw error;
+        } finally {
+          initial.destroy();
+        }
+      }
+
+      const yDocument = new Y.Doc();
+      try {
+        applyCollaborationState(yDocument, persisted.state);
+        return {
+          revision: persisted.revision,
+          document: readSemanticDocument(yDocument),
+        };
+      } finally {
+        yDocument.destroy();
+      }
+    });
+  }
+
   async updateProject(
     principal: Principal,
     projectId: string,

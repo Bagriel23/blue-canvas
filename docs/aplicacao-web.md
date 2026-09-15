@@ -65,9 +65,14 @@ selecionados recebem `data-selected="true"` para o outline azul definido em
 `global.css`.
 
 O inspetor edita o nome do nó, o conteúdo de nós de texto e mostra propriedades
-principais de estilo e layout. Alterações produzem novos snapshots imutáveis do
-documento (`transformNode`), preparando o terreno para publicar comandos ao
-servidor quando o cliente Yjs for adicionado.
+principais de estilo e layout. Ao abrir um projeto, o `Workspace` busca
+`GET /api/v1/projects/:id/document`, exibe estados de carregamento/erro/retry e
+usa o nome retornado pelo projeto no cabeçalho do canvas. Alterações são
+aplicadas de forma otimista e enviadas como comandos `update-node` serializados
+em `POST /api/v1/projects/:id/commands`, com chave de idempotência e revisão
+base. Em um conflito de revisão, o cliente busca a versão atual e reaplica a
+fila local antes de continuar, mantendo a edição do usuário sem colaboração Yjs
+nesta etapa.
 
 ## Dependências principais
 
@@ -93,10 +98,8 @@ atrás do mesmo reverse proxy que expõe a API.
 
 ## Limitações atuais
 
-- Sem integração com o cliente Hocuspocus/Yjs. O documento de trabalho ainda usa
-  um fixture local em `apps/web/src/fixtures/demo.ts`.
-- Sem persistência das edições no servidor. Os manipuladores do inspetor
-  atualizam apenas o estado em memória.
+- Sem integração com o cliente Hocuspocus/Yjs; a fila HTTP é a sincronização
+  usada nesta etapa.
 - Sem Playwright, screenshots de referência ou testes visuais automatizados.
 - Sem transformações estilo Moveable/Selecto no canvas. A seleção é por clique e
   teclado; arrastar para mover ainda não está implementado.

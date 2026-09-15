@@ -245,6 +245,37 @@ describe("application server", () => {
     expect(invalidTrace.json().error.traceId).toMatch(/^[a-f0-9-]{36}$/);
   });
 
+  it("reads and initializes the semantic project document", async () => {
+    const admin = await bootstrap();
+    const projectResponse = await admin.app.inject({
+      method: "POST",
+      url: "/api/v1/projects",
+      headers: { cookie: admin.cookie, "x-csrf-token": admin.csrf },
+      payload: { name: "Persisted canvas" },
+    });
+    const projectId = projectResponse.json().project.id as string;
+
+    const first = await admin.app.inject({
+      method: "GET",
+      url: `/api/v1/projects/${projectId}/document`,
+      headers: { cookie: admin.cookie },
+    });
+    expect(first.statusCode).toBe(200);
+    expect(first.json()).toMatchObject({
+      project: { id: projectId, name: "Persisted canvas" },
+      revision: 1,
+      document: { name: "Persisted canvas", schemaVersion: 1 },
+    });
+
+    const second = await admin.app.inject({
+      method: "GET",
+      url: `/api/v1/projects/${projectId}/document`,
+      headers: { cookie: admin.cookie },
+    });
+    expect(second.json().revision).toBe(1);
+    expect(second.json().document.id).toBe(projectId);
+  });
+
   it("reports repository readiness failures as unavailable", async () => {
     const unavailableRepository = new InMemoryRepository();
     unavailableRepository.isReady = async () => {

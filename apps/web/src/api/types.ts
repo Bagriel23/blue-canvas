@@ -1,4 +1,5 @@
 import type { UiLocale } from "@blue-canvas/ui";
+import type { DesignDocument } from "@blue-canvas/document";
 
 export interface UserSummary {
   id: string;
@@ -22,6 +23,12 @@ export interface ProjectSummary {
   createdAt: string;
   updatedAt: string;
   role: "owner" | "editor" | "commenter" | "viewer";
+}
+
+export interface ProjectDocumentResponse {
+  project: ProjectSummary;
+  revision: number;
+  document: DesignDocument;
 }
 
 export interface ProjectMember {

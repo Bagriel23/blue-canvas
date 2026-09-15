@@ -465,6 +465,16 @@ export function buildApp(dependencies: ServerDependencies): FastifyInstance {
     };
   });
 
+  app.get("/api/v1/projects/:projectId/document", async (request) => {
+    const principal = await authenticate(request, { scope: "projects:read" });
+    const projectId = identifier(request, "projectId");
+    const [project, document] = await Promise.all([
+      service.getProject(principal, projectId),
+      service.getProjectDocument(principal, projectId),
+    ]);
+    return { project, ...document };
+  });
+
   app.patch("/api/v1/projects/:projectId", async (request) => {
     const principal = await authenticate(request, {
       mutating: true,

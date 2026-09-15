@@ -64,6 +64,12 @@ export interface UiMessages {
     zoomOut: string;
     zoomIn: string;
     fitCanvas: string;
+    loading: string;
+    loadError: string;
+    retry: string;
+    saving: string;
+    saved: string;
+    conflict: string;
   };
   share: {
     heading: string;
@@ -152,6 +158,13 @@ const enUs: UiMessages = {
     zoomOut: "Zoom out",
     zoomIn: "Zoom in",
     fitCanvas: "Fit canvas",
+    loading: "Loading workspace…",
+    loadError: "Could not load this workspace.",
+    retry: "Retry",
+    saving: "Saving…",
+    saved: "Saved",
+    conflict:
+      "Your changes were kept locally while the document was updated elsewhere.",
   },
   share: {
     heading: "Share project",
@@ -241,6 +254,13 @@ const ptBr: UiMessages = {
     zoomOut: "Diminuir zoom",
     zoomIn: "Aumentar zoom",
     fitCanvas: "Ajustar canvas",
+    loading: "Carregando workspace…",
+    loadError: "Não foi possível carregar este workspace.",
+    retry: "Tentar novamente",
+    saving: "Salvando…",
+    saved: "Salvo",
+    conflict:
+      "Suas alterações foram mantidas localmente enquanto o documento era atualizado em outro lugar.",
   },
   share: {
     heading: "Compartilhar projeto",
@@ -328,6 +348,13 @@ const koKr: UiMessages = {
     zoomOut: "축소",
     zoomIn: "확대",
     fitCanvas: "캔버스 맞춤",
+    loading: "워크스페이스 로드 중…",
+    loadError: "이 워크스페이스를 불러올 수 없습니다.",
+    retry: "다시 시도",
+    saving: "저장 중…",
+    saved: "저장됨",
+    conflict:
+      "문서가 다른 곳에서 업데이트되는 동안 변경 사항을 로컬에 유지했습니다.",
   },
   share: {
     heading: "프로젝트 공유",

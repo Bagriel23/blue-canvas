@@ -26,6 +26,10 @@ Este documento descreve o estado observado no código. O plano completo está em
   CSRF, workspace de três painéis, canvas DOM semântico com seleção por clique e
   teclado e diálogos de compartilhamento e exportação. Detalhes em
   [Aplicação web](aplicacao-web.md).
+- Workspace conectado ao documento semântico persistido via
+  `GET /api/v1/projects/:id/document`, com loading/error/retry, título do
+  projeto, comandos `update-node` otimistas, fila HTTP serializada, idempotência
+  e rebase local em conflitos de revisão.
 - Biblioteca de kits e templates com manifestos versionados, ciclo draft →
   published → deprecated, revisão administrativa, duplicação com bump de patch e
   diagnóstico de compatibilidade. Três kits (SEDA Enterprise, Wireframe, Neutral
@@ -58,8 +62,8 @@ Windows.
 - A biblioteca de kits e templates ainda armazena registros em memória; os
   drafts criados por usuários somem quando o processo é reiniciado. A camada
   Prisma para library ainda não existe.
-- O workspace web ainda usa fixture local para o canvas; a integração do cliente
-  com Hocuspocus/Yjs e a persistência de edições do inspetor estão pendentes.
+- O workspace web ainda não integra o cliente Hocuspocus/Yjs; a colaboração
+  simultânea e a presença permanecem na próxima etapa.
 - O endpoint HTTP de exportação e o empacotamento ZIP ainda estão pendentes; a
   biblioteca determinística em `packages/exporters` e o diálogo web existem.
 - Não há download/listagem de assets na API.
