@@ -303,7 +303,7 @@ describe("collaboration domain", () => {
     expect(secondCompleted).toBe(true);
   });
 
-  it("preserves a concurrent Yjs edit when rebase rollback follows it", async () => {
+  it("does not persist an unconfirmed command after concurrent rollback", async () => {
     const { repository, service, project } = await fixture();
     const initial = createInitialCollaborationDocument(
       project.id,
@@ -371,8 +371,8 @@ describe("collaboration domain", () => {
         ),
       ).rejects.toThrow("receipt update failed");
       expect(readSemanticDocument(active)).toMatchObject({
-        name: "Concurrent rollback edit",
-        tokens: { brand: { type: "color", value: "#1428A0" } },
+        name: "Canvas",
+        tokens: {},
       });
     } finally {
       manager.hocuspocus.documents.delete(project.id);

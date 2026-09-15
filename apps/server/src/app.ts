@@ -488,18 +488,20 @@ export function buildApp(dependencies: ServerDependencies): FastifyInstance {
   app.get("/api/v1/projects/:projectId/document", async (request) => {
     const principal = await authenticate(request, { scope: "projects:read" });
     const projectId = identifier(request, "projectId");
-    const project = await service.getProject(principal, projectId);
-    const member = await service.collaborationAccess(
-      principal,
-      projectId,
-      false,
-    );
-    await collaboration.flushProject(projectId);
-    const document = await service.getProjectDocument(principal, projectId);
-    return {
-      project: projectSummaryResponse(project, member.role),
-      ...document,
-    };
+    return collaboration.withProjectLock(projectId, async () => {
+      const project = await service.getProject(principal, projectId);
+      const member = await service.collaborationAccess(
+        principal,
+        projectId,
+        false,
+      );
+      await collaboration.flushProject(projectId);
+      const document = await service.getProjectDocument(principal, projectId);
+      return {
+        project: projectSummaryResponse(project, member.role),
+        ...document,
+      };
+    });
   });
 
   app.patch("/api/v1/projects/:projectId", async (request) => {
@@ -656,14 +658,16 @@ export function buildApp(dependencies: ServerDependencies): FastifyInstance {
       scope: "projects:write",
     });
     const projectId = identifier(request, "projectId");
-    await collaboration.flushProject(projectId);
-    const version = await service.createNamedVersion(
-      principal,
-      projectId,
-      parse(createNamedVersionRequestSchema, request.body),
-      request.id,
-    );
-    return reply.code(201).send({ version: versionResponse(version) });
+    return collaboration.withProjectLock(projectId, async () => {
+      await collaboration.flushProject(projectId);
+      const version = await service.createNamedVersion(
+        principal,
+        projectId,
+        parse(createNamedVersionRequestSchema, request.body),
+        request.id,
+      );
+      return reply.code(201).send({ version: versionResponse(version) });
+    });
   });
 
   app.post("/api/v1/projects/:projectId/commands", async (request, reply) => {
@@ -734,20 +738,22 @@ export function buildApp(dependencies: ServerDependencies): FastifyInstance {
         scope: "projects:write",
       });
       const projectId = identifier(request, "projectId");
-      await service.collaborationAccess(principal, projectId, true);
-      const finishRestore = await collaboration.prepareRestore(projectId);
-      try {
-        const version = await service.restoreNamedVersion(
-          principal,
-          projectId,
-          identifier(request, "versionId"),
-          parse(restoreNamedVersionRequestSchema, request.body),
-          request.id,
-        );
-        return reply.code(201).send({ version: versionResponse(version) });
-      } finally {
-        finishRestore();
-      }
+      return collaboration.withProjectLock(projectId, async () => {
+        await service.collaborationAccess(principal, projectId, true);
+        const finishRestore = await collaboration.prepareRestore(projectId);
+        try {
+          const version = await service.restoreNamedVersion(
+            principal,
+            projectId,
+            identifier(request, "versionId"),
+            parse(restoreNamedVersionRequestSchema, request.body),
+            request.id,
+          );
+          return reply.code(201).send({ version: versionResponse(version) });
+        } finally {
+          finishRestore();
+        }
+      });
     },
   );
 

@@ -55,6 +55,7 @@ export class CollaborationManager {
   private readonly restoring = new Set<string>();
   private readonly projectLocks = new Map<string, Promise<void>>();
   private readonly lockContext = new AsyncLocalStorage<Set<string>>();
+  private readonly messageReleases = new Map<string, () => void>();
 
   constructor(private readonly dependencies: CollaborationManagerDependencies) {
     this.hocuspocus = new Hocuspocus<CollaborationContext>({
@@ -141,6 +142,19 @@ export class CollaborationManager {
           }
           return document;
         }),
+      beforeHandleMessage: async ({ documentName, socketId }) => {
+        const key = messageLockKey(documentName, socketId);
+        const release = await this.acquireProjectLock(documentName);
+        this.messageReleases.set(key, release);
+      },
+      afterHandleMessage: async ({ documentName, socketId }) => {
+        const key = messageLockKey(documentName, socketId);
+        const release = this.messageReleases.get(key);
+        if (release) {
+          this.messageReleases.delete(key);
+          release();
+        }
+      },
       beforeSync: async ({
         context,
         connection,
@@ -148,8 +162,8 @@ export class CollaborationManager {
         documentName,
         payload,
         type,
-      }) =>
-        this.withProjectLock(documentName, async () => {
+      }) => {
+        const operation = async () => {
           if (type !== 1 && type !== 2) return;
           const canWrite = await this.revalidate(
             context,
@@ -164,7 +178,13 @@ export class CollaborationManager {
             connection.readOnly = true;
             connection.close({ code: 1009, reason: "update-rejected" });
           }
-        }),
+        };
+        return this.messageReleases.has(
+          messageLockKey(documentName, connection.socketId),
+        )
+          ? operation()
+          : this.withProjectLock(documentName, operation);
+      },
       onStoreDocument: async ({ document, documentName }) =>
         this.withProjectLock(documentName, async () => {
           const encoded = encodeCollaborationState(document);
@@ -182,6 +202,12 @@ export class CollaborationManager {
           });
         }),
       onDisconnect: async ({ context, documentName, socketId }) => {
+        const key = messageLockKey(documentName, socketId);
+        const release = this.messageReleases.get(key);
+        if (release) {
+          this.messageReleases.delete(key);
+          release();
+        }
         if (context.writerReserved) this.releaseWriter(documentName, socketId);
       },
     });
@@ -207,6 +233,12 @@ export class CollaborationManager {
   }
 
   async prepareRestore(projectId: string): Promise<() => void> {
+    return this.withProjectLock(projectId, () =>
+      this.prepareRestoreUnlocked(projectId),
+    );
+  }
+
+  private async prepareRestoreUnlocked(projectId: string): Promise<() => void> {
     if (this.restoring.has(projectId))
       throw new ApiError(
         "restore_in_progress",
@@ -249,22 +281,30 @@ export class CollaborationManager {
     const held = this.lockContext.getStore();
     if (held?.has(projectId)) return operation();
 
-    const preceding = this.projectLocks.get(projectId) ?? Promise.resolve();
-    let release!: () => void;
-    const current = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    this.projectLocks.set(projectId, current);
-    await preceding;
+    const release = await this.acquireProjectLock(projectId);
     try {
       const nextHeld = new Set(held ?? []);
       nextHeld.add(projectId);
       return await this.lockContext.run(nextHeld, operation);
     } finally {
       release();
-      if (this.projectLocks.get(projectId) === current)
-        this.projectLocks.delete(projectId);
     }
+  }
+
+  private async acquireProjectLock(projectId: string): Promise<() => void> {
+    if (this.lockContext.getStore()?.has(projectId)) return () => undefined;
+    const preceding = this.projectLocks.get(projectId) ?? Promise.resolve();
+    let release!: () => void;
+    const current = new Promise<void>((resolve) => {
+      release = () => {
+        resolve();
+        if (this.projectLocks.get(projectId) === current)
+          this.projectLocks.delete(projectId);
+      };
+    });
+    this.projectLocks.set(projectId, current);
+    await preceding;
+    return release;
   }
 
   captureProjectStateVector(projectId: string): Uint8Array | undefined {
@@ -325,7 +365,6 @@ export class CollaborationManager {
       throw new ApiError("not_found", "Project document not found", 404);
 
     const previous = structuredClone(readSemanticDocument(document));
-    let producedStateVector: Uint8Array | undefined;
     let committed = false;
     try {
       let rebased;
@@ -347,7 +386,6 @@ export class CollaborationManager {
       if (!rebased) throw new Error("Command rebase produced no document");
       const rebasedDocument = structuredClone(readSemanticDocument(document));
       const encoded = encodeCollaborationState(document);
-      producedStateVector = encoded.stateVector;
       const updated = await this.dependencies.repository.transaction(
         async (repository) => {
           const persisted = await repository.findProjectDocument(projectId);
@@ -393,21 +431,12 @@ export class CollaborationManager {
       };
     } catch (error) {
       if (!committed) {
-        const currentStateVector =
-          encodeCollaborationState(document).stateVector;
-        if (
-          producedStateVector &&
-          !bytesEqual(producedStateVector, currentStateVector)
-        ) {
-          await this.flushProject(projectId);
-        } else {
-          document.transact(
-            () => {
-              replaceSemanticDocument(document, previous);
-            },
-            { source: "local", skipStoreHooks: true },
-          );
-        }
+        document.transact(
+          () => {
+            replaceSemanticDocument(document, previous);
+          },
+          { source: "local", skipStoreHooks: true },
+        );
       }
       if (!(error instanceof CommandError)) throw error;
       const invalid = new Set([
@@ -517,6 +546,10 @@ export class CollaborationManager {
 function bytesEqual(left: Uint8Array, right: Uint8Array): boolean {
   if (left.byteLength !== right.byteLength) return false;
   return left.every((byte, index) => byte === right[index]);
+}
+
+function messageLockKey(projectId: string, socketId: string): string {
+  return `${projectId}:${socketId}`;
 }
 
 function credentialFrom(
