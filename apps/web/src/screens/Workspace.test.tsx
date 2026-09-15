@@ -286,6 +286,85 @@ describe("Workspace persistence", () => {
     expect(screen.getByText("Project B")).toBeTruthy();
     expect(screen.queryByText("Project A")).toBeNull();
   });
+
+  it("does not apply a stale recovery error after switching project", async () => {
+    const recovery = deferred<Response>();
+    let projectACalls = 0;
+    const fetcher = vi.fn((input: RequestInfo | URL) => {
+      const path = String(input);
+      if (path.endsWith("project-a/document")) {
+        projectACalls += 1;
+        if (projectACalls === 1) {
+          return Promise.resolve(
+            jsonResponse({
+              project: { id: "project-a", name: "Project A", archived: false },
+              revision: 1,
+              document: loadDemoDocument(),
+            }),
+          );
+        }
+        return recovery.promise;
+      }
+      if (path.endsWith("project-a/commands")) {
+        return Promise.resolve(
+          jsonResponse(
+            {
+              error: {
+                code: "revision_conflict",
+                message: "Document revision changed",
+                traceId: "trace-conflict",
+              },
+            },
+            409,
+          ),
+        );
+      }
+      return Promise.resolve(
+        jsonResponse({
+          project: { id: "project-b", name: "Project B", archived: false },
+          revision: 2,
+          document: { ...loadDemoDocument(), name: "Project B" },
+        }),
+      );
+    });
+
+    const view = renderWorkspace(fetcher, "project-a");
+    await waitFor(() => expect(screen.getByText("Project A")).toBeTruthy());
+    fireEvent.click(
+      screen.getByText("Design internal tools together, offline."),
+    );
+    fireEvent.change(await screen.findByLabelText("Name"), {
+      target: { value: "Pending A" },
+    });
+    await waitFor(() => expect(projectACalls).toBe(2));
+
+    view.rerender(
+      <SessionProvider
+        client={new ApiClient({ fetch: fetcher })}
+        initialSession={session}
+      >
+        <LocaleProvider initialLocale="en-US">
+          <Workspace projectId="project-b" />
+        </LocaleProvider>
+      </SessionProvider>,
+    );
+    await waitFor(() => expect(screen.getByText("Project B")).toBeTruthy());
+    recovery.resolve(
+      jsonResponse(
+        {
+          error: {
+            code: "internal_error",
+            message: "Unavailable",
+            traceId: "trace-load",
+          },
+        },
+        503,
+      ),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(screen.getByText("Project B")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
+  });
 });
 
 function deferred<T>() {

@@ -231,6 +231,7 @@ export function Workspace({ projectId, editable = true }: WorkspaceProps) {
             editor.document = rebased;
             updateDocument(rebased, "conflict", messages.workspace.conflict);
           } catch (recoveryError) {
+            if (editorRef.current.generation !== generation) break;
             updateDocument(
               editor.document,
               "error",
