@@ -681,9 +681,26 @@ export class PrismaRepository implements RepositoryPort {
     projectId: string,
     userId: string,
   ): Promise<ProjectMember | undefined> {
-    await this.client
-      .$queryRaw`SELECT id FROM projects WHERE id = ${projectId} FOR UPDATE`;
-    return this.findProjectMember(projectId, userId);
+    const members = await this.client.$queryRaw<
+      Array<{
+        id: string;
+        projectId: string;
+        userId: string;
+        role: ProjectMember["role"];
+        createdAt: Date;
+        updatedAt: Date;
+      }>
+    >`
+      SELECT id
+        , projectId
+        , userId
+        , role
+        , createdAt
+        , updatedAt
+      FROM project_members
+      WHERE projectId = ${projectId} AND userId = ${userId}
+      FOR UPDATE`;
+    return members[0];
   }
 
   async addProjectMember(
