@@ -74,6 +74,72 @@ describe("teams and project sharing API", () => {
     expect(listed.json().teams).toHaveLength(1);
   });
 
+  it("protects team ACL mutations and rejects duplicate members", async () => {
+    const repository = dependencies.repository as InMemoryRepository;
+    const app = buildApp(dependencies);
+    const bootstrap = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/bootstrap-admin",
+      payload: {
+        email: "owner@example.com",
+        displayName: "Owner",
+        password: PASSWORD,
+        setupSecret: "development setup secret",
+      },
+    });
+    const cookie = cookieFrom(bootstrap);
+    const csrf = bootstrap.json().csrfToken as string;
+    const member = await repository.createUser({
+      email: "member@example.com",
+      displayName: "Member",
+      passwordHash: await dependencies.passwordHasher.hash(PASSWORD),
+      locale: "en-US",
+      isAdmin: false,
+      now: dependencies.now?.() ?? new Date(),
+    });
+    const team = await app.inject({
+      method: "POST",
+      url: "/api/v1/teams",
+      headers: { cookie, "x-csrf-token": csrf },
+      payload: { name: "ACL team" },
+    });
+    const teamId = team.json().team.id as string;
+    const added = await app.inject({
+      method: "POST",
+      url: `/api/v1/teams/${teamId}/members`,
+      headers: { cookie, "x-csrf-token": csrf },
+      payload: { email: member.email, role: "member" },
+    });
+    expect(added.statusCode).toBe(201);
+    const duplicate = await app.inject({
+      method: "POST",
+      url: `/api/v1/teams/${teamId}/members`,
+      headers: { cookie, "x-csrf-token": csrf },
+      payload: { email: member.email, role: "member" },
+    });
+    expect(duplicate.statusCode).toBe(409);
+    const ownerUpdate = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/teams/${teamId}/members/${bootstrap.json().user.id}`,
+      headers: { cookie, "x-csrf-token": csrf },
+      payload: { role: "admin" },
+    });
+    expect(ownerUpdate.statusCode).toBe(409);
+    const ownerRemove = await app.inject({
+      method: "DELETE",
+      url: `/api/v1/teams/${teamId}/members/${bootstrap.json().user.id}`,
+      headers: { cookie, "x-csrf-token": csrf },
+    });
+    expect(ownerRemove.statusCode).toBe(409);
+    const missingCsrf = await app.inject({
+      method: "POST",
+      url: "/api/v1/teams",
+      headers: { cookie },
+      payload: { name: "Blocked" },
+    });
+    expect(missingCsrf.statusCode).toBe(403);
+  });
+
   it("returns project members and keeps project invitations available", async () => {
     const app = buildApp(dependencies);
     const bootstrap = await app.inject({
@@ -113,6 +179,6 @@ describe("teams and project sharing API", () => {
       payload: { email: "designer@example.com", role: "editor" },
     });
     expect(invitation.statusCode).toBe(201);
-    expect(invitation.json().manualLink).toContain("accept-invitation");
+    expect(invitation.json().manualLink).toContain("/#/invitation?token=");
   });
 });

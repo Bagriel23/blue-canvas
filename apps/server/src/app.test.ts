@@ -196,9 +196,10 @@ describe("application server", () => {
       "https://blue-canvas.test",
     );
     expect(manualLink.search).toBe("");
-    expect(new URLSearchParams(manualLink.hash.slice(1)).get("token")).toBe(
-      invitation.json().token,
-    );
+    expect(manualLink.hash.startsWith("#/invitation?token=")).toBe(true);
+    expect(
+      decodeURIComponent(manualLink.hash.slice("#/invitation?token=".length)),
+    ).toBe(invitation.json().token);
     const accepted = await admin.app.inject({
       method: "POST",
       url: "/api/v1/auth/invitations/accept",
@@ -419,9 +420,10 @@ describe("application server", () => {
       "https://blue-canvas.test",
     );
     expect(manualLink.search).toBe("");
-    expect(new URLSearchParams(manualLink.hash.slice(1)).get("token")).toBe(
-      token,
-    );
+    expect(manualLink.hash.startsWith("#/invitation?token=")).toBe(true);
+    expect(
+      decodeURIComponent(manualLink.hash.slice("#/invitation?token=".length)),
+    ).toBe(token);
     expect(JSON.stringify(repository.snapshot())).not.toContain(token);
 
     const accepted = await admin.app.inject({
@@ -1102,9 +1104,10 @@ describe("application server", () => {
       "https://blue-canvas.test",
     );
     expect(manualLink.search).toBe("");
-    expect(new URLSearchParams(manualLink.hash.slice(1)).get("token")).toBe(
-      invitation.json().token,
-    );
+    expect(manualLink.hash.startsWith("#/invitation?token=")).toBe(true);
+    expect(
+      decodeURIComponent(manualLink.hash.slice("#/invitation?token=".length)),
+    ).toBe(invitation.json().token);
 
     const accepted = await owner.app.inject({
       method: "POST",

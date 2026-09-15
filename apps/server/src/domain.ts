@@ -262,7 +262,7 @@ export interface RepositoryPort {
     role: TeamRole,
     now: Date,
   ): Promise<TeamMember | undefined>;
-  removeTeamMember(teamId: string, userId: string): Promise<boolean>;
+  removeTeamMember(teamId: string, userId: string, now: Date): Promise<boolean>;
   createPersonalAccessToken(input: {
     userId: string;
     name: string;

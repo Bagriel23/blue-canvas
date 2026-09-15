@@ -20,8 +20,8 @@ segredo de CSRF.
 
 Tokens brutos de sessão, convite, CSRF e PAT não são persistidos. O servidor
 armazena hashes SHA-256. Senhas usam Argon2id. Convites e PATs são exibidos em
-texto puro apenas na criação. Links manuais de convite carregam o token no
-fragmento `#token=...`, que não faz parte da URL enviada ao servidor.
+texto puro apenas na criação. Links manuais de convite usam a rota hash
+`#/invitation?token=...`; o token não faz parte da URL enviada ao servidor.
 
 ## Rotas públicas
 
@@ -47,10 +47,17 @@ Todas as rotas abaixo são relativas a `/api/v1`.
 | `POST`   | `/invitations`                              | Administrador                                       | `admin`                  |
 | `POST`   | `/projects`                                 | Usuário autenticado                                 | `projects:write`         |
 | `GET`    | `/projects`                                 | Usuário autenticado                                 | `projects:read`          |
+| `GET`    | `/teams`                                    | Membro do time                                      | `projects:read`          |
+| `POST`   | `/teams`                                    | Cria time e adiciona owner                          | `projects:write`         |
+| `GET`    | `/teams/:teamId`                            | Membro do time; inclui membros                      | `projects:read`          |
+| `POST`   | `/teams/:teamId/members`                    | Owner/admin do time                                 | `projects:write`         |
+| `PATCH`  | `/teams/:teamId/members/:userId`            | Owner/admin; owner não pode ser alterado            | `projects:write`         |
+| `DELETE` | `/teams/:teamId/members/:userId`            | Owner/admin; owner não pode ser removido            | `projects:write`         |
 | `GET`    | `/projects/:projectId`                      | Membro do projeto                                   | `projects:read`          |
 | `PATCH`  | `/projects/:projectId`                      | Owner/editor para nome; somente owner para arquivar | `projects:write`         |
 | `POST`   | `/projects/:projectId/archive`              | Somente owner                                       | `projects:write`         |
 | `POST`   | `/projects/:projectId/members`              | Somente owner                                       | `projects:write`         |
+| `GET`    | `/projects/:projectId/members`              | Owner/editor                                        | `projects:read`          |
 | `POST`   | `/projects/:projectId/invitations`          | Somente owner                                       | `projects:write`         |
 | `PATCH`  | `/projects/:projectId/members/:userId`      | Somente owner                                       | `projects:write`         |
 | `DELETE` | `/projects/:projectId/members/:userId`      | Somente owner; owner não pode ser removido          | `projects:write`         |

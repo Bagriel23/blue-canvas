@@ -361,6 +361,8 @@ export class InMemoryRepository implements RepositoryPort {
       updatedAt: input.now,
     };
     this.teamMembers.set(key, member);
+    const team = this.teams.get(input.teamId);
+    if (team) team.updatedAt = input.now;
     return member;
   }
 
@@ -377,8 +379,17 @@ export class InMemoryRepository implements RepositoryPort {
     return member;
   }
 
-  async removeTeamMember(teamId: string, userId: string): Promise<boolean> {
-    return this.teamMembers.delete(`${teamId}:${userId}`);
+  async removeTeamMember(
+    teamId: string,
+    userId: string,
+    now: Date,
+  ): Promise<boolean> {
+    const removed = this.teamMembers.delete(`${teamId}:${userId}`);
+    if (removed) {
+      const team = this.teams.get(teamId);
+      if (team) team.updatedAt = now;
+    }
+    return removed;
   }
 
   async createPersonalAccessToken(

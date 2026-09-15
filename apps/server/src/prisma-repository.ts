@@ -582,13 +582,27 @@ export class PrismaRepository implements RepositoryPort {
       data: { role, updatedAt: now },
     });
     if (result.count === 0) return undefined;
+    await this.client.team.update({
+      where: { id: teamId },
+      data: { updatedAt: now },
+    });
     return this.findTeamMember(teamId, userId);
   }
 
-  async removeTeamMember(teamId: string, userId: string): Promise<boolean> {
+  async removeTeamMember(
+    teamId: string,
+    userId: string,
+    now: Date,
+  ): Promise<boolean> {
     const result = await this.client.teamMember.deleteMany({
       where: { teamId, userId },
     });
+    if (result.count === 1) {
+      await this.client.team.update({
+        where: { id: teamId },
+        data: { updatedAt: now },
+      });
+    }
     return result.count === 1;
   }
 

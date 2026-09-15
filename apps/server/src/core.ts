@@ -765,7 +765,13 @@ export class ApplicationService {
         409,
       );
     await this.dependencies.repository.transaction(async (repository) => {
-      if (!(await repository.removeTeamMember(teamId, userId)))
+      if (
+        !(await repository.removeTeamMember(
+          teamId,
+          userId,
+          this.dependencies.now(),
+        ))
+      )
         throw new ApiError("not_found", "Team member not found", 404);
       await this.auditWith(
         repository,

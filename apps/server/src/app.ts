@@ -475,7 +475,7 @@ export function buildApp(dependencies: ServerDependencies): FastifyInstance {
         expiresAt: result.expiresAt,
       },
       token: result.token,
-      manualLink: `/accept-invitation#token=${encodeURIComponent(result.token)}`,
+      manualLink: `/#/invitation?token=${encodeURIComponent(result.token)}`,
     });
   });
 
@@ -681,7 +681,7 @@ export function buildApp(dependencies: ServerDependencies): FastifyInstance {
       return reply.code(201).send({
         invitation: { id: result.invitationId, expiresAt: result.expiresAt },
         token: result.token,
-        manualLink: `/accept-invitation#token=${encodeURIComponent(result.token)}`,
+        manualLink: `/#/invitation?token=${encodeURIComponent(result.token)}`,
       });
     },
   );

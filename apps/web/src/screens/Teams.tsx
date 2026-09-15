@@ -5,7 +5,7 @@ import type { TeamMember, TeamSummary } from "../api/types.js";
 import { Dialog } from "../dialogs/Dialog.js";
 import { useLocale } from "../state/locale.js";
 import { useSession } from "../state/session.js";
-import { ArrowUpRight, Plus, UsersRound, X } from "lucide-react";
+import { ArrowUpRight, Plus, Trash2, UsersRound, X } from "lucide-react";
 
 export function Teams() {
   const { client } = useSession();
@@ -95,6 +95,43 @@ export function Teams() {
     }
   }
 
+  async function updateMember(member: TeamMember, role: "admin" | "member") {
+    if (!selected) return;
+    setBusy(true);
+    try {
+      await client.request({
+        method: "PATCH",
+        path: `/api/v1/teams/${encodeURIComponent(selected.id)}/members/${encodeURIComponent(member.userId)}`,
+        body: { role },
+      });
+      await openTeam(selected);
+    } catch (raw) {
+      setError(
+        raw instanceof ApiError ? raw.message : messages.common.errorPrefix,
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function removeMember(member: TeamMember) {
+    if (!selected || member.role === "owner") return;
+    setBusy(true);
+    try {
+      await client.request({
+        method: "DELETE",
+        path: `/api/v1/teams/${encodeURIComponent(selected.id)}/members/${encodeURIComponent(member.userId)}`,
+      });
+      await openTeam(selected);
+    } catch (raw) {
+      setError(
+        raw instanceof ApiError ? raw.message : messages.common.errorPrefix,
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <section className="bc-screen bc-teams">
       <div className="bc-screen__intro">
@@ -168,7 +205,13 @@ export function Teams() {
                 <span className="bc-project-card__icon">
                   <UsersRound size={17} />
                 </span>
-                <span className="bc-project-card__meta">{team.role}</span>
+                <span className="bc-project-card__meta">
+                  {team.role === "owner"
+                    ? messages.teams.roleOwner
+                    : team.role === "admin"
+                      ? messages.teams.roleAdmin
+                      : messages.teams.roleMember}
+                </span>
               </div>
               <div className="bc-project-card__name">{team.name}</div>
               <button
@@ -210,7 +253,43 @@ export function Teams() {
                       <strong>{member.displayName}</strong>
                       <small>{member.email}</small>
                     </span>
-                    <span className="bc-project-card__meta">{member.role}</span>
+                    {member.role === "owner" ? (
+                      <span className="bc-project-card__meta">
+                        {messages.teams.roleOwner}
+                      </span>
+                    ) : (
+                      <span className="bc-member-list__actions">
+                        <select
+                          className="bc-select bc-select--compact"
+                          aria-label={`${member.displayName} ${messages.teams.roleLabel}`}
+                          value={member.role}
+                          disabled={busy}
+                          onChange={(event) =>
+                            void updateMember(
+                              member,
+                              event.target.value as "admin" | "member",
+                            )
+                          }
+                        >
+                          <option value="member">
+                            {messages.teams.roleMember}
+                          </option>
+                          <option value="admin">
+                            {messages.teams.roleAdmin}
+                          </option>
+                        </select>
+                        <button
+                          type="button"
+                          className="bc-icon-btn bc-icon-btn--small"
+                          aria-label={messages.teams.remove}
+                          title={messages.teams.remove}
+                          disabled={busy}
+                          onClick={() => void removeMember(member)}
+                        >
+                          <Trash2 size={14} aria-hidden="true" />
+                        </button>
+                      </span>
+                    )}
                   </li>
                 ))}
               </ul>
@@ -229,7 +308,7 @@ export function Teams() {
                   type="email"
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
-                  placeholder="designer@empresa.com"
+                  placeholder={messages.teams.emailPlaceholder}
                   required
                 />
               </label>

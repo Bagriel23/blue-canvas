@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 
 import { Dialog } from "./Dialog.js";
+import { ApiError } from "../api/client.js";
 import { useLocale } from "../state/locale.js";
 import { useSession } from "../state/session.js";
 import type {
@@ -66,6 +67,28 @@ export function ShareDialog({ projectId, onClose }: ShareDialogProps) {
       setInvitationLink(result.data.manualLink);
       setEmail("");
     } catch (raw) {
+      if (raw instanceof ApiError && raw.code === "email_exists") {
+        try {
+          await client.request({
+            method: "POST",
+            path: `/api/v1/projects/${encodeURIComponent(projectId)}/members`,
+            body: { email: email.trim(), role },
+          });
+          setEmail("");
+          const refreshed = await client.request<{ members: ProjectMember[] }>({
+            path: `/api/v1/projects/${encodeURIComponent(projectId)}/members`,
+          });
+          setMembers(refreshed.data.members);
+          return;
+        } catch (fallbackError) {
+          setError(
+            fallbackError instanceof Error
+              ? fallbackError.message
+              : "Unknown error",
+          );
+          return;
+        }
+      }
       setError(raw instanceof Error ? raw.message : "Unknown error");
     }
   }
@@ -118,7 +141,15 @@ export function ShareDialog({ projectId, onClose }: ShareDialogProps) {
                   <small>{member.email}</small>
                 </span>
                 <span className="bc-member-list__actions">
-                  <span className="bc-project-card__meta">{member.role}</span>
+                  <span className="bc-project-card__meta">
+                    {member.role === "owner"
+                      ? messages.share.roleOwner
+                      : member.role === "editor"
+                        ? messages.share.roleEditor
+                        : member.role === "commenter"
+                          ? messages.share.roleCommenter
+                          : messages.share.roleViewer}
+                  </span>
                   {member.role !== "owner" ? (
                     <button
                       type="button"
@@ -148,7 +179,7 @@ export function ShareDialog({ projectId, onClose }: ShareDialogProps) {
             type="email"
             value={email}
             onChange={(event) => setEmail(event.target.value)}
-            placeholder="designer@empresa.com"
+            placeholder={messages.share.emailPlaceholder}
             required
           />
         </label>
@@ -160,9 +191,9 @@ export function ShareDialog({ projectId, onClose }: ShareDialogProps) {
             value={role}
             onChange={(event) => setRole(event.target.value as typeof role)}
           >
-            <option value="editor">Editor</option>
-            <option value="commenter">Commenter</option>
-            <option value="viewer">Viewer</option>
+            <option value="editor">{messages.share.roleEditor}</option>
+            <option value="commenter">{messages.share.roleCommenter}</option>
+            <option value="viewer">{messages.share.roleViewer}</option>
           </select>
         </label>
         <button
@@ -183,8 +214,8 @@ export function ShareDialog({ projectId, onClose }: ShareDialogProps) {
             type="button"
             className="bc-icon-btn bc-icon-btn--small"
             onClick={() => void copyLink()}
-            aria-label="Copy invitation link"
-            title="Copy invitation link"
+            aria-label={messages.share.copyLink}
+            title={messages.share.copyLink}
           >
             <Copy size={14} aria-hidden="true" />
           </button>

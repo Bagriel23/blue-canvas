@@ -58,6 +58,12 @@ export interface UiMessages {
     members: string;
     inviteLabel: string;
     addMember: string;
+    roleLabel: string;
+    roleOwner: string;
+    roleAdmin: string;
+    roleMember: string;
+    remove: string;
+    emailPlaceholder: string;
   };
   workspace: {
     pages: string;
@@ -99,6 +105,12 @@ export interface UiMessages {
     invite: string;
     invitationCreated: string;
     remove: string;
+    roleOwner: string;
+    roleEditor: string;
+    roleCommenter: string;
+    roleViewer: string;
+    emailPlaceholder: string;
+    copyLink: string;
   };
   exportDialog: {
     heading: string;
@@ -174,6 +186,12 @@ const enUs: UiMessages = {
     members: "Members",
     inviteLabel: "Add a teammate",
     addMember: "Add member",
+    roleLabel: "team role",
+    roleOwner: "Owner",
+    roleAdmin: "Admin",
+    roleMember: "Member",
+    remove: "Remove",
+    emailPlaceholder: "designer@company.com",
   },
   workspace: {
     pages: "Pages",
@@ -217,6 +235,12 @@ const enUs: UiMessages = {
     invite: "Create invitation",
     invitationCreated: "Invitation link created",
     remove: "Remove",
+    roleOwner: "Owner",
+    roleEditor: "Editor",
+    roleCommenter: "Commenter",
+    roleViewer: "Viewer",
+    emailPlaceholder: "designer@company.com",
+    copyLink: "Copy invitation link",
   },
   exportDialog: {
     heading: "Export",
@@ -293,6 +317,12 @@ const ptBr: UiMessages = {
     members: "Membros",
     inviteLabel: "Adicionar colega",
     addMember: "Adicionar membro",
+    roleLabel: "papel do time",
+    roleOwner: "Owner",
+    roleAdmin: "Admin",
+    roleMember: "Membro",
+    remove: "Remover",
+    emailPlaceholder: "designer@empresa.com",
   },
   workspace: {
     pages: "Páginas",
@@ -336,6 +366,12 @@ const ptBr: UiMessages = {
     invite: "Criar convite",
     invitationCreated: "Link de convite criado",
     remove: "Remover",
+    roleOwner: "Owner",
+    roleEditor: "Editor",
+    roleCommenter: "Comentarista",
+    roleViewer: "Visualizador",
+    emailPlaceholder: "designer@empresa.com",
+    copyLink: "Copiar link de convite",
   },
   exportDialog: {
     heading: "Exportar",
@@ -411,6 +447,12 @@ const koKr: UiMessages = {
     members: "구성원",
     inviteLabel: "동료 추가",
     addMember: "구성원 추가",
+    roleLabel: "팀 역할",
+    roleOwner: "소유자",
+    roleAdmin: "관리자",
+    roleMember: "구성원",
+    remove: "삭제",
+    emailPlaceholder: "designer@company.com",
   },
   workspace: {
     pages: "페이지",
@@ -453,6 +495,12 @@ const koKr: UiMessages = {
     invite: "초대 만들기",
     invitationCreated: "초대 링크가 생성되었습니다",
     remove: "삭제",
+    roleOwner: "소유자",
+    roleEditor: "편집자",
+    roleCommenter: "댓글 작성자",
+    roleViewer: "뷰어",
+    emailPlaceholder: "designer@company.com",
+    copyLink: "초대 링크 복사",
   },
   exportDialog: {
     heading: "내보내기",

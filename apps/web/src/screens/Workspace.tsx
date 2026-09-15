@@ -291,6 +291,8 @@ export function Workspace({ projectId, editable = true }: WorkspaceProps) {
     editable &&
     !project.archived &&
     (project.role === "owner" || project.role === "editor");
+  const canManageSharing =
+    project.role === "owner" || project.role === "editor";
   const activePage =
     doc.pages.find((page) => page.id === activePageId) ?? doc.pages[0];
   const pageId = activePage?.id ?? "";
@@ -441,15 +443,17 @@ export function Workspace({ projectId, editable = true }: WorkspaceProps) {
                 ? messages.workspace.exitPreview
                 : messages.workspace.preview}
             </button>
-            <button
-              type="button"
-              className="bc-btn"
-              onClick={() => setDialog({ kind: "share" })}
-              title={messages.workspace.share}
-            >
-              <Share2 size={15} aria-hidden="true" />
-              {messages.workspace.share}
-            </button>
+            {canManageSharing ? (
+              <button
+                type="button"
+                className="bc-btn"
+                onClick={() => setDialog({ kind: "share" })}
+                title={messages.workspace.share}
+              >
+                <Share2 size={15} aria-hidden="true" />
+                {messages.workspace.share}
+              </button>
+            ) : null}
             <button
               type="button"
               className="bc-btn"
