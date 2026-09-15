@@ -1006,7 +1006,7 @@ export class ApplicationService {
         projectId,
         true,
         repository,
-        lockedMember,
+        lockedMember ?? null,
       );
       const template = await repository.createProjectTemplate({
         ownerId: principal.user.id,
@@ -1142,7 +1142,7 @@ export class ApplicationService {
         projectId,
         "members:manage",
         repository,
-        lockedActor,
+        lockedActor ?? null,
       );
       const member = await repository.addProjectMember({
         projectId,
@@ -1194,7 +1194,7 @@ export class ApplicationService {
         projectId,
         "members:manage",
         repository,
-        lockedActor,
+        lockedActor ?? null,
       );
       const lockedMember =
         userId === principal.user.id
@@ -1259,7 +1259,7 @@ export class ApplicationService {
         projectId,
         "members:manage",
         repository,
-        lockedActor,
+        lockedActor ?? null,
       );
       const lockedMember =
         userId === principal.user.id
@@ -1776,7 +1776,7 @@ export class ApplicationService {
     projectId: string,
     write: boolean,
     repository: RepositoryPort = this.dependencies.repository,
-    lockedMember?: ProjectMember,
+    lockedMember?: ProjectMember | null,
   ): Promise<ProjectMember> {
     const project = await repository.findProjectById(projectId);
     if (!project) throw new ApiError("not_found", "Project not found", 404);
@@ -1787,8 +1787,9 @@ export class ApplicationService {
         409,
       );
     const member =
-      lockedMember ??
-      (await repository.findProjectMember(projectId, principal.user.id));
+      lockedMember === undefined
+        ? await repository.findProjectMember(projectId, principal.user.id)
+        : lockedMember;
     if (
       !member ||
       (write && member.role !== "owner" && member.role !== "editor")
@@ -1901,11 +1902,12 @@ export class ApplicationService {
     projectId: string,
     action: ProjectAction,
     repository: RepositoryPort = this.dependencies.repository,
-    lockedMember?: ProjectMember,
+    lockedMember?: ProjectMember | null,
   ): Promise<ProjectMember> {
     const member =
-      lockedMember ??
-      (await repository.findProjectMember(projectId, principal.user.id));
+      lockedMember === undefined
+        ? await repository.findProjectMember(projectId, principal.user.id)
+        : lockedMember;
     if (!member || !canProjectRole(member.role, action)) {
       throw new ApiError("forbidden", "Project access denied", 403);
     }

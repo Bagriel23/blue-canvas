@@ -7,7 +7,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { buildApp, type ServerDependencies } from "./app.js";
 import { CollaborationManager } from "./collaboration.js";
-import type { AuditEvent, RepositoryPort, Session } from "./domain.js";
+import type {
+  AuditEvent,
+  ProjectMember,
+  RepositoryPort,
+  Session,
+} from "./domain.js";
 import { InMemoryRepository } from "./memory-repository.js";
 import { ArgonPasswordHasher, type PasswordHasher } from "./security.js";
 import {
@@ -63,6 +68,24 @@ class AuditFailingRepository extends InMemoryRepository {
       throw new Error("injected session failure");
     }
     return super.createSession(input);
+  }
+}
+
+class RecordingProjectLockRepository extends InMemoryRepository {
+  readonly projectLockCalls: { projectId: string; userId: string }[] = [];
+  rejectNextProjectLock = false;
+
+  override async lockProjectForWrite(
+    projectId: string,
+    userId: string,
+  ): Promise<ProjectMember | undefined> {
+    this.projectLockCalls.push({ projectId, userId });
+    const member = await super.lockProjectForWrite(projectId, userId);
+    if (this.rejectNextProjectLock) {
+      this.rejectNextProjectLock = false;
+      return undefined;
+    }
+    return member;
   }
 }
 
@@ -1198,6 +1221,74 @@ describe("application server", () => {
       headers: { cookie: memberCookie },
     });
     expect(invisible.statusCode).toBe(403);
+  });
+
+  it("uses the locked membership for template ACL authorization", async () => {
+    const lockedRepository = new RecordingProjectLockRepository();
+    repository = lockedRepository;
+    dependencies = { ...dependencies, repository };
+    const owner = await bootstrap();
+    const created = await owner.app.inject({
+      method: "POST",
+      url: "/api/v1/projects",
+      headers: { cookie: owner.cookie, "x-csrf-token": owner.csrf },
+      payload: { name: "Locked template source" },
+    });
+    const projectId = created.json().project.id as string;
+
+    lockedRepository.rejectNextProjectLock = true;
+    const denied = await owner.app.inject({
+      method: "POST",
+      url: `/api/v1/projects/${projectId}/templates`,
+      headers: { cookie: owner.cookie, "x-csrf-token": owner.csrf },
+      payload: { name: "Should not save", description: "" },
+    });
+
+    expect(denied.statusCode).toBe(403);
+    expect(denied.json().error.code).toBe("forbidden");
+  });
+
+  it("locks the actor and target memberships before changing a member", async () => {
+    const lockedRepository = new RecordingProjectLockRepository();
+    repository = lockedRepository;
+    dependencies = { ...dependencies, repository };
+    const owner = await bootstrap();
+    const created = await owner.app.inject({
+      method: "POST",
+      url: "/api/v1/projects",
+      headers: { cookie: owner.cookie, "x-csrf-token": owner.csrf },
+      payload: { name: "Membership lock" },
+    });
+    const projectId = created.json().project.id as string;
+    const member = await lockedRepository.createUser({
+      email: "membership-lock-target@example.com",
+      displayName: "Membership lock target",
+      passwordHash: await dependencies.passwordHasher.hash(PASSWORD),
+      locale: "en-US",
+      isAdmin: false,
+      now: dependencies.now(),
+    });
+    const added = await owner.app.inject({
+      method: "POST",
+      url: `/api/v1/projects/${projectId}/members`,
+      headers: { cookie: owner.cookie, "x-csrf-token": owner.csrf },
+      payload: { email: member.email, role: "viewer" },
+    });
+    expect(added.statusCode).toBe(201);
+    lockedRepository.projectLockCalls.length = 0;
+
+    const updated = await owner.app.inject({
+      method: "PATCH",
+      url: `/api/v1/projects/${projectId}/members/${member.id}`,
+      headers: { cookie: owner.cookie, "x-csrf-token": owner.csrf },
+      payload: { role: "commenter" },
+    });
+
+    expect(updated.statusCode).toBe(200);
+    expect(lockedRepository.projectLockCalls).toEqual([
+      { projectId, userId: owner.user.id },
+      { projectId, userId: member.id },
+    ]);
   });
 
   it("audits only the successful request during concurrent member removal", async () => {
