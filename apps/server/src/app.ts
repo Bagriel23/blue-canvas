@@ -679,7 +679,8 @@ export function buildApp(dependencies: ServerDependencies): FastifyInstance {
       parse(applyCommandsRequestSchema, request.body),
       request.id,
     );
-    await collaboration.applyProjectSnapshot(projectId, result.document);
+    if (!result.idempotent)
+      await collaboration.applyProjectSnapshot(projectId, result.document);
     return reply.code(result.idempotent ? 200 : 201).send(result);
   });
 

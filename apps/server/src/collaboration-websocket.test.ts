@@ -9,7 +9,11 @@ import {
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
 import * as Y from "yjs";
-import { applyCollaborationState } from "@blue-canvas/collaboration";
+import {
+  applyCollaborationState,
+  readSemanticDocument,
+  replaceSemanticDocument,
+} from "@blue-canvas/collaboration";
 
 import { buildApp, type ServerDependencies } from "./app.js";
 import { InMemoryRepository } from "./memory-repository.js";
@@ -318,8 +322,32 @@ describe("Hocuspocus collaboration", () => {
       },
     });
     expect(commands.statusCode).toBe(201);
-    document.getMap("content").set("after-http", true);
+    await waitUntil(
+      () => readSemanticDocument(document).tokens.brand !== undefined,
+    );
+    const collaborativeUpdate = readSemanticDocument(document);
+    collaborativeUpdate.name = "Collaborative update";
+    replaceSemanticDocument(document, collaborativeUpdate);
     await new Promise((resolve) => setTimeout(resolve, 150));
+
+    const retry = await app.inject({
+      method: "POST",
+      url: `/api/v1/projects/${projectId}/commands`,
+      headers: { cookie, "x-csrf-token": csrf },
+      payload: {
+        baseRevision: current.revision,
+        idempotencyKey: "http-command-123456",
+        commands: [
+          {
+            type: "set-token",
+            name: "brand",
+            value: { type: "color", value: "#1428A0" },
+          },
+        ],
+      },
+    });
+    expect(retry.statusCode).toBe(200);
+    expect(readSemanticDocument(document).name).toBe("Collaborative update");
 
     const snapshot = await app.inject({
       method: "GET",
