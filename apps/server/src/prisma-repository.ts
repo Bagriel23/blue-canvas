@@ -743,6 +743,34 @@ export class PrismaRepository implements RepositoryPort {
     }
   }
 
+  async updateCommandReceipt(input: {
+    projectId: string;
+    idempotencyKey: string;
+    revision: number;
+    document: unknown;
+  }): Promise<CommandReceipt | undefined> {
+    const result = await this.client.commandReceipt.updateMany({
+      where: {
+        projectId: input.projectId,
+        idempotencyKey: input.idempotencyKey,
+      },
+      data: {
+        revision: input.revision,
+        document: input.document as Prisma.InputJsonValue,
+      },
+    });
+    if (result.count !== 1) return undefined;
+    const value = await this.client.commandReceipt.findUniqueOrThrow({
+      where: {
+        projectId_idempotencyKey: {
+          projectId: input.projectId,
+          idempotencyKey: input.idempotencyKey,
+        },
+      },
+    });
+    return commandReceipt(value);
+  }
+
   async createNamedVersion(
     input: Parameters<RepositoryPort["createNamedVersion"]>[0],
   ): Promise<NamedVersion> {

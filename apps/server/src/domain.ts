@@ -268,6 +268,12 @@ export interface RepositoryPort {
   createCommandReceipt(
     input: Omit<CommandReceipt, "id">,
   ): Promise<CommandReceipt>;
+  updateCommandReceipt(input: {
+    projectId: string;
+    idempotencyKey: string;
+    revision: number;
+    document: unknown;
+  }): Promise<CommandReceipt | undefined>;
   createNamedVersion(
     input: Omit<NamedVersion, "id" | "createdAt"> & { now: Date },
   ): Promise<NamedVersion>;

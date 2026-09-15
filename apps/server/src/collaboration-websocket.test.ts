@@ -472,6 +472,32 @@ describe("Hocuspocus collaboration", () => {
         tokens: { brand: { type: "color", value: "#1428A0" } },
       });
       expect(snapshot.json().revision).toBe(commands.json().revision);
+
+      const retry = await app.inject({
+        method: "POST",
+        url: `/api/v1/projects/${projectId}/commands`,
+        headers: { cookie, "x-csrf-token": csrf },
+        payload: {
+          baseRevision: current.revision,
+          idempotencyKey: "http-command-race-123456",
+          commands: [
+            {
+              type: "set-token",
+              name: "brand",
+              value: { type: "color", value: "#1428A0" },
+            },
+          ],
+        },
+      });
+      expect(retry.statusCode).toBe(200);
+      expect(retry.json()).toMatchObject({
+        revision: commands.json().revision,
+        document: {
+          name: "Concurrent edit",
+          tokens: { brand: { type: "color", value: "#1428A0" } },
+        },
+        idempotent: true,
+      });
     } finally {
       collaborationPrototype.applyProjectSnapshot = originalApply;
       active.destroy();

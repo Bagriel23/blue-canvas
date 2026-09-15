@@ -1,10 +1,14 @@
 import {
+  applyCollaborationState,
   createInitialCollaborationDocument,
   encodeCollaborationState,
+  readSemanticDocument,
+  replaceSemanticDocument,
 } from "@blue-canvas/collaboration";
 import * as Y from "yjs";
 import { describe, expect, it, vi } from "vitest";
 
+import { CollaborationManager } from "./collaboration.js";
 import { ApplicationService, type Principal } from "./core.js";
 import { InMemoryRepository } from "./memory-repository.js";
 import type { PasswordHasher } from "./security.js";
@@ -55,6 +59,128 @@ async function fixture() {
 }
 
 describe("collaboration domain", () => {
+  it("converts rebase command errors into a controlled revision conflict", async () => {
+    const { repository, service, project } = await fixture();
+    const initial = createInitialCollaborationDocument(
+      project.id,
+      project.name,
+    );
+    const encoded = encodeCollaborationState(initial);
+    await repository.upsertProjectDocument({
+      projectId: project.id,
+      ...encoded,
+      expectedRevision: 0,
+      now: NOW,
+    });
+    initial.destroy();
+
+    const manager = new CollaborationManager({
+      repository,
+      service,
+      now: () => NOW,
+    });
+    const active = createInitialCollaborationDocument(project.id, project.name);
+    (manager.hocuspocus.documents as unknown as Map<string, Y.Doc>).set(
+      project.id,
+      active,
+    );
+    try {
+      await expect(
+        manager.rebaseProjectCommands(
+          project.id,
+          [
+            {
+              type: "update-node",
+              nodeId: "00000000-0000-4000-8000-000000000999",
+              patch: { name: "Renamed" },
+            },
+          ],
+          "00000000-0000-4000-8000-000000000998",
+        ),
+      ).rejects.toMatchObject({
+        code: "revision_conflict",
+        statusCode: 409,
+      });
+      expect(readSemanticDocument(active).name).toBe(project.name);
+    } finally {
+      manager.hocuspocus.documents.delete(project.id);
+      active.destroy();
+    }
+  });
+
+  it("retries rebase when the active Yjs vector changes while reading persistence", async () => {
+    const { repository, service, project } = await fixture();
+    const initial = createInitialCollaborationDocument(
+      project.id,
+      project.name,
+    );
+    const encoded = encodeCollaborationState(initial);
+    await repository.upsertProjectDocument({
+      projectId: project.id,
+      ...encoded,
+      expectedRevision: 0,
+      now: NOW,
+    });
+    initial.destroy();
+
+    const manager = new CollaborationManager({
+      repository,
+      service,
+      now: () => NOW,
+    });
+    const active = createInitialCollaborationDocument(project.id, project.name);
+    (manager.hocuspocus.documents as unknown as Map<string, Y.Doc>).set(
+      project.id,
+      active,
+    );
+    let injectConcurrentEdit = true;
+    const findProjectDocument = repository.findProjectDocument.bind(repository);
+    vi.spyOn(repository, "findProjectDocument").mockImplementation(
+      (projectId) => {
+        const result = findProjectDocument(projectId);
+        if (!injectConcurrentEdit) return result;
+        injectConcurrentEdit = false;
+        return result.then((persisted) => {
+          queueMicrotask(() => {
+            const concurrent = readSemanticDocument(active);
+            concurrent.name = "Late edit";
+            replaceSemanticDocument(active, concurrent);
+          });
+          return persisted;
+        });
+      },
+    );
+
+    try {
+      await manager.rebaseProjectCommands(
+        project.id,
+        [
+          {
+            type: "set-token",
+            name: "brand",
+            value: { type: "color", value: "#1428A0" },
+          },
+        ],
+        "00000000-0000-4000-8000-000000000998",
+      );
+      const persisted = await findProjectDocument(project.id);
+      if (!persisted) throw new Error("missing persisted document");
+      const restored = new Y.Doc();
+      try {
+        applyCollaborationState(restored, persisted.state);
+        expect(readSemanticDocument(restored)).toMatchObject({
+          name: "Late edit",
+          tokens: { brand: { type: "color", value: "#1428A0" } },
+        });
+      } finally {
+        restored.destroy();
+      }
+    } finally {
+      manager.hocuspocus.documents.delete(project.id);
+      active.destroy();
+    }
+  });
+
   it("destroys the command document when persistence fails", async () => {
     const { repository, service, principal, project } = await fixture();
     const initial = createInitialCollaborationDocument(

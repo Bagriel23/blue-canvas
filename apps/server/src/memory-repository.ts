@@ -460,6 +460,20 @@ export class InMemoryRepository implements RepositoryPort {
     return { ...receipt };
   }
 
+  async updateCommandReceipt(input: {
+    projectId: string;
+    idempotencyKey: string;
+    revision: number;
+    document: unknown;
+  }): Promise<CommandReceipt | undefined> {
+    const key = `${input.projectId}:${input.idempotencyKey}`;
+    const receipt = this.commandReceipts.get(key);
+    if (!receipt) return undefined;
+    receipt.revision = input.revision;
+    receipt.document = input.document;
+    return { ...receipt };
+  }
+
   async createNamedVersion(
     input: Parameters<RepositoryPort["createNamedVersion"]>[0],
   ): Promise<NamedVersion> {

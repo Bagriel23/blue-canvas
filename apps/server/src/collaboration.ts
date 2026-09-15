@@ -15,7 +15,11 @@ import {
   type Connection,
   type Document as HocuspocusDocument,
 } from "@hocuspocus/server";
-import { applyCommandBatch, createCommandState } from "@blue-canvas/commands";
+import {
+  applyCommandBatch,
+  CommandError,
+  createCommandState,
+} from "@blue-canvas/commands";
 import type { FastifyRequest } from "fastify";
 import type WebSocket from "ws";
 
@@ -263,15 +267,31 @@ export class CollaborationManager {
     if (!document)
       throw new ApiError("not_found", "Project document not found", 404);
 
-    const rebased = applyCommandBatch(
-      createCommandState(readSemanticDocument(document)),
-      {
-        id: randomUUID(),
-        actorId,
-        baseRevision: 0,
-        commands,
-      },
-    );
+    let rebased;
+    try {
+      rebased = applyCommandBatch(
+        createCommandState(readSemanticDocument(document)),
+        {
+          id: randomUUID(),
+          actorId,
+          baseRevision: 0,
+          commands,
+        },
+      );
+    } catch (error) {
+      if (!(error instanceof CommandError)) throw error;
+      const invalid = new Set([
+        "INVALID_BATCH",
+        "INVALID_PATCH",
+        "INVALID_RESULT",
+      ]);
+      throw new ApiError(
+        invalid.has(error.code) ? "invalid_command_batch" : "revision_conflict",
+        error.message,
+        invalid.has(error.code) ? 400 : 409,
+        { code: error.code },
+      );
+    }
     document.transact(
       () => {
         replaceSemanticDocument(document, rebased.document);
@@ -283,13 +303,8 @@ export class CollaborationManager {
       const encoded = encodeCollaborationState(document);
       const persisted =
         await this.dependencies.repository.findProjectDocument(projectId);
-      if (
-        !bytesEqual(
-          encoded.stateVector,
-          encodeCollaborationState(document).stateVector,
-        )
-      )
-        continue;
+      const currentStateVector = encodeCollaborationState(document).stateVector;
+      if (!bytesEqual(encoded.stateVector, currentStateVector)) continue;
       try {
         const updated =
           await this.dependencies.repository.upsertProjectDocument({

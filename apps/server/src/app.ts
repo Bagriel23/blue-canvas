@@ -695,6 +695,12 @@ export function buildApp(dependencies: ServerDependencies): FastifyInstance {
           commandInput.commands,
           principal.user.id,
         );
+        await dependencies.repository.updateCommandReceipt({
+          projectId,
+          idempotencyKey: commandInput.idempotencyKey,
+          revision: rebased.revision,
+          document: rebased.document,
+        });
         response = { ...result, ...rebased };
       }
     }
