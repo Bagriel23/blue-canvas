@@ -27,14 +27,14 @@ const session = {
   bootstrapRequired: false,
 };
 
-function renderWorkspace(fetcher: typeof fetch) {
+function renderWorkspace(fetcher: typeof fetch, projectId = "project-1") {
   return render(
     <SessionProvider
       client={new ApiClient({ fetch: fetcher })}
       initialSession={session}
     >
       <LocaleProvider initialLocale="en-US">
-        <Workspace projectId="project-1" />
+        <Workspace projectId={projectId} />
       </LocaleProvider>
     </SessionProvider>,
   );
@@ -142,4 +142,158 @@ describe("Workspace persistence", () => {
       },
     ]);
   });
+
+  it("reuses the queued idempotency key after a revision conflict", async () => {
+    const persisted = loadDemoDocument();
+    const conflict = jsonResponse(
+      {
+        error: {
+          code: "revision_conflict",
+          message: "Document revision changed",
+          traceId: "trace-conflict",
+        },
+      },
+      409,
+    );
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        jsonResponse({
+          project: { id: "project-1", name: "Project", archived: false },
+          revision: 2,
+          document: persisted,
+        }),
+      )
+      .mockResolvedValueOnce(conflict)
+      .mockResolvedValueOnce(
+        jsonResponse({
+          project: { id: "project-1", name: "Project", archived: false },
+          revision: 3,
+          document: persisted,
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({ revision: 4, document: persisted, idempotent: false }),
+      );
+
+    renderWorkspace(fetcher);
+    await waitFor(() => expect(screen.getByText("Project")).toBeTruthy());
+    fireEvent.click(
+      screen.getByText("Design internal tools together, offline."),
+    );
+    fireEvent.change(await screen.findByLabelText("Name"), {
+      target: { value: "Retried heading" },
+    });
+
+    await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(4));
+    const firstBody = JSON.parse(String(fetcher.mock.calls[1]?.[1]?.body));
+    const retryBody = JSON.parse(String(fetcher.mock.calls[3]?.[1]?.body));
+    expect(firstBody.idempotencyKey).toBe(retryBody.idempotencyKey);
+    expect(retryBody.baseRevision).toBe(3);
+  });
+
+  it("shows a retry action when conflict recovery cannot load the latest document", async () => {
+    const persisted = loadDemoDocument();
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        jsonResponse({
+          project: { id: "project-1", name: "Project", archived: false },
+          revision: 2,
+          document: persisted,
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse(
+          {
+            error: {
+              code: "revision_conflict",
+              message: "Document revision changed",
+              traceId: "trace-conflict",
+            },
+          },
+          409,
+        ),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse(
+          {
+            error: {
+              code: "internal_error",
+              message: "Unavailable",
+              traceId: "trace-load",
+            },
+          },
+          503,
+        ),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({ revision: 3, document: persisted, idempotent: false }),
+      );
+
+    renderWorkspace(fetcher);
+    await waitFor(() => expect(screen.getByText("Project")).toBeTruthy());
+    fireEvent.click(
+      screen.getByText("Design internal tools together, offline."),
+    );
+    fireEvent.change(await screen.findByLabelText("Name"), {
+      target: { value: "Kept locally" },
+    });
+
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Retry" })).toBeTruthy(),
+    );
+    expect(screen.getByText("Kept locally")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(4));
+  });
+
+  it("ignores a stale response after switching project", async () => {
+    const first = deferred<Response>();
+    const second = deferred<Response>();
+    const fetcher = vi.fn((input: RequestInfo | URL) => {
+      return String(input).endsWith("project-a/document")
+        ? first.promise
+        : second.promise;
+    });
+    const view = renderWorkspace(fetcher, "project-a");
+    view.rerender(
+      <SessionProvider
+        client={new ApiClient({ fetch: fetcher })}
+        initialSession={session}
+      >
+        <LocaleProvider initialLocale="en-US">
+          <Workspace projectId="project-b" />
+        </LocaleProvider>
+      </SessionProvider>,
+    );
+    second.resolve(
+      jsonResponse({
+        project: { id: "project-b", name: "Project B", archived: false },
+        revision: 1,
+        document: { ...loadDemoDocument(), name: "Project B" },
+      }),
+    );
+    await waitFor(() => expect(screen.getByText("Project B")).toBeTruthy());
+    first.resolve(
+      jsonResponse({
+        project: { id: "project-a", name: "Project A", archived: false },
+        revision: 1,
+        document: { ...loadDemoDocument(), name: "Project A" },
+      }),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(screen.getByText("Project B")).toBeTruthy();
+    expect(screen.queryByText("Project A")).toBeNull();
+  });
 });
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (error: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}

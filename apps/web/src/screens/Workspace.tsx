@@ -41,10 +41,16 @@ type WorkspaceResource =
     };
 
 interface EditorRef {
+  generation: number;
   document: DesignDocument | null;
   revision: number;
-  pending: DesignCommand[];
+  pending: PendingCommand[];
   processing: boolean;
+}
+
+interface PendingCommand {
+  command: DesignCommand;
+  idempotencyKey: string;
 }
 
 interface CommandResponse {
@@ -65,11 +71,13 @@ export function Workspace({ projectId, editable = true }: WorkspaceProps) {
   const [dialog, setDialog] = useState<DialogState>({ kind: "none" });
   const [previewing, setPreviewing] = useState(false);
   const editorRef = useRef<EditorRef>({
+    generation: 0,
     document: null,
     revision: 0,
     pending: [],
     processing: false,
   });
+  const requestGeneration = useRef(0);
 
   const loadDocument =
     useCallback(async (): Promise<ProjectDocumentResponse> => {
@@ -80,10 +88,14 @@ export function Workspace({ projectId, editable = true }: WorkspaceProps) {
     }, [client, projectId]);
 
   const refresh = useCallback(async () => {
+    const generation = ++requestGeneration.current;
+    editorRef.current.generation = generation;
     setResource({ status: "loading" });
     try {
       const loaded = await loadDocument();
+      if (generation !== requestGeneration.current) return;
       editorRef.current = {
+        generation,
         document: loaded.document,
         revision: loaded.revision,
         pending: [],
@@ -98,6 +110,7 @@ export function Workspace({ projectId, editable = true }: WorkspaceProps) {
       });
       setSelectedId(null);
     } catch (raw) {
+      if (generation !== requestGeneration.current) return;
       setResource({
         status: "error",
         message:
@@ -163,26 +176,31 @@ export function Workspace({ projectId, editable = true }: WorkspaceProps) {
 
   const syncQueue = useCallback(async () => {
     const editor = editorRef.current;
+    const generation = editor.generation;
     if (editor.processing) return;
     editor.processing = true;
     try {
       while (editor.pending.length > 0 && editor.document) {
-        const command = editor.pending[0];
+        if (editorRef.current.generation !== generation) break;
+        const pending = editor.pending[0];
+        if (!pending) break;
+        const command = pending.command;
         try {
           const result = await client.request<CommandResponse>({
             method: "POST",
             path: `/api/v1/projects/${encodeURIComponent(projectId)}/commands`,
             body: {
               baseRevision: editor.revision,
-              idempotencyKey: randomId(),
+              idempotencyKey: pending.idempotencyKey,
               commands: [command],
             },
           });
+          if (editorRef.current.generation !== generation) break;
           editor.pending.shift();
           editor.revision = result.data.revision;
           let nextDocument = result.data.document;
-          for (const pending of editor.pending) {
-            nextDocument = applyLocalCommand(nextDocument, pending);
+          for (const queued of editor.pending) {
+            nextDocument = applyLocalCommand(nextDocument, queued.command);
           }
           editor.document = nextDocument;
           updateDocument(
@@ -190,6 +208,7 @@ export function Workspace({ projectId, editable = true }: WorkspaceProps) {
             editor.pending.length ? "saving" : "saved",
           );
         } catch (raw) {
+          if (editorRef.current.generation !== generation) break;
           if (!(raw instanceof ApiError) || raw.code !== "revision_conflict") {
             updateDocument(
               editor.document,
@@ -201,14 +220,26 @@ export function Workspace({ projectId, editable = true }: WorkspaceProps) {
             break;
           }
 
-          const latest = await loadDocument();
-          editor.revision = latest.revision;
-          let rebased = latest.document;
-          for (const pending of editor.pending) {
-            rebased = applyLocalCommand(rebased, pending);
+          try {
+            const latest = await loadDocument();
+            if (editorRef.current.generation !== generation) break;
+            editor.revision = latest.revision;
+            let rebased = latest.document;
+            for (const queued of editor.pending) {
+              rebased = applyLocalCommand(rebased, queued.command);
+            }
+            editor.document = rebased;
+            updateDocument(rebased, "conflict", messages.workspace.conflict);
+          } catch (recoveryError) {
+            updateDocument(
+              editor.document,
+              "error",
+              recoveryError instanceof ApiError
+                ? recoveryError.message
+                : messages.workspace.loadError,
+            );
+            break;
           }
-          editor.document = rebased;
-          updateDocument(rebased, "conflict", messages.workspace.conflict);
         }
       }
     } finally {
@@ -263,7 +294,7 @@ export function Workspace({ projectId, editable = true }: WorkspaceProps) {
     } catch {
       return;
     }
-    editor.pending.push(command);
+    editor.pending.push({ command, idempotencyKey: randomId() });
     updateDocument(editor.document, "saving");
     void syncQueue();
   };
@@ -308,19 +339,35 @@ export function Workspace({ projectId, editable = true }: WorkspaceProps) {
               <p className="bc-eyebrow">{messages.workspace.canvas}</p>
               <h1>{project.name}</h1>
             </div>
-            <p
-              className="bc-workspace__sync"
-              data-sync={resource.sync}
-              aria-live="polite"
-            >
-              {resource.sync === "saving"
-                ? messages.workspace.saving
-                : resource.sync === "saved"
-                  ? messages.workspace.saved
-                  : resource.sync === "conflict"
-                    ? messages.workspace.conflict
-                    : (resource.syncMessage ?? messages.workspace.loadError)}
-            </p>
+            <div className="bc-workspace__sync-wrap">
+              <p
+                className="bc-workspace__sync"
+                data-sync={resource.sync}
+                aria-live="polite"
+              >
+                {resource.sync === "saving"
+                  ? messages.workspace.saving
+                  : resource.sync === "saved"
+                    ? messages.workspace.saved
+                    : resource.sync === "conflict"
+                      ? messages.workspace.conflict
+                      : (resource.syncMessage ?? messages.workspace.loadError)}
+              </p>
+              {resource.sync === "error" ? (
+                <button
+                  type="button"
+                  className="bc-icon-btn bc-icon-btn--small"
+                  aria-label={messages.workspace.retry}
+                  title={messages.workspace.retry}
+                  onClick={() => {
+                    updateDocument(resource.document, "saving");
+                    void syncQueue();
+                  }}
+                >
+                  <RefreshCw size={14} aria-hidden="true" />
+                </button>
+              ) : null}
+            </div>
           </header>
           {previewing ? (
             activeArtboard ? (
