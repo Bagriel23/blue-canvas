@@ -291,6 +291,40 @@ function referencedAssetIds(
   return result;
 }
 
+function assetsForExportScope(
+  document: unknown,
+  scope: { type: string; pageId?: string; nodeIds?: string[] },
+): unknown {
+  if (scope.type === "project") return document;
+  if (scope.type === "page" && document && typeof document === "object") {
+    const pages = (document as { pages?: unknown }).pages;
+    if (Array.isArray(pages))
+      return (
+        pages.find(
+          (page) =>
+            page &&
+            typeof page === "object" &&
+            (page as { id?: unknown }).id === scope.pageId,
+        ) ?? document
+      );
+  }
+  if (scope.type === "selection" && Array.isArray(scope.nodeIds)) {
+    const wanted = new Set(scope.nodeIds);
+    const selected: unknown[] = [];
+    const visit = (value: unknown): void => {
+      if (Array.isArray(value)) return value.forEach(visit);
+      if (!value || typeof value !== "object") return;
+      const record = value as Record<string, unknown>;
+      if (typeof record.id === "string" && wanted.has(record.id))
+        selected.push(record);
+      Object.values(record).forEach(visit);
+    };
+    visit(document);
+    return selected;
+  }
+  return document;
+}
+
 export function buildApp(dependencies: ServerDependencies): FastifyInstance {
   const app = Fastify({
     logger: {
@@ -697,7 +731,9 @@ export function buildApp(dependencies: ServerDependencies): FastifyInstance {
       { fileName: string; mimeType: string; bytes: Uint8Array }
     > = {};
     let exportBytes = 0;
-    const referenced = referencedAssetIds(documentResponse.document);
+    const referenced = referencedAssetIds(
+      assetsForExportScope(documentResponse.document, input.scope),
+    );
     const selectedAssets = assets.filter((asset) => referenced.has(asset.id));
     for (const asset of selectedAssets.slice(0, MAX_EXPORT_ASSETS)) {
       if (exportBytes + asset.size > MAX_EXPORT_ASSET_BYTES) break;
