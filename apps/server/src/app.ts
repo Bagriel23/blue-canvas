@@ -296,6 +296,48 @@ function assetsForExportScope(
   scope: { type: string; pageId?: string; nodeIds?: string[] },
 ): unknown {
   if (scope.type === "project") return document;
+  const source = document as {
+    components?: unknown;
+  };
+  const components = Array.isArray(source.components) ? source.components : [];
+  const reachableComponents = (roots: unknown[]): unknown[] => {
+    const byId = new Map<string, unknown>();
+    for (const component of components) {
+      if (
+        component &&
+        typeof component === "object" &&
+        typeof (component as { id?: unknown }).id === "string"
+      ) {
+        byId.set((component as { id: string }).id, component);
+      }
+    }
+    const result: unknown[] = [];
+    const visited = new Set<string>();
+    const queue: string[] = [];
+    const collectIds = (value: unknown): void => {
+      if (Array.isArray(value)) return value.forEach(collectIds);
+      if (!value || typeof value !== "object") return;
+      const record = value as Record<string, unknown>;
+      if (
+        record.kind === "component-instance" &&
+        typeof record.componentId === "string"
+      ) {
+        queue.push(record.componentId);
+      }
+      Object.values(record).forEach(collectIds);
+    };
+    roots.forEach(collectIds);
+    while (queue.length > 0) {
+      const id = queue.shift();
+      if (!id || visited.has(id)) continue;
+      visited.add(id);
+      const component = byId.get(id);
+      if (!component) continue;
+      result.push(component);
+      collectIds((component as { root?: unknown }).root);
+    }
+    return result;
+  };
   if (scope.type === "page" && document && typeof document === "object") {
     const pages = (document as { pages?: unknown }).pages;
     if (Array.isArray(pages))
@@ -308,7 +350,14 @@ function assetsForExportScope(
               (page as { id?: unknown }).id === scope.pageId,
           ) ?? document,
         ],
-        components: (document as { components?: unknown }).components,
+        components: reachableComponents([
+          pages.find(
+            (page) =>
+              page &&
+              typeof page === "object" &&
+              (page as { id?: unknown }).id === scope.pageId,
+          ) ?? document,
+        ]),
       };
   }
   if (scope.type === "selection" && Array.isArray(scope.nodeIds)) {
@@ -325,7 +374,7 @@ function assetsForExportScope(
     visit(document);
     return {
       nodes: selected,
-      components: (document as { components?: unknown }).components,
+      components: reachableComponents(selected),
     };
   }
   return document;
