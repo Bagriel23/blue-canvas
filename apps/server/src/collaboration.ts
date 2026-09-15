@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { AsyncLocalStorage } from "node:async_hooks";
 
 import {
   applyCollaborationState,
@@ -52,6 +53,8 @@ export class CollaborationManager {
   readonly hocuspocus: Hocuspocus<CollaborationContext>;
   private readonly writers = new Map<string, Set<string>>();
   private readonly restoring = new Set<string>();
+  private readonly projectLocks = new Map<string, Promise<void>>();
+  private readonly lockContext = new AsyncLocalStorage<Set<string>>();
 
   constructor(private readonly dependencies: CollaborationManagerDependencies) {
     this.hocuspocus = new Hocuspocus<CollaborationContext>({
@@ -98,45 +101,46 @@ export class CollaborationManager {
         }
         return context;
       },
-      onLoadDocument: async ({ document, documentName }) => {
-        const persisted =
-          await dependencies.repository.findProjectDocument(documentName);
-        if (persisted) {
-          applyCollaborationState(document, persisted.state);
-          encodeCollaborationState(document);
-          return document;
-        }
-        const project =
-          await dependencies.repository.findProjectById(documentName);
-        if (!project || project.archivedAt) throw permissionDenied();
-        const initial = createInitialCollaborationDocument(
-          project.id,
-          project.name,
-        );
-        try {
-          const encoded = encodeCollaborationState(initial);
-          await dependencies.repository.upsertProjectDocument({
-            projectId: documentName,
-            ...encoded,
-            expectedRevision: 0,
-            now: dependencies.now(),
-          });
-          applyCollaborationState(document, encoded.state);
-        } catch (error) {
-          if (
-            !(error instanceof ApiError) ||
-            error.code !== "revision_conflict"
-          )
-            throw error;
-          const concurrent =
+      onLoadDocument: async ({ document, documentName }) =>
+        this.withProjectLock(documentName, async () => {
+          const persisted =
             await dependencies.repository.findProjectDocument(documentName);
-          if (!concurrent) throw error;
-          applyCollaborationState(document, concurrent.state);
-        } finally {
-          initial.destroy();
-        }
-        return document;
-      },
+          if (persisted) {
+            applyCollaborationState(document, persisted.state);
+            encodeCollaborationState(document);
+            return document;
+          }
+          const project =
+            await dependencies.repository.findProjectById(documentName);
+          if (!project || project.archivedAt) throw permissionDenied();
+          const initial = createInitialCollaborationDocument(
+            project.id,
+            project.name,
+          );
+          try {
+            const encoded = encodeCollaborationState(initial);
+            await dependencies.repository.upsertProjectDocument({
+              projectId: documentName,
+              ...encoded,
+              expectedRevision: 0,
+              now: dependencies.now(),
+            });
+            applyCollaborationState(document, encoded.state);
+          } catch (error) {
+            if (
+              !(error instanceof ApiError) ||
+              error.code !== "revision_conflict"
+            )
+              throw error;
+            const concurrent =
+              await dependencies.repository.findProjectDocument(documentName);
+            if (!concurrent) throw error;
+            applyCollaborationState(document, concurrent.state);
+          } finally {
+            initial.destroy();
+          }
+          return document;
+        }),
       beforeSync: async ({
         context,
         connection,
@@ -144,34 +148,39 @@ export class CollaborationManager {
         documentName,
         payload,
         type,
-      }) => {
-        if (type !== 1 && type !== 2) return;
-        const canWrite = await this.revalidate(
-          context,
-          documentName,
-          connection,
-        );
-        connection.readOnly = !canWrite;
-        if (!canWrite) return;
-        try {
-          validateProspectiveUpdate(document, payload);
-        } catch {
-          connection.readOnly = true;
-          connection.close({ code: 1009, reason: "update-rejected" });
-        }
-      },
-      onStoreDocument: async ({ document, documentName }) => {
-        const encoded = encodeCollaborationState(document);
-        const persisted =
-          await dependencies.repository.findProjectDocument(documentName);
-        if (persisted && bytesEqual(persisted.stateVector, encoded.stateVector))
-          return;
-        await dependencies.repository.upsertProjectDocument({
-          projectId: documentName,
-          ...encoded,
-          now: dependencies.now(),
-        });
-      },
+      }) =>
+        this.withProjectLock(documentName, async () => {
+          if (type !== 1 && type !== 2) return;
+          const canWrite = await this.revalidate(
+            context,
+            documentName,
+            connection,
+          );
+          connection.readOnly = !canWrite;
+          if (!canWrite) return;
+          try {
+            validateProspectiveUpdate(document, payload);
+          } catch {
+            connection.readOnly = true;
+            connection.close({ code: 1009, reason: "update-rejected" });
+          }
+        }),
+      onStoreDocument: async ({ document, documentName }) =>
+        this.withProjectLock(documentName, async () => {
+          const encoded = encodeCollaborationState(document);
+          const persisted =
+            await dependencies.repository.findProjectDocument(documentName);
+          if (
+            persisted &&
+            bytesEqual(persisted.stateVector, encoded.stateVector)
+          )
+            return;
+          await dependencies.repository.upsertProjectDocument({
+            projectId: documentName,
+            ...encoded,
+            now: dependencies.now(),
+          });
+        }),
       onDisconnect: async ({ context, documentName, socketId }) => {
         if (context.writerReserved) this.releaseWriter(documentName, socketId);
       },
@@ -223,8 +232,39 @@ export class CollaborationManager {
   }
 
   async flushProject(projectId: string): Promise<void> {
+    await this.withProjectLock(projectId, () =>
+      this.flushProjectUnlocked(projectId),
+    );
+  }
+
+  private async flushProjectUnlocked(projectId: string): Promise<void> {
     const document = this.hocuspocus.documents.get(projectId);
     if (document) await this.storeActiveDocument(document);
+  }
+
+  async withProjectLock<T>(
+    projectId: string,
+    operation: () => Promise<T>,
+  ): Promise<T> {
+    const held = this.lockContext.getStore();
+    if (held?.has(projectId)) return operation();
+
+    const preceding = this.projectLocks.get(projectId) ?? Promise.resolve();
+    let release!: () => void;
+    const current = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    this.projectLocks.set(projectId, current);
+    await preceding;
+    try {
+      const nextHeld = new Set(held ?? []);
+      nextHeld.add(projectId);
+      return await this.lockContext.run(nextHeld, operation);
+    } finally {
+      release();
+      if (this.projectLocks.get(projectId) === current)
+        this.projectLocks.delete(projectId);
+    }
   }
 
   captureProjectStateVector(projectId: string): Uint8Array | undefined {
@@ -264,11 +304,28 @@ export class CollaborationManager {
     actorId: string,
     idempotencyKey: string,
   ): Promise<{ revision: number; document: unknown }> {
+    return this.withProjectLock(projectId, () =>
+      this.rebaseProjectCommandsUnlocked(
+        projectId,
+        commands,
+        actorId,
+        idempotencyKey,
+      ),
+    );
+  }
+
+  private async rebaseProjectCommandsUnlocked(
+    projectId: string,
+    commands: unknown[],
+    actorId: string,
+    idempotencyKey: string,
+  ): Promise<{ revision: number; document: unknown }> {
     const document = this.hocuspocus.documents.get(projectId);
     if (!document)
       throw new ApiError("not_found", "Project document not found", 404);
 
     const previous = structuredClone(readSemanticDocument(document));
+    let producedStateVector: Uint8Array | undefined;
     let committed = false;
     try {
       let rebased;
@@ -288,7 +345,9 @@ export class CollaborationManager {
         { source: "local", skipStoreHooks: true },
       );
       if (!rebased) throw new Error("Command rebase produced no document");
+      const rebasedDocument = structuredClone(readSemanticDocument(document));
       const encoded = encodeCollaborationState(document);
+      producedStateVector = encoded.stateVector;
       const updated = await this.dependencies.repository.transaction(
         async (repository) => {
           const persisted = await repository.findProjectDocument(projectId);
@@ -302,7 +361,7 @@ export class CollaborationManager {
             projectId,
             idempotencyKey,
             revision: result.revision,
-            document: readSemanticDocument(document),
+            document: rebasedDocument,
           });
           if (!receipt)
             throw new ApiError("not_found", "Command receipt not found", 404);
@@ -330,16 +389,26 @@ export class CollaborationManager {
       }
       return {
         revision: updated.revision,
-        document: readSemanticDocument(document),
+        document: rebasedDocument,
       };
     } catch (error) {
-      if (!committed)
-        document.transact(
-          () => {
-            replaceSemanticDocument(document, previous);
-          },
-          { source: "local", skipStoreHooks: true },
-        );
+      if (!committed) {
+        const currentStateVector =
+          encodeCollaborationState(document).stateVector;
+        if (
+          producedStateVector &&
+          !bytesEqual(producedStateVector, currentStateVector)
+        ) {
+          await this.flushProject(projectId);
+        } else {
+          document.transact(
+            () => {
+              replaceSemanticDocument(document, previous);
+            },
+            { source: "local", skipStoreHooks: true },
+          );
+        }
+      }
       if (!(error instanceof CommandError)) throw error;
       const invalid = new Set([
         "INVALID_BATCH",

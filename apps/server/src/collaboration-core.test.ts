@@ -270,6 +270,116 @@ describe("collaboration domain", () => {
     }
   });
 
+  it("serializes project operations through a reentrant project lock", async () => {
+    const { repository, service, project } = await fixture();
+    const manager = new CollaborationManager({
+      repository,
+      service,
+      now: () => NOW,
+    });
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let entered = false;
+    let secondCompleted = false;
+
+    const first = manager.withProjectLock(project.id, async () => {
+      entered = true;
+      await gate;
+      return "first";
+    });
+    while (!entered) await Promise.resolve();
+    const second = manager.withProjectLock(project.id, async () => {
+      secondCompleted = true;
+      return "second";
+    });
+
+    await Promise.resolve();
+    expect(secondCompleted).toBe(false);
+    release();
+    await expect(first).resolves.toBe("first");
+    await expect(second).resolves.toBe("second");
+    expect(secondCompleted).toBe(true);
+  });
+
+  it("preserves a concurrent Yjs edit when rebase rollback follows it", async () => {
+    const { repository, service, project } = await fixture();
+    const initial = createInitialCollaborationDocument(
+      project.id,
+      project.name,
+    );
+    const encoded = encodeCollaborationState(initial);
+    await repository.upsertProjectDocument({
+      projectId: project.id,
+      ...encoded,
+      expectedRevision: 0,
+      now: NOW,
+    });
+    await repository.createCommandReceipt({
+      projectId: project.id,
+      idempotencyKey: "rebase-concurrent-123456",
+      fingerprint: "fingerprint",
+      revision: 1,
+      document: readSemanticDocument(initial),
+      createdAt: NOW,
+    });
+    initial.destroy();
+
+    const manager = new CollaborationManager({
+      repository,
+      service,
+      now: () => NOW,
+    });
+    const active = createInitialCollaborationDocument(project.id, project.name);
+    (manager.hocuspocus.documents as unknown as Map<string, Y.Doc>).set(
+      project.id,
+      active,
+    );
+    vi.spyOn(manager, "flushProject").mockImplementation(async () => {
+      const persisted = await repository.findProjectDocument(project.id);
+      if (!persisted) throw new Error("missing persisted document");
+      await repository.upsertProjectDocument({
+        projectId: project.id,
+        ...encodeCollaborationState(active),
+        expectedRevision: persisted.revision,
+        now: NOW,
+      });
+    });
+    vi.spyOn(repository, "updateCommandReceipt").mockImplementation(
+      async () => {
+        const concurrent = readSemanticDocument(active);
+        concurrent.name = "Concurrent rollback edit";
+        replaceSemanticDocument(active, concurrent);
+        throw new Error("receipt update failed");
+      },
+    );
+
+    try {
+      await expect(
+        manager.rebaseProjectCommands(
+          project.id,
+          [
+            {
+              type: "set-token",
+              name: "brand",
+              value: { type: "color", value: "#1428A0" },
+            },
+          ],
+          "00000000-0000-4000-8000-000000000998",
+          "rebase-concurrent-123456",
+        ),
+      ).rejects.toThrow("receipt update failed");
+      expect(readSemanticDocument(active)).toMatchObject({
+        name: "Concurrent rollback edit",
+        tokens: { brand: { type: "color", value: "#1428A0" } },
+      });
+    } finally {
+      manager.hocuspocus.documents.delete(project.id);
+      active.destroy();
+    }
+  });
+
   it("destroys the command document when persistence fails", async () => {
     const { repository, service, principal, project } = await fixture();
     const initial = createInitialCollaborationDocument(

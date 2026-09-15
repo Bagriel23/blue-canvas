@@ -672,34 +672,36 @@ export function buildApp(dependencies: ServerDependencies): FastifyInstance {
       scope: "projects:write",
     });
     const projectId = identifier(request, "projectId");
-    await collaboration.flushProject(projectId);
-    const expectedStateVector =
-      collaboration.captureProjectStateVector(projectId);
     const commandInput = parse(applyCommandsRequestSchema, request.body);
-    const result = await service.applyCommands(
-      principal,
-      projectId,
-      commandInput,
-      request.id,
-    );
-    let response = result;
-    if (!result.idempotent) {
-      const applied = await collaboration.applyProjectSnapshot(
+    return collaboration.withProjectLock(projectId, async () => {
+      await collaboration.flushProject(projectId);
+      const expectedStateVector =
+        collaboration.captureProjectStateVector(projectId);
+      const result = await service.applyCommands(
+        principal,
         projectId,
-        result.document,
-        expectedStateVector,
+        commandInput,
+        request.id,
       );
-      if (!applied) {
-        const rebased = await collaboration.rebaseProjectCommands(
+      let response = result;
+      if (!result.idempotent) {
+        const applied = await collaboration.applyProjectSnapshot(
           projectId,
-          commandInput.commands,
-          principal.user.id,
-          commandInput.idempotencyKey,
+          result.document,
+          expectedStateVector,
         );
-        response = { ...result, ...rebased };
+        if (!applied) {
+          const rebased = await collaboration.rebaseProjectCommands(
+            projectId,
+            commandInput.commands,
+            principal.user.id,
+            commandInput.idempotencyKey,
+          );
+          response = { ...result, ...rebased };
+        }
       }
-    }
-    return reply.code(result.idempotent ? 200 : 201).send(response);
+      return reply.code(result.idempotent ? 200 : 201).send(response);
+    });
   });
 
   app.get("/api/v1/projects/:projectId/versions", async (request) => {
