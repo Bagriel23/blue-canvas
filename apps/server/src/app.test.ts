@@ -1417,6 +1417,58 @@ describe("application server", () => {
     expect(response.json().asset).not.toHaveProperty("storageKey");
   });
 
+  it("generates a deterministic export from the persisted project document", async () => {
+    const admin = await bootstrap();
+    const created = await admin.app.inject({
+      method: "POST",
+      url: "/api/v1/projects",
+      headers: { cookie: admin.cookie, "x-csrf-token": admin.csrf },
+      payload: { name: "Export target" },
+    });
+    const projectId = created.json().project.id as string;
+    const first = await admin.app.inject({
+      method: "POST",
+      url: `/api/v1/projects/${projectId}/exports`,
+      headers: { cookie: admin.cookie, "x-csrf-token": admin.csrf },
+      payload: { target: "html", scope: { type: "project" } },
+    });
+    const second = await admin.app.inject({
+      method: "POST",
+      url: `/api/v1/projects/${projectId}/exports`,
+      headers: { cookie: admin.cookie, "x-csrf-token": admin.csrf },
+      payload: { target: "html", scope: { type: "project" } },
+    });
+
+    expect(first.statusCode).toBe(200);
+    expect(first.json().archiveName).toBe("export-target-html-project.zip");
+    expect(first.json().files).toEqual(second.json().files);
+    expect(first.json().files).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ path: "index.html" }),
+        expect.objectContaining({ path: "export-manifest.json" }),
+      ]),
+    );
+  });
+
+  it("rejects malformed export requests before reading the document", async () => {
+    const admin = await bootstrap();
+    const created = await admin.app.inject({
+      method: "POST",
+      url: "/api/v1/projects",
+      headers: { cookie: admin.cookie, "x-csrf-token": admin.csrf },
+      payload: { name: "Export validation" },
+    });
+    const response = await admin.app.inject({
+      method: "POST",
+      url: `/api/v1/projects/${created.json().project.id}/exports`,
+      headers: { cookie: admin.cookie, "x-csrf-token": admin.csrf },
+      payload: { target: "vue", scope: { type: "project" } },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json().error.code).toBe("validation_error");
+  });
+
   it("saves a project template and creates a project from its persisted snapshot", async () => {
     const admin = await bootstrap();
     const created = await admin.app.inject({

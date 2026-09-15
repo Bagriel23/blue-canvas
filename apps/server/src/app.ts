@@ -24,8 +24,11 @@ import {
   updateCommentRequestSchema,
   createProjectTemplateRequestSchema,
   instantiateProjectTemplateRequestSchema,
+  exportRequestSchema,
   type PersonalAccessTokenScope,
 } from "@blue-canvas/contracts";
+import { generateExport, type GeneratedFile } from "@blue-canvas/exporters";
+import type { DesignDocument } from "@blue-canvas/document";
 import { z } from "zod";
 import Fastify, {
   LogController,
@@ -253,6 +256,17 @@ function projectTemplateResponse(template: {
     description: template.description,
     createdAt: template.createdAt.toISOString(),
     updatedAt: template.updatedAt.toISOString(),
+  };
+}
+
+function exportFileResponse(file: GeneratedFile) {
+  if ("content" in file) {
+    return { path: file.path, content: file.content, bytes: Buffer.byteLength(file.content) };
+  }
+  return {
+    path: file.path,
+    base64: Buffer.from(file.bytes).toString("base64"),
+    bytes: file.bytes.byteLength,
   };
 }
 
@@ -634,6 +648,32 @@ export function buildApp(dependencies: ServerDependencies): FastifyInstance {
         ...document,
       };
     });
+  });
+
+  app.post("/api/v1/projects/:projectId/exports", async (request) => {
+    const principal = await authenticate(request, { scope: "projects:read" });
+    const projectId = identifier(request, "projectId");
+    const input = parse(exportRequestSchema, request.body);
+    const documentResponse = await collaboration.withProjectLock(
+      projectId,
+      async () => {
+        await collaboration.flushProject(projectId);
+        return service.getProjectDocument(principal, projectId);
+      },
+    );
+    const result = await generateExport({
+      document: documentResponse.document as DesignDocument,
+      target: input.target,
+      scope: input.scope,
+      assets: {},
+    });
+    const project = await service.getProject(principal, projectId);
+    return {
+      archiveName: `${(project.name.replace(/[^a-zA-Z0-9_-]+/g, "-").replace(/^-+|-+$/g, "") || "blue-canvas").toLowerCase()}-${input.target}-${input.scope.type}.zip`,
+      files: result.files.map(exportFileResponse),
+      diagnostics: result.diagnostics,
+      manifest: { files: result.manifest.files.map(({ path, bytes }) => ({ path, bytes })) },
+    };
   });
 
   app.post("/api/v1/projects/:projectId/templates", async (request, reply) => {

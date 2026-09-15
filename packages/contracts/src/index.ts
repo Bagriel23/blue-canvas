@@ -20,6 +20,20 @@ export const personalAccessTokenScopeSchema = z.enum([
   "admin",
 ]);
 
+export const exportTargetSchema = z.enum(["html", "react", "preact"]);
+export const exportScopeSchema = z.discriminatedUnion("type", [
+  z.strictObject({ type: z.literal("project") }),
+  z.strictObject({ type: z.literal("page"), pageId: z.uuid() }),
+  z.strictObject({
+    type: z.literal("selection"),
+    nodeIds: z.array(z.uuid()).min(1).max(1000),
+  }),
+]);
+export const exportRequestSchema = z.strictObject({
+  target: exportTargetSchema,
+  scope: exportScopeSchema,
+});
+
 export const bootstrapAdminRequestSchema = z.strictObject({
   email: emailSchema,
   displayName: displayNameSchema,
@@ -210,3 +224,6 @@ export type TeamRole = z.infer<typeof teamRoleSchema>;
 export type PersonalAccessTokenScope = z.infer<
   typeof personalAccessTokenScopeSchema
 >;
+export type ExportRequest = z.infer<typeof exportRequestSchema>;
+export type ExportTarget = z.infer<typeof exportTargetSchema>;
+export type ExportScope = z.infer<typeof exportScopeSchema>;
