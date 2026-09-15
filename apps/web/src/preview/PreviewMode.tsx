@@ -104,11 +104,10 @@ export function PreviewMode({
   );
 
   const goBack = () => {
-    setHistory((current) => {
-      const previous = current.at(-1);
-      if (previous) setActivePageId(previous);
-      return previous ? current.slice(0, -1) : current;
-    });
+    const previous = history.at(-1);
+    if (!previous) return;
+    setActivePageId(previous);
+    setHistory(history.slice(0, -1));
     setOpenOverlayIds(new Set());
   };
 

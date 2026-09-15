@@ -26,6 +26,8 @@ const formConditionalId = "4a4d0000-0000-7000-8000-000000000415";
 const formMessageId = "4a4d0000-0000-7000-8000-000000000416";
 const submitButtonId = "4a4d0000-0000-7000-8000-000000000417";
 const submitLabelId = "4a4d0000-0000-7000-8000-000000000418";
+const genericId = "4a4d0000-0000-7000-8000-000000000421";
+const genericTextId = "4a4d0000-0000-7000-8000-000000000422";
 
 function textNode(id: string, name: string, text: string): DesignNode {
   return { id, kind: "text", name, visible: true, style: {}, text };
@@ -194,6 +196,24 @@ function interactiveDocument(): DesignDocument {
     style: {},
     componentId,
   });
+  root.children.push({
+    id: genericId,
+    kind: "stack",
+    name: "Generic action",
+    visible: true,
+    style: {},
+    layout: {
+      direction: "row",
+      gap: 4,
+      align: "center",
+      justify: "start",
+      wrap: "nowrap",
+    },
+    interactions: [
+      { trigger: "click", action: { type: "open-overlay", overlayId } },
+    ],
+    children: [textNode(genericTextId, "Generic action label", "Open generic")],
+  });
   const secondPage = {
     id: secondPageId,
     name: "Details",
@@ -293,6 +313,30 @@ describe("PreviewMode", () => {
     expect(screen.getByText("Filter applied")).toBeTruthy();
   });
 
+  it("keeps focus while a text input receives multiple characters", () => {
+    const document = interactiveDocument();
+    const page = document.pages[0];
+    const root = page?.artboards[0]?.root;
+    if (!root || root.kind !== "stack")
+      throw new Error("document root missing");
+    const input = findNodeById(root, inputId)?.node;
+    if (!input || input.kind !== "input") throw new Error("input missing");
+    input.interactions = [
+      {
+        trigger: "change",
+        action: { type: "set-variable", variable: "query", value: "" },
+      },
+    ];
+    renderPreview(document);
+    const renderedInput = screen.getByPlaceholderText("Search");
+    renderedInput.focus();
+    fireEvent.change(renderedInput, { target: { value: "B" } });
+    fireEvent.change(renderedInput, { target: { value: "Blue" } });
+
+    expect(globalThis.document.activeElement).toBe(renderedInput);
+    expect(renderedInput).toHaveProperty("value", "Blue");
+  });
+
   it("converts a number input submitted from a form before setting its variable", () => {
     const document = interactiveDocument();
     const page = document.pages[0];
@@ -346,6 +390,66 @@ describe("PreviewMode", () => {
       screen.getByRole("button", { name: "Open from component" }),
     );
     expect(screen.getByText("Saved")).toBeTruthy();
+  });
+
+  it("exposes generic click interactions as keyboard-activatable buttons", () => {
+    const document = interactiveDocument();
+    renderPreview(document);
+    const generic = screen.getByRole("button", { name: "Open generic" });
+
+    expect(generic.getAttribute("tabindex")).toBe("0");
+    fireEvent.keyDown(generic, { key: "Enter" });
+    expect(
+      screen.getByRole("dialog", { name: "Confirmation dialog" }),
+    ).toBeTruthy();
+
+    fireEvent.click(
+      screen.getByRole("dialog", { name: "Confirmation dialog" }),
+    );
+    fireEvent.keyDown(generic, { key: " " });
+    expect(
+      screen.getByRole("dialog", { name: "Confirmation dialog" }),
+    ).toBeTruthy();
+  });
+
+  it("renders component chains deeper than eight levels without truncating them", () => {
+    const document = interactiveDocument();
+    const first = document.components[0];
+    if (!first || first.root.kind !== "stack")
+      throw new Error("component missing");
+    const chainIds = Array.from(
+      { length: 9 },
+      (_, index) =>
+        `4a4d0000-0000-7000-8000-${(431 + index).toString().padStart(12, "0")}`,
+    );
+    for (let index = 0; index < 9; index += 1) {
+      const nextComponentId = chainIds[index];
+      if (!nextComponentId) throw new Error("chain component id missing");
+      document.components.push({
+        id: nextComponentId,
+        name: `Chain ${index}`,
+        root: {
+          id: `4a4d0000-0000-7000-8000-${(441 + index).toString().padStart(12, "0")}`,
+          kind: "component-instance",
+          name: `Chain instance ${index}`,
+          visible: true,
+          style: {},
+          componentId: chainIds[index + 1] ?? componentId,
+        },
+      });
+    }
+    const page = document.pages[0];
+    const pageRoot = page?.artboards[0]?.root;
+    if (!pageRoot || pageRoot.kind !== "stack")
+      throw new Error("page root missing");
+    const instance = pageRoot.children.find(
+      (node) => node.id === componentInstanceId,
+    );
+    if (!instance || instance.kind !== "component-instance")
+      throw new Error("instance missing");
+    instance.componentId = chainIds[0] ?? componentId;
+    renderPreview(document);
+    expect(screen.getByText("Open from component")).toBeTruthy();
   });
 
   it.each([

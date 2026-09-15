@@ -1,5 +1,6 @@
 import {
   useCallback,
+  useEffect,
   useState,
   type KeyboardEvent,
   type MouseEvent,
@@ -187,7 +188,7 @@ interface NodeViewProps {
   editable: boolean;
   previewState?: PreviewState | undefined;
   onInteraction?: PreviewInteractionHandler | undefined;
-  componentDepth?: number | undefined;
+  componentStack?: ReadonlySet<string> | undefined;
 }
 
 function NodeView({
@@ -198,9 +199,19 @@ function NodeView({
   editable,
   previewState,
   onInteraction,
-  componentDepth = 0,
+  componentStack = new Set(),
 }: NodeViewProps) {
   const previewing = !editable && onInteraction !== undefined;
+  const externalInputValue =
+    previewing && node.kind === "input" && node.variable
+      ? String(previewState?.variables[node.variable] ?? "")
+      : "";
+  const [draftInputValue, setDraftInputValue] = useState(externalInputValue);
+  useEffect(() => {
+    if (previewing && node.kind === "input") {
+      setDraftInputValue(externalInputValue);
+    }
+  }, [externalInputValue, node.kind, previewing]);
   if (previewing) {
     if (
       node.kind === "overlay" &&
@@ -214,8 +225,12 @@ function NodeView({
   const hasInteraction = (trigger: "click" | "submit" | "change") =>
     node.interactions?.some((interaction) => interaction.trigger === trigger) ??
     false;
+  const keyboardInteractive =
+    previewing &&
+    hasInteraction("click") &&
+    !["link", "button", "input", "form", "overlay"].includes(node.kind);
 
-  const handleClick = (event: MouseEvent) => {
+  const handleClick = (event: MouseEvent | KeyboardEvent) => {
     if (editable) {
       event.stopPropagation();
       onSelect(node.id);
@@ -227,14 +242,22 @@ function NodeView({
     }
   };
 
+  const handleNodeKeyDown = (event: KeyboardEvent) => {
+    if (!keyboardInteractive || !["Enter", " "].includes(event.key)) return;
+    event.preventDefault();
+    handleClick(event);
+  };
+
   const commonProps = {
     className: "bc-canvas-node",
     "data-node-id": node.id,
     "data-node-kind": node.kind,
     "data-node-name": node.name,
     "data-selected": selected ? "true" : "false",
-    tabIndex: editable ? 0 : undefined,
+    role: keyboardInteractive ? "button" : undefined,
+    tabIndex: editable || keyboardInteractive ? 0 : undefined,
     onClick: handleClick,
+    onKeyDown: handleNodeKeyDown,
     style: { ...styleToCss(node.style), ...layoutToCss(node) },
   } as const;
 
@@ -249,7 +272,7 @@ function NodeView({
         editable={editable}
         previewState={previewState}
         onInteraction={onInteraction}
-        componentDepth={componentDepth}
+        componentStack={componentStack}
       />
     ));
 
@@ -314,22 +337,17 @@ function NodeView({
         <input
           {...commonProps}
           type={node.inputType}
-          key={
-            previewing && node.variable
-              ? `${node.id}:${String(previewState?.variables[node.variable] ?? "")}`
-              : node.id
-          }
           name={node.variable}
           placeholder={node.placeholder}
           readOnly={!previewing}
-          defaultValue={
-            previewing && node.variable
-              ? String(previewState?.variables[node.variable] ?? "")
-              : undefined
-          }
+          value={previewing ? draftInputValue : undefined}
           onChange={(event) => {
-            if (previewing && hasInteraction("change")) {
-              onInteraction(node.id, "change", event.currentTarget.value);
+            if (previewing) {
+              const value = event.currentTarget.value;
+              setDraftInputValue(value);
+              if (hasInteraction("change")) {
+                onInteraction(node.id, "change", value);
+              }
             }
           }}
         />
@@ -377,7 +395,12 @@ function NodeView({
     }
     case "overlay":
       return (
-        <div {...commonProps} role="dialog">
+        <div
+          {...commonProps}
+          role="dialog"
+          aria-modal="true"
+          aria-label={node.name}
+        >
           {renderChildren(node.children)}
         </div>
       );
@@ -387,12 +410,14 @@ function NodeView({
           <div {...commonProps} data-component-instance={node.componentId} />
         );
       }
-      if (componentDepth >= 8) return null;
       {
+        if (componentStack.has(node.componentId)) return null;
         const component = document.components.find(
           (entry) => entry.id === node.componentId,
         );
         if (!component) return null;
+        const nextComponentStack = new Set(componentStack);
+        nextComponentStack.add(node.componentId);
         return (
           <div {...commonProps} data-component-instance={node.componentId}>
             <NodeView
@@ -403,7 +428,7 @@ function NodeView({
               editable={editable}
               previewState={previewState}
               onInteraction={onInteraction}
-              componentDepth={componentDepth + 1}
+              componentStack={nextComponentStack}
             />
           </div>
         );
