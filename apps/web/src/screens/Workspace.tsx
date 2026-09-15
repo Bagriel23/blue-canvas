@@ -291,8 +291,7 @@ export function Workspace({ projectId, editable = true }: WorkspaceProps) {
     editable &&
     !project.archived &&
     (project.role === "owner" || project.role === "editor");
-  const canManageSharing =
-    project.role === "owner" || project.role === "editor";
+  const canManageSharing = project.role === "owner";
   const activePage =
     doc.pages.find((page) => page.id === activePageId) ?? doc.pages[0];
   const pageId = activePage?.id ?? "";

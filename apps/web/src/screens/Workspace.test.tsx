@@ -229,8 +229,29 @@ describe("Workspace persistence", () => {
     );
     const input = await screen.findByLabelText("Name");
     expect(input.hasAttribute("readonly")).toBe(true);
+    expect(screen.queryByRole("button", { name: "Share" })).toBeNull();
     fireEvent.change(input, { target: { value: "Must stay unchanged" } });
     expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps project sharing reserved for owners", async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(
+      jsonResponse({
+        project: {
+          id: "project-1",
+          name: "Editor project",
+          archived: false,
+          role: "editor",
+        },
+        revision: 1,
+        document: loadDemoDocument(),
+      }),
+    );
+    renderWorkspace(fetcher);
+    await waitFor(() =>
+      expect(screen.getByText("Editor project")).toBeTruthy(),
+    );
+    expect(screen.queryByRole("button", { name: "Share" })).toBeNull();
   });
 
   it("keeps pending edits when the locale changes", async () => {

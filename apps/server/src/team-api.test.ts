@@ -140,6 +140,45 @@ describe("teams and project sharing API", () => {
     expect(missingCsrf.statusCode).toBe(403);
   });
 
+  it("refreshes team updatedAt whenever membership changes", async () => {
+    const repository = new InMemoryRepository();
+    const old = new Date("2026-08-24T12:00:00.000Z");
+    const next = new Date("2026-08-24T12:05:00.000Z");
+    const owner = await repository.createUser({
+      email: "owner@example.com",
+      displayName: "Owner",
+      passwordHash: "hash",
+      locale: "en-US",
+      isAdmin: false,
+      now: old,
+    });
+    const member = await repository.createUser({
+      email: "member@example.com",
+      displayName: "Member",
+      passwordHash: "hash",
+      locale: "en-US",
+      isAdmin: false,
+      now: old,
+    });
+    const team = await repository.createTeam({
+      name: "Updated team",
+      ownerId: owner.id,
+      now: old,
+    });
+    await repository.addTeamMember({
+      teamId: team.id,
+      userId: member.id,
+      role: "member",
+      now: next,
+    });
+    expect((await repository.findTeamById(team.id))?.updatedAt).toEqual(next);
+    const changed = new Date("2026-08-24T12:10:00.000Z");
+    await repository.updateTeamMember(team.id, member.id, "admin", changed);
+    expect((await repository.findTeamById(team.id))?.updatedAt).toEqual(
+      changed,
+    );
+  });
+
   it("returns project members and keeps project invitations available", async () => {
     const app = buildApp(dependencies);
     const bootstrap = await app.inject({

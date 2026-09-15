@@ -48,7 +48,7 @@ Todas as rotas abaixo são relativas a `/api/v1`.
 | `POST`   | `/projects`                                 | Usuário autenticado                                 | `projects:write`         |
 | `GET`    | `/projects`                                 | Usuário autenticado                                 | `projects:read`          |
 | `GET`    | `/teams`                                    | Membro do time                                      | `projects:read`          |
-| `POST`   | `/teams`                                    | Cria time e adiciona owner                          | `projects:write`         |
+| `POST`   | `/teams`                                    | Somente sessão + CSRF; cria time e adiciona owner   | Não permitido para PAT   |
 | `GET`    | `/teams/:teamId`                            | Membro do time; inclui membros                      | `projects:read`          |
 | `POST`   | `/teams/:teamId/members`                    | Owner/admin do time                                 | `projects:write`         |
 | `PATCH`  | `/teams/:teamId/members/:userId`            | Owner/admin; owner não pode ser alterado            | `projects:write`         |

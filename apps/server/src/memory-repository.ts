@@ -376,6 +376,8 @@ export class InMemoryRepository implements RepositoryPort {
     if (!member) return undefined;
     member.role = role;
     member.updatedAt = now;
+    const team = this.teams.get(teamId);
+    if (team) team.updatedAt = now;
     return member;
   }
 

@@ -253,9 +253,14 @@ export function Teams() {
                       <strong>{member.displayName}</strong>
                       <small>{member.email}</small>
                     </span>
-                    {member.role === "owner" ? (
+                    {member.role === "owner" ||
+                    (selected.role !== "owner" && selected.role !== "admin") ? (
                       <span className="bc-project-card__meta">
-                        {messages.teams.roleOwner}
+                        {member.role === "owner"
+                          ? messages.teams.roleOwner
+                          : member.role === "admin"
+                            ? messages.teams.roleAdmin
+                            : messages.teams.roleMember}
                       </span>
                     ) : (
                       <span className="bc-member-list__actions">
@@ -295,7 +300,7 @@ export function Teams() {
               </ul>
             )}
           </section>
-          {selected.role !== "member" ? (
+          {selected.role === "owner" || selected.role === "admin" ? (
             <form
               className="bc-form"
               onSubmit={(event) => void addMember(event)}

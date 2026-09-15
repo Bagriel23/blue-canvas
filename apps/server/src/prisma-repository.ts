@@ -549,7 +549,7 @@ export class PrismaRepository implements RepositoryPort {
     input: Parameters<RepositoryPort["addTeamMember"]>[0],
   ): Promise<TeamMember> {
     try {
-      return await this.client.teamMember.create({
+      const member = await this.client.teamMember.create({
         data: {
           id: randomUUID(),
           teamId: input.teamId,
@@ -559,6 +559,11 @@ export class PrismaRepository implements RepositoryPort {
           updatedAt: input.now,
         },
       });
+      await this.client.team.update({
+        where: { id: input.teamId },
+        data: { updatedAt: input.now },
+      });
+      return member;
     } catch (error) {
       if (isPrismaError(error, "P2002")) {
         throw new ApiError(
