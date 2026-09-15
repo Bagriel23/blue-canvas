@@ -1,4 +1,5 @@
 import type { DesignDocument } from "@blue-canvas/document";
+import { FileText, Frame } from "lucide-react";
 import { useLocale } from "../state/locale.js";
 
 interface PagesPanelProps {
@@ -24,7 +25,10 @@ export function PagesPanel({
       <div className="bc-layers">
         {document.pages.map((page) => (
           <div key={page.id}>
-            <div className="bc-project-card__meta">{page.name}</div>
+            <div className="bc-panel-label">
+              <FileText size={13} aria-hidden="true" />
+              <span>{page.name}</span>
+            </div>
             {page.artboards.map((artboard) => (
               <button
                 type="button"
@@ -37,7 +41,8 @@ export function PagesPanel({
                 }
                 onClick={() => onSelectArtboard(page.id, artboard.id)}
               >
-                <span>{artboard.name}</span>
+                <Frame size={14} aria-hidden="true" />
+                <span className="bc-layer-row__label">{artboard.name}</span>
                 <span className="bc-project-card__meta">
                   {artboard.width}×{artboard.height}
                 </span>

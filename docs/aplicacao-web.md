@@ -52,8 +52,10 @@ erro.
 
 O workspace divide a tela em três painéis: páginas + camadas à esquerda, o
 canvas DOM ao centro e o inspetor à direita com botões de prévia,
-compartilhamento e exportação. Em telas menores que 900 px o layout empilha as
-colunas.
+compartilhamento e exportação. O shell usa uma linguagem visual de estúdio
+densa, com ícones Lucide, barra de controles do canvas (zoom/ajuste), estados de
+carregamento e vazio e responsividade: em telas menores que 820 px as colunas
+viram seções empilhadas e os comandos da barra superior ficam compactos.
 
 O canvas renderiza `DesignDocument` como DOM semântico (`div`, `span`, `button`,
 `img`, `input`, `a`, `form`) usando `styleToCss` e `layoutToCss`. A seleção é
@@ -70,6 +72,7 @@ servidor quando o cliente Yjs for adicionado.
 ## Dependências principais
 
 - `react` e `react-dom` 19.
+- `lucide-react` fornece ícones consistentes para ações e estados do estúdio.
 - `vite` 8 + `@vitejs/plugin-react` 6.
 - `@testing-library/react` 16 sobre `happy-dom` 20 para testes de componentes.
 - `@blue-canvas/contracts` fornece os esquemas Zod usados na fronteira HTTP.

@@ -90,6 +90,18 @@ describe("i18n locale controller", () => {
     expect(formatMessage("ko-KR", "app.title")).toBe("Blue Canvas");
   });
 
+  it("localizes the studio shell copy in every supported locale", () => {
+    expect(formatMessage("en-US", "home.lede")).toBe(
+      "Build interfaces with a clear visual system.",
+    );
+    expect(formatMessage("pt-BR", "home.lede")).toBe(
+      "Construa interfaces com um sistema visual claro.",
+    );
+    expect(formatMessage("ko-KR", "home.lede")).toBe(
+      "명확한 시각 시스템으로 인터페이스를 만드세요.",
+    );
+  });
+
   it("returns the raw key when path is unknown", () => {
     expect(formatMessage("en-US", "missing.key")).toBe("missing.key");
   });

@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ApiError } from "../api/client.js";
 import { useLocale } from "../state/locale.js";
 import { useSession } from "../state/session.js";
+import { Boxes, FileCode2, PackageOpen } from "lucide-react";
 
 interface LibraryKit {
   id: string;
@@ -61,11 +62,20 @@ export function Library() {
   }, [load]);
 
   return (
-    <section className="bc-screen">
-      <h1 className="bc-screen__heading">{messages.library.heading}</h1>
+    <section className="bc-screen bc-library">
+      <div className="bc-screen__intro">
+        <div>
+          <p className="bc-eyebrow">{messages.library.kicker}</p>
+          <h1 className="bc-screen__heading">{messages.library.heading}</h1>
+          <p className="bc-screen__lede">{messages.library.lede}</p>
+        </div>
+      </div>
       {error ? <p className="bc-error">{error}</p> : null}
-      <div className="bc-card">
-        <h2>{messages.library.kits}</h2>
+      <div className="bc-library-section">
+        <div className="bc-section-heading">
+          <Boxes size={17} aria-hidden="true" />
+          <h2>{messages.library.kits}</h2>
+        </div>
         {kits === null ? (
           <p>{messages.common.loading}</p>
         ) : kits.length === 0 ? (
@@ -87,12 +97,18 @@ export function Library() {
           </ul>
         )}
       </div>
-      <div className="bc-card" style={{ marginTop: 16 }}>
-        <h2>{messages.library.templates}</h2>
+      <div className="bc-library-section">
+        <div className="bc-section-heading">
+          <FileCode2 size={17} aria-hidden="true" />
+          <h2>{messages.library.templates}</h2>
+        </div>
         {templates === null ? (
           <p>{messages.common.loading}</p>
         ) : templates.length === 0 ? (
-          <p>{messages.library.empty}</p>
+          <div className="bc-empty-state">
+            <PackageOpen size={22} aria-hidden="true" />
+            <p>{messages.library.empty}</p>
+          </div>
         ) : (
           <ul
             className="bc-project-list"

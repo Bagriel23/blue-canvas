@@ -1,5 +1,11 @@
-import { useCallback, type KeyboardEvent, type MouseEvent } from "react";
+import {
+  useCallback,
+  useState,
+  type KeyboardEvent,
+  type MouseEvent,
+} from "react";
 import type { Artboard, DesignNode } from "@blue-canvas/document";
+import { Maximize2, Minus, Plus } from "lucide-react";
 
 import { layoutToCss, styleToCss } from "./style.js";
 import {
@@ -8,6 +14,7 @@ import {
   previousNodeId,
 } from "./selection.js";
 import type { DesignDocument } from "@blue-canvas/document";
+import { useLocale } from "../state/locale.js";
 
 interface CanvasProps {
   document: DesignDocument;
@@ -26,6 +33,8 @@ export function Canvas({
   onSelect,
   editable,
 }: CanvasProps) {
+  const { messages } = useLocale();
+  const [zoom, setZoom] = useState(100);
   const page = document.pages.find((entry) => entry.id === pageId);
   const artboard = page?.artboards.find((entry) => entry.id === artboardId);
   const root = currentArtboardRoot(document, pageId, artboardId);
@@ -58,7 +67,7 @@ export function Canvas({
   if (!page || !artboard || !root) {
     return (
       <div className="bc-canvas-wrapper" data-empty="true">
-        <p>Page not found.</p>
+        <p>{messages.workspace.pageNotFound}</p>
       </div>
     );
   }
@@ -72,7 +81,47 @@ export function Canvas({
       onKeyDown={handleKeyDown}
       tabIndex={0}
     >
-      <ArtboardFrame artboard={artboard}>
+      <div
+        className="bc-canvas-toolbar"
+        aria-label={messages.workspace.canvasControls}
+      >
+        <span className="bc-canvas-toolbar__label">
+          {messages.workspace.canvas}
+        </span>
+        <div className="bc-canvas-toolbar__actions">
+          <button
+            className="bc-icon-btn bc-icon-btn--small"
+            type="button"
+            aria-label={messages.workspace.zoomOut}
+            title={messages.workspace.zoomOut}
+            onClick={() => setZoom((value) => Math.max(25, value - 10))}
+          >
+            <Minus size={14} aria-hidden="true" />
+          </button>
+          <span className="bc-canvas-toolbar__zoom" aria-live="polite">
+            {zoom}%
+          </span>
+          <button
+            className="bc-icon-btn bc-icon-btn--small"
+            type="button"
+            aria-label={messages.workspace.zoomIn}
+            title={messages.workspace.zoomIn}
+            onClick={() => setZoom((value) => Math.min(200, value + 10))}
+          >
+            <Plus size={14} aria-hidden="true" />
+          </button>
+          <button
+            className="bc-icon-btn bc-icon-btn--small"
+            type="button"
+            aria-label={messages.workspace.fitCanvas}
+            title={messages.workspace.fitCanvas}
+            onClick={() => setZoom(100)}
+          >
+            <Maximize2 size={14} aria-hidden="true" />
+          </button>
+        </div>
+      </div>
+      <ArtboardFrame artboard={artboard} zoom={zoom / 100}>
         <NodeView
           node={root}
           selectedId={selectedId}
@@ -86,16 +135,24 @@ export function Canvas({
 
 function ArtboardFrame({
   artboard,
+  zoom,
   children,
 }: {
   artboard: Artboard;
+  zoom: number;
   children: React.ReactNode;
 }) {
   return (
     <div
       className="bc-canvas-artboard"
       data-artboard-id={artboard.id}
-      style={{ width: artboard.width, minHeight: artboard.height }}
+      data-zoom={zoom}
+      style={{
+        width: artboard.width,
+        minHeight: artboard.height,
+        transform: `scale(${zoom})`,
+        transformOrigin: "top center",
+      }}
     >
       <div className="bc-canvas-artboard__label">{artboard.name}</div>
       {children}

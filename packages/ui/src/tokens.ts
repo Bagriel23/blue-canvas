@@ -119,8 +119,9 @@ export const palettes: Record<ThemeMode, ColorPalette> = {
 
 export const typography = {
   fontFamily:
-    '"Inter", "SamsungOne", "Noto Sans", "Noto Sans KR", "Segoe UI", system-ui, sans-serif',
-  monoFamily: '"JetBrains Mono", "Fira Code", "Menlo", monospace',
+    '"IBM Plex Sans", "Noto Sans", "SamsungOne", "Segoe UI", system-ui, sans-serif',
+  monoFamily:
+    '"IBM Plex Mono", "JetBrains Mono", "Fira Code", Menlo, monospace',
   scale: {
     xs: "0.75rem",
     sm: "0.8125rem",

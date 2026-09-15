@@ -11,6 +11,8 @@ export interface UiMessages {
     themeLight: string;
     themeDark: string;
     localeLabel: string;
+    openNavigation: string;
+    closeNavigation: string;
   };
   auth: {
     signInHeading: string;
@@ -29,12 +31,18 @@ export interface UiMessages {
     createHeading: string;
     projectName: string;
     open: string;
+    kicker: string;
+    lede: string;
+    studioStatus: string;
+    createDescription: string;
   };
   library: {
     heading: string;
     empty: string;
     kits: string;
     templates: string;
+    kicker: string;
+    lede: string;
   };
   workspace: {
     pages: string;
@@ -50,6 +58,12 @@ export interface UiMessages {
     layout: string;
     text: string;
     unsavedWarning: string;
+    canvas: string;
+    canvasControls: string;
+    pageNotFound: string;
+    zoomOut: string;
+    zoomIn: string;
+    fitCanvas: string;
   };
   share: {
     heading: string;
@@ -84,6 +98,8 @@ const enUs: UiMessages = {
     themeLight: "Light theme",
     themeDark: "Dark theme",
     localeLabel: "Language",
+    openNavigation: "Open navigation",
+    closeNavigation: "Close navigation",
   },
   auth: {
     signInHeading: "Sign in",
@@ -102,12 +118,18 @@ const enUs: UiMessages = {
     createHeading: "Create a project",
     projectName: "Project name",
     open: "Open",
+    kicker: "Workspace / 01",
+    lede: "Build interfaces with a clear visual system.",
+    studioStatus: "Local studio",
+    createDescription: "Start from a focused canvas and keep your flow close.",
   },
   library: {
     heading: "Library",
     empty: "No published kits or templates yet.",
     kits: "Kits",
     templates: "Templates",
+    kicker: "Resources / 02",
+    lede: "Reusable building blocks for your next canvas.",
   },
   workspace: {
     pages: "Pages",
@@ -124,6 +146,12 @@ const enUs: UiMessages = {
     text: "Text",
     unsavedWarning:
       "You have pending changes that have not been synchronized yet.",
+    canvas: "Canvas",
+    canvasControls: "Canvas controls",
+    pageNotFound: "Page not found.",
+    zoomOut: "Zoom out",
+    zoomIn: "Zoom in",
+    fitCanvas: "Fit canvas",
   },
   share: {
     heading: "Share project",
@@ -158,6 +186,8 @@ const ptBr: UiMessages = {
     themeLight: "Tema claro",
     themeDark: "Tema escuro",
     localeLabel: "Idioma",
+    openNavigation: "Abrir navegação",
+    closeNavigation: "Fechar navegação",
   },
   auth: {
     signInHeading: "Entrar",
@@ -176,12 +206,19 @@ const ptBr: UiMessages = {
     createHeading: "Criar projeto",
     projectName: "Nome do projeto",
     open: "Abrir",
+    kicker: "Workspace / 01",
+    lede: "Construa interfaces com um sistema visual claro.",
+    studioStatus: "Estúdio local",
+    createDescription:
+      "Comece em um canvas focado e mantenha seu fluxo por perto.",
   },
   library: {
     heading: "Biblioteca",
     empty: "Nenhum kit ou template publicado ainda.",
     kits: "Kits",
     templates: "Templates",
+    kicker: "Recursos / 02",
+    lede: "Blocos reutilizáveis para seu próximo canvas.",
   },
   workspace: {
     pages: "Páginas",
@@ -198,6 +235,12 @@ const ptBr: UiMessages = {
     text: "Texto",
     unsavedWarning:
       "Existem alterações pendentes que ainda não foram sincronizadas.",
+    canvas: "Canvas",
+    canvasControls: "Controles do canvas",
+    pageNotFound: "Página não encontrada.",
+    zoomOut: "Diminuir zoom",
+    zoomIn: "Aumentar zoom",
+    fitCanvas: "Ajustar canvas",
   },
   share: {
     heading: "Compartilhar projeto",
@@ -232,6 +275,8 @@ const koKr: UiMessages = {
     themeLight: "라이트 테마",
     themeDark: "다크 테마",
     localeLabel: "언어",
+    openNavigation: "탐색 열기",
+    closeNavigation: "탐색 닫기",
   },
   auth: {
     signInHeading: "로그인",
@@ -250,12 +295,18 @@ const koKr: UiMessages = {
     createHeading: "프로젝트 만들기",
     projectName: "프로젝트 이름",
     open: "열기",
+    kicker: "워크스페이스 / 01",
+    lede: "명확한 시각 시스템으로 인터페이스를 만드세요.",
+    studioStatus: "로컬 스튜디오",
+    createDescription: "집중된 캔버스에서 시작하고 흐름을 가까이 유지하세요.",
   },
   library: {
     heading: "라이브러리",
     empty: "게시된 키트나 템플릿이 없습니다.",
     kits: "키트",
     templates: "템플릿",
+    kicker: "리소스 / 02",
+    lede: "다음 캔버스를 위한 재사용 가능한 블록입니다.",
   },
   workspace: {
     pages: "페이지",
@@ -271,6 +322,12 @@ const koKr: UiMessages = {
     layout: "레이아웃",
     text: "텍스트",
     unsavedWarning: "동기화되지 않은 변경 사항이 있습니다.",
+    canvas: "캔버스",
+    canvasControls: "캔버스 컨트롤",
+    pageNotFound: "페이지를 찾을 수 없습니다.",
+    zoomOut: "축소",
+    zoomIn: "확대",
+    fitCanvas: "캔버스 맞춤",
   },
   share: {
     heading: "프로젝트 공유",

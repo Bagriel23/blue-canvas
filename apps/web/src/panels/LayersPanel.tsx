@@ -1,5 +1,19 @@
 import type { DesignNode } from "@blue-canvas/document";
 import { getNodeChildren } from "@blue-canvas/document";
+import {
+  Box,
+  CircleHelp,
+  Component,
+  ExternalLink,
+  FormInput,
+  Grid2X2,
+  Image,
+  Layers3,
+  List,
+  MousePointer2,
+  SquareStack,
+  Type,
+} from "lucide-react";
 import { useLocale } from "../state/locale.js";
 
 interface LayersPanelProps {
@@ -53,8 +67,10 @@ function LayerNode({
         style={{ paddingLeft: 6 + depth * 12 }}
         onClick={() => onSelect(node.id)}
       >
-        <span aria-hidden="true">{iconFor(node.kind)}</span>
-        <span>{node.name}</span>
+        <span className="bc-layer-row__icon" aria-hidden="true">
+          {iconFor(node.kind)}
+        </span>
+        <span className="bc-layer-row__label">{node.name}</span>
       </button>
       {children.map((child) => (
         <LayerNode
@@ -69,33 +85,33 @@ function LayerNode({
   );
 }
 
-function iconFor(kind: DesignNode["kind"]): string {
+function iconFor(kind: DesignNode["kind"]): React.ReactNode {
   switch (kind) {
     case "stack":
-      return "▤";
+      return <Layers3 size={14} />;
     case "grid":
-      return "▦";
+      return <Grid2X2 size={14} />;
     case "text":
-      return "T";
+      return <Type size={14} />;
     case "image":
-      return "▣";
+      return <Image size={14} />;
     case "icon":
-      return "◆";
+      return <CircleHelp size={14} />;
     case "link":
-      return "↗";
+      return <ExternalLink size={14} />;
     case "button":
-      return "▷";
+      return <MousePointer2 size={14} />;
     case "input":
-      return "▭";
+      return <FormInput size={14} />;
     case "form":
-      return "▤";
+      return <SquareStack size={14} />;
     case "repeater":
-      return "≡";
+      return <List size={14} />;
     case "conditional":
-      return "?";
+      return <CircleHelp size={14} />;
     case "overlay":
-      return "◫";
+      return <Box size={14} />;
     case "component-instance":
-      return "◈";
+      return <Component size={14} />;
   }
 }

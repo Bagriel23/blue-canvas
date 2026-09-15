@@ -1,3 +1,5 @@
+import { useState } from "react";
+
 import { LocaleProvider, useLocale } from "./state/locale.js";
 import { SessionProvider, useSession } from "./state/session.js";
 import { ThemeProvider, useTheme } from "./state/theme.js";
@@ -8,6 +10,17 @@ import { Home } from "./screens/Home.js";
 import { Library } from "./screens/Library.js";
 import { Workspace } from "./screens/Workspace.js";
 import { localeDisplayNames, uiLocales, type UiLocale } from "@blue-canvas/ui";
+import {
+  FolderKanban,
+  Library as LibraryIcon,
+  LogOut,
+  Menu,
+  Monitor,
+  Moon,
+  PanelsTopLeft,
+  Sun,
+  X,
+} from "lucide-react";
 
 export function App() {
   return (
@@ -28,7 +41,7 @@ function Shell() {
   if (loading) {
     return (
       <div className="bc-app">
-        <div className="bc-screen">Loading…</div>
+        <AppLoading />
       </div>
     );
   }
@@ -88,10 +101,11 @@ function Shell() {
   );
 }
 
-function Topbar({ signedIn }: { signedIn: boolean }) {
+export function Topbar({ signedIn }: { signedIn: boolean }) {
   const { messages, locale, setLocale } = useLocale();
   const { preference, cycle } = useTheme();
   const { signOut } = useSession();
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const themeLabel =
     preference === "system"
       ? messages.app.themeSystem
@@ -101,60 +115,125 @@ function Topbar({ signedIn }: { signedIn: boolean }) {
   return (
     <header className="bc-topbar">
       <div className="bc-topbar__brand">
-        <span className="bc-topbar__logo" aria-hidden="true" />
-        <a href={serializeRoute({ name: "home" })}>{messages.app.title}</a>
+        <a
+          className="bc-topbar__brand-link"
+          href={serializeRoute({ name: "home" })}
+        >
+          <span className="bc-topbar__logo" aria-hidden="true">
+            <PanelsTopLeft size={15} strokeWidth={2.5} />
+          </span>
+          <span>{messages.app.title}</span>
+        </a>
         {signedIn ? (
-          <nav aria-label="Primary" style={{ marginLeft: 16 }}>
+          <nav
+            className="bc-topbar__nav"
+            aria-label="Primary"
+            id="bc-primary-navigation"
+            data-mobile-open={mobileNavOpen ? "true" : "false"}
+          >
             <a
+              className="bc-topbar__nav-link"
               href={serializeRoute({ name: "home" })}
-              style={{ marginRight: 12 }}
+              onClick={() => setMobileNavOpen(false)}
             >
+              <FolderKanban size={15} aria-hidden="true" />
               {messages.home.heading}
             </a>
-            <a href={serializeRoute({ name: "library" })}>
+            <a
+              className="bc-topbar__nav-link"
+              href={serializeRoute({ name: "library" })}
+              onClick={() => setMobileNavOpen(false)}
+            >
+              <LibraryIcon size={15} aria-hidden="true" />
               {messages.library.heading}
             </a>
           </nav>
         ) : null}
       </div>
       <div className="bc-topbar__actions">
-        <label className="bc-visually-hidden" htmlFor="bc-locale">
-          {messages.app.localeLabel}
-        </label>
-        <select
-          id="bc-locale"
-          className="bc-select"
-          value={locale}
-          onChange={(event) => setLocale(event.target.value as UiLocale)}
-          style={{ width: "auto" }}
-        >
-          {uiLocales.map((code) => (
-            <option key={code} value={code}>
-              {localeDisplayNames[code]}
-            </option>
-          ))}
-        </select>
+        {signedIn ? (
+          <button
+            type="button"
+            className="bc-icon-btn bc-mobile-nav-toggle"
+            aria-label={
+              mobileNavOpen
+                ? messages.app.closeNavigation
+                : messages.app.openNavigation
+            }
+            aria-expanded={mobileNavOpen}
+            aria-controls="bc-primary-navigation"
+            title={
+              mobileNavOpen
+                ? messages.app.closeNavigation
+                : messages.app.openNavigation
+            }
+            onClick={() => setMobileNavOpen((open) => !open)}
+          >
+            {mobileNavOpen ? (
+              <X size={17} aria-hidden="true" />
+            ) : (
+              <Menu size={17} aria-hidden="true" />
+            )}
+          </button>
+        ) : null}
+        <div className="bc-topbar__locale">
+          <label className="bc-visually-hidden" htmlFor="bc-locale">
+            {messages.app.localeLabel}
+          </label>
+          <select
+            id="bc-locale"
+            className="bc-select"
+            value={locale}
+            onChange={(event) => setLocale(event.target.value as UiLocale)}
+          >
+            {uiLocales.map((code) => (
+              <option key={code} value={code}>
+                {localeDisplayNames[code]}
+              </option>
+            ))}
+          </select>
+        </div>
         <button
           type="button"
-          className="bc-btn"
+          className="bc-icon-btn"
           onClick={cycle}
           aria-pressed={preference !== "system"}
+          aria-label={themeLabel}
           title={themeLabel}
         >
-          {themeLabel}
+          {preference === "system" ? (
+            <Monitor size={17} aria-hidden="true" />
+          ) : preference === "dark" ? (
+            <Moon size={17} aria-hidden="true" />
+          ) : (
+            <Sun size={17} aria-hidden="true" />
+          )}
         </button>
         {signedIn ? (
           <button
             type="button"
-            className="bc-btn"
+            className="bc-btn bc-btn--compact"
             data-variant="ghost"
             onClick={() => void signOut()}
+            title={messages.app.signOut}
           >
+            <LogOut size={15} aria-hidden="true" />
             {messages.app.signOut}
           </button>
         ) : null}
       </div>
     </header>
+  );
+}
+
+export function AppLoading() {
+  return (
+    <main className="bc-loading-area" style={{ gridRow: "1 / -1" }}>
+      <div className="bc-screen" aria-busy="true">
+        <p className="bc-eyebrow">Blue Canvas</p>
+        <p>Loading…</p>
+      </div>
+    </main>
   );
 }
 

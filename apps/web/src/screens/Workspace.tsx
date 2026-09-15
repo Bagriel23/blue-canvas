@@ -10,6 +10,7 @@ import { PreviewMode } from "../preview/PreviewMode.js";
 import { loadDemoDocument } from "../fixtures/demo.js";
 import { currentArtboardRoot, findNodeById } from "../canvas/selection.js";
 import { useLocale } from "../state/locale.js";
+import { Download, Eye, Share2 } from "lucide-react";
 
 interface WorkspaceProps {
   projectId: string;
@@ -70,7 +71,7 @@ export function Workspace({ projectId, editable = true }: WorkspaceProps) {
             onSelect={setSelectedId}
           />
         </aside>
-        <main>
+        <main className="bc-workspace__stage">
           {previewing ? (
             (() => {
               const artboard = doc.pages
@@ -98,20 +99,28 @@ export function Workspace({ projectId, editable = true }: WorkspaceProps) {
           )}
         </main>
         <aside className="bc-workspace__panel" data-side="right">
-          <div style={{ display: "flex", gap: 6, padding: 12 }}>
+          <div className="bc-workspace__toolbar" aria-label="Workspace actions">
             <button
               type="button"
               className="bc-btn"
               onClick={() => setPreviewing((value) => !value)}
               aria-pressed={previewing}
+              title={
+                previewing
+                  ? messages.workspace.exitPreview
+                  : messages.workspace.preview
+              }
             >
+              <Eye size={15} aria-hidden="true" />
               {messages.workspace.preview}
             </button>
             <button
               type="button"
               className="bc-btn"
               onClick={() => setDialog({ kind: "share" })}
+              title={messages.workspace.share}
             >
+              <Share2 size={15} aria-hidden="true" />
               {messages.workspace.share}
             </button>
             <button
@@ -119,7 +128,9 @@ export function Workspace({ projectId, editable = true }: WorkspaceProps) {
               className="bc-btn"
               data-variant="primary"
               onClick={() => setDialog({ kind: "export" })}
+              title={messages.workspace.export}
             >
+              <Download size={15} aria-hidden="true" />
               {messages.workspace.export}
             </button>
           </div>
