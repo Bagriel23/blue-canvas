@@ -681,6 +681,11 @@ export class PrismaRepository implements RepositoryPort {
     projectId: string,
     userId: string,
   ): Promise<ProjectMember | undefined> {
+    await this.client.$queryRaw`
+      SELECT id
+      FROM projects
+      WHERE id = ${projectId}
+      FOR UPDATE`;
     const members = await this.client.$queryRaw<
       {
         id: string;

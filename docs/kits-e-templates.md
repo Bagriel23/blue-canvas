@@ -89,9 +89,10 @@ de origem e snapshot `DesignDocument` do workspace.
 A cópia recebe novo id e nome de projeto, preservando páginas, nós e interações
 do documento original. A implementação usa `InMemoryRepository` nos testes e
 `PrismaRepository` com MariaDB/MySQL em produção, sem dependência de Docker. O
-salvamento revalida a função `owner/editor` dentro da transação e bloqueia a
-linha do projeto (`SELECT ... FOR UPDATE` no MariaDB), evitando uma alteração de
-ACL entre a checagem e a criação do template.
+salvamento revalida a função `owner/editor` dentro da transação e bloqueia as
+linhas do projeto e da associação do ator (`SELECT ... FOR UPDATE` no MariaDB),
+evitando alterações concorrentes de arquivamento ou ACL entre a checagem e a
+criação do template.
 
 ## Limitações atuais
 
