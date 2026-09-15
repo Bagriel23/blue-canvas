@@ -340,6 +340,7 @@ export interface RepositoryPort {
   createAsset(
     input: Omit<Asset, "id" | "createdAt"> & { now: Date },
   ): Promise<Asset>;
+  listReadyAssets(projectId: string): Promise<Asset[]>;
   listPendingAssets(createdBefore: Date): Promise<Asset[]>;
   markAssetReady(id: string): Promise<Asset | undefined>;
   removePendingAsset(id: string): Promise<boolean>;

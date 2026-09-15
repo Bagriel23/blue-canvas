@@ -602,6 +602,12 @@ export class InMemoryRepository implements RepositoryPort {
     return asset;
   }
 
+  async listReadyAssets(projectId: string): Promise<Asset[]> {
+    return [...this.assets.values()].filter(
+      (asset) => asset.projectId === projectId && asset.status === "ready",
+    );
+  }
+
   async listPendingAssets(createdBefore: Date): Promise<Asset[]> {
     return [...this.assets.values()].filter(
       (asset) => asset.status === "pending" && asset.createdAt <= createdBefore,

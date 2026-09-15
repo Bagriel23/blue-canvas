@@ -984,6 +984,15 @@ export class PrismaRepository implements RepositoryPort {
     );
   }
 
+  async listReadyAssets(projectId: string): Promise<Asset[]> {
+    return (
+      await this.client.asset.findMany({
+        where: { projectId, status: "ready" },
+        orderBy: { createdAt: "asc" },
+      })
+    ).map(asset);
+  }
+
   async listPendingAssets(createdBefore: Date): Promise<Asset[]> {
     return (
       await this.client.asset.findMany({

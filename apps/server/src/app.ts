@@ -665,11 +665,30 @@ export function buildApp(dependencies: ServerDependencies): FastifyInstance {
         return service.getProjectDocument(principal, projectId);
       },
     );
+    const assets = await service.listProjectAssetsForExport(
+      principal,
+      projectId,
+    );
+    const exportAssets: Record<
+      string,
+      { fileName: string; mimeType: string; bytes: Uint8Array }
+    > = {};
+    for (const asset of assets) {
+      try {
+        exportAssets[asset.id] = {
+          fileName: asset.originalName,
+          mimeType: asset.mediaType,
+          bytes: await dependencies.storage.read(asset.storageKey),
+        };
+      } catch {
+        // The exporter will emit a deterministic missing-asset diagnostic.
+      }
+    }
     const result = await generateExport({
       document: documentResponse.document as DesignDocument,
       target: input.target,
       scope: input.scope,
-      assets: {},
+      assets: exportAssets,
     });
     const project = await service.getProject(principal, projectId);
     return {

@@ -933,6 +933,14 @@ export class ApplicationService {
     return project;
   }
 
+  async listProjectAssetsForExport(
+    principal: Principal,
+    projectId: string,
+  ): Promise<Asset[]> {
+    await this.requireProject(principal, projectId, "project:read");
+    return this.dependencies.repository.listReadyAssets(projectId);
+  }
+
   async getProjectDocument(
     principal: Principal,
     projectId: string,
