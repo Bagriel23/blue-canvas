@@ -3,6 +3,7 @@ export type Route =
   | { name: "invitation"; token?: string }
   | { name: "home" }
   | { name: "library" }
+  | { name: "teams" }
   | { name: "workspace"; projectId: string }
   | { name: "share"; projectId: string }
   | { name: "export"; projectId: string }
@@ -13,6 +14,7 @@ export function parseRoute(hash: string): Route {
   if (clean === "" || clean === "home") return { name: "home" };
   if (clean === "sign-in") return { name: "sign-in" };
   if (clean === "library") return { name: "library" };
+  if (clean === "teams") return { name: "teams" };
   if (clean.startsWith("invitation")) {
     const [, token] = clean.split("?token=");
     return token ? { name: "invitation", token } : { name: "invitation" };
@@ -35,6 +37,8 @@ export function serializeRoute(route: Route): string {
       return "#/sign-in";
     case "library":
       return "#/library";
+    case "teams":
+      return "#/teams";
     case "invitation":
       return route.token
         ? `#/invitation?token=${encodeURIComponent(route.token)}`

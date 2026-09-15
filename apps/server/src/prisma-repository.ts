@@ -17,6 +17,8 @@ import type {
   ProjectDocument,
   CommandReceipt,
   ProjectMember,
+  Team,
+  TeamMember,
   NamedVersion,
   RepositoryPort,
   Session,
@@ -486,6 +488,106 @@ export class PrismaRepository implements RepositoryPort {
   ): Promise<boolean> {
     const result = await this.client.projectMember.deleteMany({
       where: { projectId, userId },
+    });
+    return result.count === 1;
+  }
+
+  async createTeam(
+    input: Parameters<RepositoryPort["createTeam"]>[0],
+  ): Promise<Team> {
+    return this.withinTransaction(async (transaction) => {
+      const team = await transaction.team.create({
+        data: {
+          id: randomUUID(),
+          name: input.name,
+          ownerId: input.ownerId,
+          createdAt: input.now,
+          updatedAt: input.now,
+        },
+      });
+      await transaction.teamMember.create({
+        data: {
+          id: randomUUID(),
+          teamId: team.id,
+          userId: input.ownerId,
+          role: "owner",
+          createdAt: input.now,
+          updatedAt: input.now,
+        },
+      });
+      return team;
+    });
+  }
+
+  async listTeamsForUser(userId: string): Promise<Team[]> {
+    return this.client.team.findMany({
+      where: { members: { some: { userId } } },
+      orderBy: { updatedAt: "desc" },
+    });
+  }
+
+  async findTeamById(id: string): Promise<Team | undefined> {
+    return (await this.client.team.findUnique({ where: { id } })) ?? undefined;
+  }
+
+  async findTeamMember(
+    teamId: string,
+    userId: string,
+  ): Promise<TeamMember | undefined> {
+    return (
+      (await this.client.teamMember.findUnique({
+        where: { teamId_userId: { teamId, userId } },
+      })) ?? undefined
+    );
+  }
+
+  async listTeamMembers(teamId: string): Promise<TeamMember[]> {
+    return this.client.teamMember.findMany({ where: { teamId } });
+  }
+
+  async addTeamMember(
+    input: Parameters<RepositoryPort["addTeamMember"]>[0],
+  ): Promise<TeamMember> {
+    try {
+      return await this.client.teamMember.create({
+        data: {
+          id: randomUUID(),
+          teamId: input.teamId,
+          userId: input.userId,
+          role: input.role,
+          createdAt: input.now,
+          updatedAt: input.now,
+        },
+      });
+    } catch (error) {
+      if (isPrismaError(error, "P2002")) {
+        throw new ApiError(
+          "team_member_exists",
+          "User is already a team member",
+          409,
+        );
+      }
+      throw error;
+    }
+  }
+
+  async updateTeamMember(
+    teamId: string,
+    userId: string,
+    role: TeamMember["role"],
+    now: Date,
+  ): Promise<TeamMember | undefined> {
+    const result = await this.client.teamMember.updateMany({
+      where: { teamId, userId },
+      data: { role, updatedAt: now },
+    });
+    if (result.count === 0) return undefined;
+    return this.findTeamMember(teamId, userId);
+  }
+
+  async removeTeamMember(teamId: string, userId: string): Promise<boolean> {
+    const result = await this.client.teamMember.deleteMany({
+      where: { teamId, userId },
     });
     return result.count === 1;
   }

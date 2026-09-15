@@ -11,6 +11,8 @@ import type {
   ProjectDocument,
   CommandReceipt,
   ProjectMember,
+  Team,
+  TeamMember,
   NamedVersion,
   RepositoryPort,
   Session,
@@ -23,6 +25,8 @@ export class InMemoryRepository implements RepositoryPort {
   private invitations = new Map<string, Invitation>();
   private projects = new Map<string, Project>();
   private members = new Map<string, ProjectMember>();
+  private teams = new Map<string, Team>();
+  private teamMembers = new Map<string, TeamMember>();
   private personalAccessTokens = new Map<string, PersonalAccessToken>();
   private auditEvents = new Map<string, AuditEvent>();
   private assets = new Map<string, Asset>();
@@ -287,6 +291,94 @@ export class InMemoryRepository implements RepositoryPort {
     userId: string,
   ): Promise<boolean> {
     return this.members.delete(`${projectId}:${userId}`);
+  }
+
+  async createTeam(
+    input: Parameters<RepositoryPort["createTeam"]>[0],
+  ): Promise<Team> {
+    const team: Team = {
+      id: randomUUID(),
+      name: input.name,
+      ownerId: input.ownerId,
+      createdAt: input.now,
+      updatedAt: input.now,
+    };
+    this.teams.set(team.id, team);
+    await this.addTeamMember({
+      teamId: team.id,
+      userId: input.ownerId,
+      role: "owner",
+      now: input.now,
+    });
+    return team;
+  }
+
+  async listTeamsForUser(userId: string): Promise<Team[]> {
+    const ids = [...this.teamMembers.values()]
+      .filter((member) => member.userId === userId)
+      .map((member) => member.teamId);
+    return [...this.teams.values()]
+      .filter((team) => ids.includes(team.id))
+      .sort(
+        (left, right) => right.updatedAt.getTime() - left.updatedAt.getTime(),
+      );
+  }
+
+  async findTeamById(id: string): Promise<Team | undefined> {
+    return this.teams.get(id);
+  }
+
+  async findTeamMember(
+    teamId: string,
+    userId: string,
+  ): Promise<TeamMember | undefined> {
+    return this.teamMembers.get(`${teamId}:${userId}`);
+  }
+
+  async listTeamMembers(teamId: string): Promise<TeamMember[]> {
+    return [...this.teamMembers.values()].filter(
+      (member) => member.teamId === teamId,
+    );
+  }
+
+  async addTeamMember(
+    input: Parameters<RepositoryPort["addTeamMember"]>[0],
+  ): Promise<TeamMember> {
+    const key = `${input.teamId}:${input.userId}`;
+    if (this.teamMembers.has(key)) {
+      throw new ApiError(
+        "team_member_exists",
+        "User is already a team member",
+        409,
+      );
+    }
+    const member: TeamMember = {
+      id: randomUUID(),
+      teamId: input.teamId,
+      userId: input.userId,
+      role: input.role,
+      createdAt: input.now,
+      updatedAt: input.now,
+    };
+    this.teamMembers.set(key, member);
+    return member;
+  }
+
+  async updateTeamMember(
+    teamId: string,
+    userId: string,
+    role: TeamMember["role"],
+    now: Date,
+  ): Promise<TeamMember | undefined> {
+    const member = this.teamMembers.get(`${teamId}:${userId}`);
+    if (!member) return undefined;
+    member.role = role;
+    member.updatedAt = now;
+    return member;
+  }
+
+  async removeTeamMember(teamId: string, userId: string): Promise<boolean> {
+    return this.teamMembers.delete(`${teamId}:${userId}`);
   }
 
   async createPersonalAccessToken(
@@ -585,6 +677,8 @@ export class InMemoryRepository implements RepositoryPort {
       invitations: [...this.invitations.values()],
       projects: [...this.projects.values()],
       members: [...this.members.values()],
+      teams: [...this.teams.values()],
+      teamMembers: [...this.teamMembers.values()],
       personalAccessTokens: [...this.personalAccessTokens.values()],
       auditEvents: [...this.auditEvents.values()],
       assets: [...this.assets.values()],
@@ -628,6 +722,8 @@ export class InMemoryRepository implements RepositoryPort {
       invitations: this.invitations,
       projects: this.projects,
       members: this.members,
+      teams: this.teams,
+      teamMembers: this.teamMembers,
       personalAccessTokens: this.personalAccessTokens,
       auditEvents: this.auditEvents,
       assets: this.assets,
@@ -644,6 +740,8 @@ export class InMemoryRepository implements RepositoryPort {
     this.invitations = snapshot.invitations;
     this.projects = snapshot.projects;
     this.members = snapshot.members;
+    this.teams = snapshot.teams;
+    this.teamMembers = snapshot.teamMembers;
     this.personalAccessTokens = snapshot.personalAccessTokens;
     this.auditEvents = snapshot.auditEvents;
     this.assets = snapshot.assets;

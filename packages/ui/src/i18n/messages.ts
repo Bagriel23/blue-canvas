@@ -44,6 +44,21 @@ export interface UiMessages {
     kicker: string;
     lede: string;
   };
+  teams: {
+    heading: string;
+    kicker: string;
+    lede: string;
+    collaborationStatus: string;
+    createHeading: string;
+    createDescription: string;
+    name: string;
+    createButton: string;
+    empty: string;
+    open: string;
+    members: string;
+    inviteLabel: string;
+    addMember: string;
+  };
   workspace: {
     pages: string;
     layers: string;
@@ -79,6 +94,11 @@ export interface UiMessages {
     members: string;
     tokens: string;
     close: string;
+    inviteEmail: string;
+    inviteRole: string;
+    invite: string;
+    invitationCreated: string;
+    remove: string;
   };
   exportDialog: {
     heading: string;
@@ -140,6 +160,21 @@ const enUs: UiMessages = {
     kicker: "Resources / 02",
     lede: "Reusable building blocks for your next canvas.",
   },
+  teams: {
+    heading: "Teams",
+    kicker: "Collaboration / 03",
+    lede: "Bring people and projects together.",
+    collaborationStatus: "Shared workspace",
+    createHeading: "Create a team",
+    createDescription: "A shared home for your studio.",
+    name: "Team name",
+    createButton: "Create team",
+    empty: "No teams yet.",
+    open: "Manage team",
+    members: "Members",
+    inviteLabel: "Add a teammate",
+    addMember: "Add member",
+  },
   workspace: {
     pages: "Pages",
     layers: "Layers",
@@ -177,6 +212,11 @@ const enUs: UiMessages = {
     members: "Members",
     tokens: "Access tokens",
     close: "Close",
+    inviteEmail: "Invite by email",
+    inviteRole: "Role",
+    invite: "Create invitation",
+    invitationCreated: "Invitation link created",
+    remove: "Remove",
   },
   exportDialog: {
     heading: "Export",
@@ -239,6 +279,21 @@ const ptBr: UiMessages = {
     kicker: "Recursos / 02",
     lede: "Blocos reutilizáveis para seu próximo canvas.",
   },
+  teams: {
+    heading: "Times",
+    kicker: "Colaboração / 03",
+    lede: "Reúna pessoas e projetos em um só lugar.",
+    collaborationStatus: "Workspace compartilhado",
+    createHeading: "Criar um time",
+    createDescription: "Um espaço compartilhado para seu estúdio.",
+    name: "Nome do time",
+    createButton: "Criar time",
+    empty: "Nenhum time ainda.",
+    open: "Gerenciar time",
+    members: "Membros",
+    inviteLabel: "Adicionar colega",
+    addMember: "Adicionar membro",
+  },
   workspace: {
     pages: "Páginas",
     layers: "Camadas",
@@ -276,6 +331,11 @@ const ptBr: UiMessages = {
     members: "Membros",
     tokens: "Tokens de acesso",
     close: "Fechar",
+    inviteEmail: "Convidar por e-mail",
+    inviteRole: "Papel",
+    invite: "Criar convite",
+    invitationCreated: "Link de convite criado",
+    remove: "Remover",
   },
   exportDialog: {
     heading: "Exportar",
@@ -337,6 +397,21 @@ const koKr: UiMessages = {
     kicker: "리소스 / 02",
     lede: "다음 캔버스를 위한 재사용 가능한 블록입니다.",
   },
+  teams: {
+    heading: "팀",
+    kicker: "협업 / 03",
+    lede: "사람과 프로젝트를 한곳에서 연결하세요.",
+    collaborationStatus: "공유 워크스페이스",
+    createHeading: "팀 만들기",
+    createDescription: "스튜디오를 위한 공유 공간입니다.",
+    name: "팀 이름",
+    createButton: "팀 만들기",
+    empty: "아직 팀이 없습니다.",
+    open: "팀 관리",
+    members: "구성원",
+    inviteLabel: "동료 추가",
+    addMember: "구성원 추가",
+  },
   workspace: {
     pages: "페이지",
     layers: "레이어",
@@ -373,6 +448,11 @@ const koKr: UiMessages = {
     members: "구성원",
     tokens: "액세스 토큰",
     close: "닫기",
+    inviteEmail: "이메일로 초대",
+    inviteRole: "역할",
+    invite: "초대 만들기",
+    invitationCreated: "초대 링크가 생성되었습니다",
+    remove: "삭제",
   },
   exportDialog: {
     heading: "내보내기",

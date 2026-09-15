@@ -87,6 +87,20 @@ e comentaristas continuam com inspeção somente leitura. Rejeições 4xx ficam 
 conflito irreconciliável, com ações explícitas para tentar novamente ou
 descartar a fila.
 
+## Times e compartilhamento
+
+A rota `#/teams` lista os times do usuário e permite criar um time persistido.
+Owners e admins conseguem abrir o painel de membros e adicionar usuários já
+registrados. No workspace, o diálogo `Share` lista a ACL do projeto, gera
+convites por e-mail com papel `editor`, `commenter` ou `viewer`, apresenta o
+link manual e remove membros sem expor o papel do owner para alteração.
+
+As rotas correspondentes são `GET/POST /api/v1/teams`, `GET /api/v1/teams/:id`,
+`POST /api/v1/teams/:id/members` e `GET /api/v1/projects/:id/members`, além das
+rotas existentes de convites e remoção de membros. As tabelas `teams` e
+`team_members` usam apenas tipos compatíveis com MariaDB/MySQL, portanto a
+migração funciona em XAMPP e Laragon.
+
 ## Dependências principais
 
 - `react` e `react-dom` 19.

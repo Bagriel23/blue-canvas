@@ -18,6 +18,9 @@ import {
   inviteProjectMemberRequestSchema,
   updateProjectMemberRequestSchema,
   updateProjectRequestSchema,
+  createTeamRequestSchema,
+  addTeamMemberRequestSchema,
+  updateTeamMemberRequestSchema,
   updateCommentRequestSchema,
   type PersonalAccessTokenScope,
 } from "@blue-canvas/contracts";
@@ -30,7 +33,12 @@ import Fastify, {
 } from "fastify";
 import { ZodError, type ZodType } from "zod";
 
-import { ApiError, ApplicationService, type Principal } from "./core.js";
+import {
+  ApiError,
+  ApplicationService,
+  type Principal,
+  type PublicTeamMember,
+} from "./core.js";
 import { CollaborationManager } from "./collaboration.js";
 import {
   LibraryError,
@@ -178,6 +186,20 @@ function projectSummaryResponse(
     updatedAt: project.updatedAt.toISOString(),
     role,
   };
+}
+
+function teamResponse(team: {
+  id: string;
+  name: string;
+  role: "owner" | "admin" | "member";
+  createdAt: string;
+  updatedAt: string;
+}) {
+  return team;
+}
+
+function teamMemberResponse(member: PublicTeamMember) {
+  return member;
 }
 
 function commentResponse(comment: {
@@ -470,6 +492,91 @@ export function buildApp(dependencies: ServerDependencies): FastifyInstance {
     return reply.code(201).send({ project });
   });
 
+  app.get("/api/v1/teams", async (request) => {
+    const principal = await authenticate(request, { scope: "projects:read" });
+    return { teams: (await service.listTeams(principal)).map(teamResponse) };
+  });
+
+  app.post("/api/v1/teams", async (request, reply) => {
+    const principal = await authenticate(request, {
+      mutating: true,
+      scope: "projects:write",
+    });
+    const team = await service.createTeam(
+      principal,
+      parse(createTeamRequestSchema, request.body),
+      request.id,
+    );
+    return reply.code(201).send({
+      team: {
+        id: team.id,
+        name: team.name,
+        role: "owner",
+        createdAt: team.createdAt.toISOString(),
+        updatedAt: team.updatedAt.toISOString(),
+      },
+    });
+  });
+
+  app.get("/api/v1/teams/:teamId", async (request) => {
+    const principal = await authenticate(request, { scope: "projects:read" });
+    const result = await service.getTeam(
+      principal,
+      identifier(request, "teamId"),
+    );
+    return {
+      team: teamResponse(result.team),
+      members: result.members.map(teamMemberResponse),
+    };
+  });
+
+  app.post("/api/v1/teams/:teamId/members", async (request, reply) => {
+    const principal = await authenticate(request, {
+      mutating: true,
+      scope: "projects:write",
+    });
+    const member = await service.addTeamMember(
+      principal,
+      identifier(request, "teamId"),
+      parse(addTeamMemberRequestSchema, request.body),
+      request.id,
+    );
+    return reply.code(201).send({ member });
+  });
+
+  app.patch("/api/v1/teams/:teamId/members/:userId", async (request) => {
+    const principal = await authenticate(request, {
+      mutating: true,
+      scope: "projects:write",
+    });
+    return {
+      member: await service.updateTeamMember(
+        principal,
+        identifier(request, "teamId"),
+        identifier(request, "userId"),
+        parse(updateTeamMemberRequestSchema, request.body),
+        request.id,
+      ),
+    };
+  });
+
+  app.delete(
+    "/api/v1/teams/:teamId/members/:userId",
+    async (request, reply) => {
+      const principal = await authenticate(request, {
+        mutating: true,
+        scope: "projects:write",
+      });
+      await service.removeTeamMember(
+        principal,
+        identifier(request, "teamId"),
+        identifier(request, "userId"),
+        request.id,
+      );
+      return reply.code(204).send();
+    },
+  );
+
   app.get("/api/v1/projects", async (request) => {
     const principal = await authenticate(request, { scope: "projects:read" });
     return { projects: await service.listProjects(principal) };
@@ -546,6 +653,16 @@ export function buildApp(dependencies: ServerDependencies): FastifyInstance {
       request.id,
     );
     return reply.code(201).send({ member });
+  });
+
+  app.get("/api/v1/projects/:projectId/members", async (request) => {
+    const principal = await authenticate(request, { scope: "projects:read" });
+    return {
+      members: await service.listProjectMembers(
+        principal,
+        identifier(request, "projectId"),
+      ),
+    };
   });
 
   app.post(

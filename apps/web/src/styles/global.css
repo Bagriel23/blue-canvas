@@ -400,6 +400,69 @@ button:disabled {
   font-size: 0.8125rem;
 }
 
+.bc-member-list {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.bc-member-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--bc-color-divider);
+}
+.bc-member-list li > span:first-child {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.bc-member-list small {
+  overflow: hidden;
+  color: var(--bc-color-text-muted);
+  font-size: 0.6875rem;
+  text-overflow: ellipsis;
+}
+.bc-member-list__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.bc-share-form {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--bc-color-divider);
+}
+.bc-share-link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 14px;
+  padding: 10px;
+  background: var(--bc-color-brand-soft);
+  color: var(--bc-color-text);
+  font-size: 0.75rem;
+}
+.bc-share-link p {
+  margin: 0;
+  font-weight: 650;
+}
+.bc-share-link code {
+  flex: 1;
+  overflow-wrap: anywhere;
+  color: var(--bc-color-brand);
+}
+.bc-team-dialog__section {
+  margin-bottom: 16px;
+}
+.bc-team-dialog__section h3 {
+  margin: 0 0 8px;
+  font-size: 0.8125rem;
+}
+
 .bc-library-section {
   margin-top: 18px;
   padding-top: 20px;

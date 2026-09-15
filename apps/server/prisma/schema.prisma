@@ -39,6 +39,8 @@ model User {
   sentInvitations      Invitation[]          @relation("InvitationSender")
   ownedProjects        Project[]             @relation("ProjectOwner")
   memberships          ProjectMember[]
+  ownedTeams           Team[]              @relation("TeamOwner")
+  teamMemberships      TeamMember[]
   personalAccessTokens PersonalAccessToken[]
   auditEvents          AuditEvent[]           @relation("AuditActor")
   uploadedAssets       Asset[]                @relation("AssetUploader")
@@ -117,6 +119,40 @@ model ProjectMember {
   @@unique([projectId, userId], map: "project_members_project_user_key")
   @@index([userId], map: "project_members_user_idx")
   @@map("project_members")
+}
+
+enum TeamRole {
+  owner
+  admin
+  member
+}
+
+model Team {
+  id          String       @id @db.VarChar(36)
+  name        String       @db.VarChar(120)
+  ownerId     String       @db.VarChar(36)
+  createdAt   DateTime     @db.DateTime(3)
+  updatedAt   DateTime     @db.DateTime(3)
+  owner       User         @relation("TeamOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  members     TeamMember[]
+
+  @@index([ownerId], map: "teams_owner_idx")
+  @@map("teams")
+}
+
+model TeamMember {
+  id        String   @id @db.VarChar(36)
+  teamId    String   @db.VarChar(36)
+  userId    String   @db.VarChar(36)
+  role      TeamRole
+  createdAt DateTime @db.DateTime(3)
+  updatedAt DateTime @db.DateTime(3)
+  team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, userId], map: "team_members_team_user_key")
+  @@index([userId], map: "team_members_user_idx")
+  @@map("team_members")
 }
 
 model PersonalAccessToken {

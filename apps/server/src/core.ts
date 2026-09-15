@@ -14,6 +14,9 @@ import type {
   PersonalAccessTokenScope,
   UpdateProjectMemberRequest,
   UpdateProjectRequest,
+  CreateTeamRequest,
+  AddTeamMemberRequest,
+  UpdateTeamMemberRequest,
 } from "@blue-canvas/contracts";
 import {
   applyCollaborationState,
@@ -39,6 +42,8 @@ import type {
   ProjectComment,
   NamedVersion,
   ProjectMember,
+  Team,
+  TeamMember,
   RepositoryPort,
   Session,
   User,
@@ -79,6 +84,32 @@ export interface PublicUser {
   status: User["status"];
   locale: string;
   isAdmin: boolean;
+}
+
+export interface PublicTeam {
+  id: string;
+  name: string;
+  role: TeamMember["role"];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PublicTeamMember {
+  id: string;
+  userId: string;
+  email: string;
+  displayName: string;
+  role: TeamMember["role"];
+  addedAt: string;
+}
+
+export interface PublicProjectMember {
+  id: string;
+  userId: string;
+  email: string;
+  displayName: string;
+  role: ProjectMember["role"];
+  addedAt: string;
 }
 
 export type Principal =
@@ -527,6 +558,226 @@ export class ApplicationService {
 
   async listProjects(principal: Principal): Promise<Project[]> {
     return this.dependencies.repository.listProjectsForUser(principal.user.id);
+  }
+
+  async listProjectMembers(
+    principal: Principal,
+    projectId: string,
+  ): Promise<PublicProjectMember[]> {
+    await this.requireProject(principal, projectId, "members:manage");
+    const members =
+      await this.dependencies.repository.findProjectMembers(projectId);
+    const result: PublicProjectMember[] = [];
+    for (const member of members) {
+      const user = await this.dependencies.repository.findUserById(
+        member.userId,
+      );
+      if (!user) continue;
+      result.push({
+        id: member.id,
+        userId: member.userId,
+        email: user.email,
+        displayName: user.displayName,
+        role: member.role,
+        addedAt: member.createdAt.toISOString(),
+      });
+    }
+    return result;
+  }
+
+  async createTeam(
+    principal: Principal,
+    input: CreateTeamRequest,
+    traceId: string,
+  ): Promise<Team> {
+    this.requireSession(principal);
+    return this.dependencies.repository.transaction(async (repository) => {
+      const team = await repository.createTeam({
+        name: input.name,
+        ownerId: principal.user.id,
+        now: this.dependencies.now(),
+      });
+      await this.auditWith(
+        repository,
+        principal.user.id,
+        "team.create",
+        "team",
+        team.id,
+        null,
+        traceId,
+        { name: team.name },
+      );
+      return team;
+    });
+  }
+
+  async listTeams(principal: Principal): Promise<PublicTeam[]> {
+    const teams = await this.dependencies.repository.listTeamsForUser(
+      principal.user.id,
+    );
+    const result: PublicTeam[] = [];
+    for (const team of teams) {
+      const membership = await this.dependencies.repository.findTeamMember(
+        team.id,
+        principal.user.id,
+      );
+      if (!membership) continue;
+      result.push({
+        id: team.id,
+        name: team.name,
+        role: membership.role,
+        createdAt: team.createdAt.toISOString(),
+        updatedAt: team.updatedAt.toISOString(),
+      });
+    }
+    return result;
+  }
+
+  async getTeam(
+    principal: Principal,
+    teamId: string,
+  ): Promise<{ team: PublicTeam; members: PublicTeamMember[] }> {
+    const team = await this.requireTeam(principal, teamId, false);
+    const members = await this.dependencies.repository.listTeamMembers(teamId);
+    const publicMembers: PublicTeamMember[] = [];
+    for (const member of members) {
+      const user = await this.dependencies.repository.findUserById(
+        member.userId,
+      );
+      if (!user) continue;
+      publicMembers.push({
+        id: member.id,
+        userId: member.userId,
+        email: user.email,
+        displayName: user.displayName,
+        role: member.role,
+        addedAt: member.createdAt.toISOString(),
+      });
+    }
+    const ownMembership = await this.dependencies.repository.findTeamMember(
+      teamId,
+      principal.user.id,
+    );
+    if (!ownMembership)
+      throw new ApiError("forbidden", "Team access denied", 403);
+    return {
+      team: {
+        id: team.id,
+        name: team.name,
+        role: ownMembership.role,
+        createdAt: team.createdAt.toISOString(),
+        updatedAt: team.updatedAt.toISOString(),
+      },
+      members: publicMembers,
+    };
+  }
+
+  async addTeamMember(
+    principal: Principal,
+    teamId: string,
+    input: AddTeamMemberRequest,
+    traceId: string,
+  ): Promise<TeamMember> {
+    await this.requireTeam(principal, teamId, true);
+    const user = await this.dependencies.repository.findUserByEmail(
+      input.email,
+    );
+    if (!user) throw new ApiError("user_not_found", "User not found", 404);
+    return this.dependencies.repository.transaction(async (repository) => {
+      const member = await repository.addTeamMember({
+        teamId,
+        userId: user.id,
+        role: input.role,
+        now: this.dependencies.now(),
+      });
+      await this.auditWith(
+        repository,
+        principal.user.id,
+        "team.member.add",
+        "user",
+        user.id,
+        null,
+        traceId,
+        { teamId, role: input.role },
+      );
+      return member;
+    });
+  }
+
+  async updateTeamMember(
+    principal: Principal,
+    teamId: string,
+    userId: string,
+    input: UpdateTeamMemberRequest,
+    traceId: string,
+  ): Promise<TeamMember> {
+    await this.requireTeam(principal, teamId, true);
+    const current = await this.dependencies.repository.findTeamMember(
+      teamId,
+      userId,
+    );
+    if (!current) throw new ApiError("not_found", "Team member not found", 404);
+    if (current.role === "owner")
+      throw new ApiError(
+        "owner_protected",
+        "The team owner role cannot be changed",
+        409,
+      );
+    return this.dependencies.repository.transaction(async (repository) => {
+      const member = await repository.updateTeamMember(
+        teamId,
+        userId,
+        input.role,
+        this.dependencies.now(),
+      );
+      if (!member)
+        throw new ApiError("not_found", "Team member not found", 404);
+      await this.auditWith(
+        repository,
+        principal.user.id,
+        "team.member.update",
+        "user",
+        userId,
+        null,
+        traceId,
+        { teamId, role: input.role },
+      );
+      return member;
+    });
+  }
+
+  async removeTeamMember(
+    principal: Principal,
+    teamId: string,
+    userId: string,
+    traceId: string,
+  ): Promise<void> {
+    await this.requireTeam(principal, teamId, true);
+    const current = await this.dependencies.repository.findTeamMember(
+      teamId,
+      userId,
+    );
+    if (!current) throw new ApiError("not_found", "Team member not found", 404);
+    if (current.role === "owner")
+      throw new ApiError(
+        "owner_protected",
+        "The team owner cannot be removed",
+        409,
+      );
+    await this.dependencies.repository.transaction(async (repository) => {
+      if (!(await repository.removeTeamMember(teamId, userId)))
+        throw new ApiError("not_found", "Team member not found", 404);
+      await this.auditWith(
+        repository,
+        principal.user.id,
+        "team.member.remove",
+        "user",
+        userId,
+        null,
+        traceId,
+        { teamId },
+      );
+    });
   }
 
   async applyCommands(
@@ -1491,6 +1742,26 @@ export class ApplicationService {
       throw new ApiError("forbidden", "Project access denied", 403);
     }
     return member;
+  }
+
+  private async requireTeam(
+    principal: Principal,
+    teamId: string,
+    manage: boolean,
+  ): Promise<Team> {
+    const team = await this.dependencies.repository.findTeamById(teamId);
+    if (!team) throw new ApiError("not_found", "Team not found", 404);
+    const member = await this.dependencies.repository.findTeamMember(
+      teamId,
+      principal.user.id,
+    );
+    if (
+      !member ||
+      (manage && member.role !== "owner" && member.role !== "admin")
+    ) {
+      throw new ApiError("forbidden", "Team access denied", 403);
+    }
+    return team;
   }
 
   private async auditWith(

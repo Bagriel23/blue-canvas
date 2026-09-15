@@ -8,6 +8,7 @@ import { useRouter } from "./router/useRouter.js";
 import { SignIn } from "./screens/SignIn.js";
 import { Home } from "./screens/Home.js";
 import { Library } from "./screens/Library.js";
+import { Teams } from "./screens/Teams.js";
 import { Workspace } from "./screens/Workspace.js";
 import { localeDisplayNames, uiLocales, type UiLocale } from "@blue-canvas/ui";
 import {
@@ -20,6 +21,7 @@ import {
   PanelsTopLeft,
   Sun,
   X,
+  UsersRound,
 } from "lucide-react";
 
 export function App() {
@@ -84,6 +86,8 @@ function Shell() {
               );
             case "library":
               return <Library />;
+            case "teams":
+              return <Teams />;
             case "workspace":
             case "share":
             case "export":
@@ -146,6 +150,14 @@ export function Topbar({ signedIn }: { signedIn: boolean }) {
             >
               <LibraryIcon size={15} aria-hidden="true" />
               {messages.library.heading}
+            </a>
+            <a
+              className="bc-topbar__nav-link"
+              href={serializeRoute({ name: "teams" })}
+              onClick={() => setMobileNavOpen(false)}
+            >
+              <UsersRound size={15} aria-hidden="true" />
+              {messages.teams.heading}
             </a>
           </nav>
         ) : null}

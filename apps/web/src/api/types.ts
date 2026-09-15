@@ -39,6 +39,23 @@ export interface ProjectMember {
   addedAt: string;
 }
 
+export interface TeamSummary {
+  id: string;
+  name: string;
+  role: "owner" | "admin" | "member";
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TeamMember {
+  id: string;
+  userId: string;
+  email: string;
+  displayName: string;
+  role: "owner" | "admin" | "member";
+  addedAt: string;
+}
+
 export interface PersonalAccessTokenSummary {
   id: string;
   name: string;

@@ -34,6 +34,10 @@ Este documento descreve o estado observado no código. O plano completo está em
   navegação entre páginas, histórico voltar, reset, variáveis condicionais e
   abertura/fechamento de overlays; nós invisíveis permanecem ocultos e links
   externos passam por validação de esquema.
+- Times e compartilhamento básico de projetos: a API persiste times e membros em
+  memória ou MariaDB/Prisma, com papéis owner/admin/member; a aplicação web
+  lista e cria times, consulta membros, cria convites de projeto com papel e
+  permite remover acessos pelo diálogo de compartilhamento.
 - Biblioteca de kits e templates com manifestos versionados, ciclo draft →
   published → deprecated, revisão administrativa, duplicação com bump de patch e
   diagnóstico de compatibilidade. Três kits (SEDA Enterprise, Wireframe, Neutral

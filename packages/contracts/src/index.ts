@@ -11,6 +11,7 @@ export const projectRoleSchema = z.enum([
   "commenter",
   "viewer",
 ]);
+export const teamRoleSchema = z.enum(["owner", "admin", "member"]);
 export const personalAccessTokenScopeSchema = z.enum([
   "projects:read",
   "projects:write",
@@ -111,6 +112,19 @@ export const updateProjectMemberRequestSchema = z.strictObject({
   role: projectRoleSchema.exclude(["owner"]),
 });
 
+export const createTeamRequestSchema = z.strictObject({
+  name: z.string().trim().min(1).max(120),
+});
+
+export const addTeamMemberRequestSchema = z.strictObject({
+  email: emailSchema,
+  role: teamRoleSchema.exclude(["owner"]),
+});
+
+export const updateTeamMemberRequestSchema = z.strictObject({
+  role: teamRoleSchema.exclude(["owner"]),
+});
+
 export const createPersonalAccessTokenRequestSchema = z.strictObject({
   name: z.string().trim().min(1).max(100),
   scopes: z.array(personalAccessTokenScopeSchema).min(1).max(10),
@@ -168,10 +182,16 @@ export type AddProjectMemberRequest = z.infer<
 export type UpdateProjectMemberRequest = z.infer<
   typeof updateProjectMemberRequestSchema
 >;
+export type CreateTeamRequest = z.infer<typeof createTeamRequestSchema>;
+export type AddTeamMemberRequest = z.infer<typeof addTeamMemberRequestSchema>;
+export type UpdateTeamMemberRequest = z.infer<
+  typeof updateTeamMemberRequestSchema
+>;
 export type CreatePersonalAccessTokenRequest = z.infer<
   typeof createPersonalAccessTokenRequestSchema
 >;
 export type ProjectRole = z.infer<typeof projectRoleSchema>;
+export type TeamRole = z.infer<typeof teamRoleSchema>;
 export type PersonalAccessTokenScope = z.infer<
   typeof personalAccessTokenScopeSchema
 >;

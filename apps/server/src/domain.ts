@@ -1,6 +1,7 @@
 import type {
   PersonalAccessTokenScope,
   ProjectRole,
+  TeamRole,
 } from "@blue-canvas/contracts";
 
 export type UserStatus = "active" | "disabled";
@@ -54,6 +55,23 @@ export interface ProjectMember {
   projectId: string;
   userId: string;
   role: ProjectRole;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface Team {
+  id: string;
+  name: string;
+  ownerId: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface TeamMember {
+  id: string;
+  teamId: string;
+  userId: string;
+  role: TeamRole;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -220,6 +238,31 @@ export interface RepositoryPort {
     now: Date,
   ): Promise<ProjectMember | undefined>;
   removeProjectMember(projectId: string, userId: string): Promise<boolean>;
+  createTeam(input: {
+    name: string;
+    ownerId: string;
+    now: Date;
+  }): Promise<Team>;
+  listTeamsForUser(userId: string): Promise<Team[]>;
+  findTeamById(id: string): Promise<Team | undefined>;
+  findTeamMember(
+    teamId: string,
+    userId: string,
+  ): Promise<TeamMember | undefined>;
+  listTeamMembers(teamId: string): Promise<TeamMember[]>;
+  addTeamMember(input: {
+    teamId: string;
+    userId: string;
+    role: TeamRole;
+    now: Date;
+  }): Promise<TeamMember>;
+  updateTeamMember(
+    teamId: string,
+    userId: string,
+    role: TeamRole,
+    now: Date,
+  ): Promise<TeamMember | undefined>;
+  removeTeamMember(teamId: string, userId: string): Promise<boolean>;
   createPersonalAccessToken(input: {
     userId: string;
     name: string;
