@@ -261,7 +261,11 @@ function projectTemplateResponse(template: {
 
 function exportFileResponse(file: GeneratedFile) {
   if ("content" in file) {
-    return { path: file.path, content: file.content, bytes: Buffer.byteLength(file.content) };
+    return {
+      path: file.path,
+      content: file.content,
+      bytes: Buffer.byteLength(file.content),
+    };
   }
   return {
     path: file.path,
@@ -672,7 +676,12 @@ export function buildApp(dependencies: ServerDependencies): FastifyInstance {
       archiveName: `${(project.name.replace(/[^a-zA-Z0-9_-]+/g, "-").replace(/^-+|-+$/g, "") || "blue-canvas").toLowerCase()}-${input.target}-${input.scope.type}.zip`,
       files: result.files.map(exportFileResponse),
       diagnostics: result.diagnostics,
-      manifest: { files: result.manifest.files.map(({ path, bytes }) => ({ path, bytes })) },
+      manifest: {
+        files: result.manifest.files.map(({ path, bytes }) => ({
+          path,
+          bytes,
+        })),
+      },
     };
   });
 

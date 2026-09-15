@@ -60,7 +60,9 @@ describe("ExportDialog", () => {
       configurable: true,
       value: vi.fn(),
     });
-    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
+    const click = vi
+      .spyOn(HTMLAnchorElement.prototype, "click")
+      .mockImplementation(() => undefined);
 
     render(
       <ExportDialog
@@ -109,7 +111,9 @@ describe("ExportDialog", () => {
     fireEvent.change(screen.getByLabelText("Scope"), {
       target: { value: "selection" },
     });
-    expect(screen.getByRole("button", { name: "Generate export" })).toHaveProperty("disabled", true);
+    expect(
+      screen.getByRole("button", { name: "Generate export" }),
+    ).toHaveProperty("disabled", true);
     fireEvent.change(screen.getByLabelText("Scope"), {
       target: { value: "project" },
     });

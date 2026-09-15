@@ -803,7 +803,9 @@ button:disabled {
   font-size: 0.75rem;
 }
 @keyframes bc-export-spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 .bc-preview {
   height: 100%;

@@ -16,7 +16,9 @@ function normalizePath(path: string): string {
   if (
     normalized.length === 0 ||
     normalized.startsWith("/") ||
-    normalized.split("/").some((part) => part.length === 0 || part === "." || part === "..")
+    normalized
+      .split("/")
+      .some((part) => part.length === 0 || part === "." || part === "..")
   ) {
     throw new Error(`unsafe archive path: ${path}`);
   }
@@ -47,7 +49,9 @@ function writeU32(target: Uint8Array, offset: number, value: number): void {
 }
 
 function concat(parts: Uint8Array[]): Uint8Array {
-  const result = new Uint8Array(parts.reduce((total, part) => total + part.length, 0));
+  const result = new Uint8Array(
+    parts.reduce((total, part) => total + part.length, 0),
+  );
   let offset = 0;
   for (const part of parts) {
     result.set(part, offset);
@@ -57,7 +61,9 @@ function concat(parts: Uint8Array[]): Uint8Array {
 }
 
 /** Creates a store-only ZIP with fixed timestamps and stable entry ordering. */
-export async function createDeterministicZip(entries: readonly ZipEntry[]): Promise<Uint8Array> {
+export async function createDeterministicZip(
+  entries: readonly ZipEntry[],
+): Promise<Uint8Array> {
   const normalized = entries.map((entry) => {
     const path = normalizePath(entry.path);
     return {
@@ -68,7 +74,9 @@ export async function createDeterministicZip(entries: readonly ZipEntry[]): Prom
       offset: 0,
     } satisfies NormalizedEntry;
   });
-  normalized.sort((left, right) => (left.path < right.path ? -1 : left.path > right.path ? 1 : 0));
+  normalized.sort((left, right) =>
+    left.path < right.path ? -1 : left.path > right.path ? 1 : 0,
+  );
   for (let index = 1; index < normalized.length; index += 1) {
     if (normalized[index]?.path === normalized[index - 1]?.path) {
       throw new Error(`duplicate archive path: ${normalized[index]?.path}`);

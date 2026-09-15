@@ -81,11 +81,11 @@ export interface ExportFileResponse {
 export interface ExportResponse {
   archiveName: string;
   files: ExportFileResponse[];
-  diagnostics: Array<{
+  diagnostics: {
     severity: "error" | "warning";
     code: string;
     nodeId?: string;
     message: string;
-  }>;
-  manifest: { files: Array<{ path: string; bytes: number }> };
+  }[];
+  manifest: { files: { path: string; bytes: number }[] };
 }

@@ -73,13 +73,16 @@ export function ExportDialog({
   const [state, setState] = useState<ExportState>({ kind: "idle" });
   const warningCount =
     state.kind === "ready"
-      ? state.result.diagnostics.filter(({ severity }) => severity === "warning")
-          .length
+      ? state.result.diagnostics.filter(
+          ({ severity }) => severity === "warning",
+        ).length
       : 0;
   const scopeValue = useMemo<ExportScope | null>(() => {
     if (scope === "project") return { type: "project" };
     if (scope === "page") return { type: "page", pageId: currentPageId };
-    return currentSelection ? { type: "selection", nodeIds: [currentSelection] } : null;
+    return currentSelection
+      ? { type: "selection", nodeIds: [currentSelection] }
+      : null;
   }, [currentPageId, currentSelection, scope]);
 
   async function start(): Promise<void> {
@@ -129,7 +132,11 @@ export function ExportDialog({
         disabled={!canStart}
       >
         {state.kind === "loading" ? (
-          <LoaderCircle className="bc-export-spinner" size={15} aria-hidden="true" />
+          <LoaderCircle
+            className="bc-export-spinner"
+            size={15}
+            aria-hidden="true"
+          />
         ) : (
           <FileArchive size={15} aria-hidden="true" />
         )}
@@ -167,7 +174,9 @@ export function ExportDialog({
               setState({ kind: "idle" });
             }}
           >
-            <option value="project">{messages.exportDialog.scopeProject}</option>
+            <option value="project">
+              {messages.exportDialog.scopeProject}
+            </option>
             <option value="page">{messages.exportDialog.scopePage}</option>
             <option value="selection" disabled={!currentSelection}>
               {messages.exportDialog.scopeSelection}
@@ -196,7 +205,11 @@ export function ExportDialog({
           </p>
         ) : null}
         {state.kind === "loading" ? (
-          <div className="bc-export-progress" aria-live="polite" aria-busy="true">
+          <div
+            className="bc-export-progress"
+            aria-live="polite"
+            aria-busy="true"
+          >
             <progress value={65} max={100} />
             <span>{messages.exportDialog.generating}</span>
           </div>
@@ -207,19 +220,31 @@ export function ExportDialog({
           </p>
         ) : null}
         {state.kind === "ready" ? (
-          <section className="bc-export-summary" aria-labelledby="bc-export-summary-title">
+          <section
+            className="bc-export-summary"
+            aria-labelledby="bc-export-summary-title"
+          >
             <div className="bc-export-summary__header">
               <div>
                 <p className="bc-eyebrow">{messages.exportDialog.preview}</p>
-                <h3 id="bc-export-summary-title">{messages.exportDialog.generated}</h3>
+                <h3 id="bc-export-summary-title">
+                  {messages.exportDialog.generated}
+                </h3>
               </div>
               <span className="bc-export-summary__badge">ZIP</span>
             </div>
             <p>{messages.exportDialog.generatedDescription}</p>
             <div className="bc-export-summary__stats">
-              <strong>{interpolate(messages.exportDialog.fileCount, state.result.files.length)}</strong>
+              <strong>
+                {interpolate(
+                  messages.exportDialog.fileCount,
+                  state.result.files.length,
+                )}
+              </strong>
               {warningCount > 0 ? (
-                <span>{interpolate(messages.exportDialog.warnings, warningCount)}</span>
+                <span>
+                  {interpolate(messages.exportDialog.warnings, warningCount)}
+                </span>
               ) : null}
             </div>
             {state.result.diagnostics.length > 0 ? (
