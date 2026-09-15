@@ -96,6 +96,7 @@ describe("collaboration domain", () => {
             },
           ],
           "00000000-0000-4000-8000-000000000998",
+          "rebase-error-123456",
         ),
       ).rejects.toMatchObject({
         code: "revision_conflict",
@@ -121,6 +122,14 @@ describe("collaboration domain", () => {
       expectedRevision: 0,
       now: NOW,
     });
+    await repository.createCommandReceipt({
+      projectId: project.id,
+      idempotencyKey: "rebase-vector-123456",
+      fingerprint: "fingerprint",
+      revision: 1,
+      document: readSemanticDocument(initial),
+      createdAt: NOW,
+    });
     initial.destroy();
 
     const manager = new CollaborationManager({
@@ -133,6 +142,17 @@ describe("collaboration domain", () => {
       project.id,
       active,
     );
+    vi.spyOn(manager, "flushProject").mockImplementation(async () => {
+      const latest = await findProjectDocument(project.id);
+      if (!latest) throw new Error("missing persisted document");
+      const current = encodeCollaborationState(active);
+      await repository.upsertProjectDocument({
+        projectId: project.id,
+        ...current,
+        expectedRevision: latest.revision,
+        now: NOW,
+      });
+    });
     let injectConcurrentEdit = true;
     const findProjectDocument = repository.findProjectDocument.bind(repository);
     vi.spyOn(repository, "findProjectDocument").mockImplementation(
@@ -162,6 +182,7 @@ describe("collaboration domain", () => {
           },
         ],
         "00000000-0000-4000-8000-000000000998",
+        "rebase-vector-123456",
       );
       const persisted = await findProjectDocument(project.id);
       if (!persisted) throw new Error("missing persisted document");
@@ -172,6 +193,74 @@ describe("collaboration domain", () => {
           name: "Late edit",
           tokens: { brand: { type: "color", value: "#1428A0" } },
         });
+      } finally {
+        restored.destroy();
+      }
+    } finally {
+      manager.hocuspocus.documents.delete(project.id);
+      active.destroy();
+    }
+  });
+
+  it("rolls back the active Yjs rebase when the receipt update fails", async () => {
+    const { repository, service, project } = await fixture();
+    const initial = createInitialCollaborationDocument(
+      project.id,
+      project.name,
+    );
+    const encoded = encodeCollaborationState(initial);
+    await repository.upsertProjectDocument({
+      projectId: project.id,
+      ...encoded,
+      expectedRevision: 0,
+      now: NOW,
+    });
+    await repository.createCommandReceipt({
+      projectId: project.id,
+      idempotencyKey: "rebase-rollback-123456",
+      fingerprint: "fingerprint",
+      revision: 1,
+      document: readSemanticDocument(initial),
+      createdAt: NOW,
+    });
+    initial.destroy();
+
+    const manager = new CollaborationManager({
+      repository,
+      service,
+      now: () => NOW,
+    });
+    const active = createInitialCollaborationDocument(project.id, project.name);
+    (manager.hocuspocus.documents as unknown as Map<string, Y.Doc>).set(
+      project.id,
+      active,
+    );
+    vi.spyOn(repository, "updateCommandReceipt").mockRejectedValue(
+      new Error("receipt update failed"),
+    );
+
+    try {
+      await expect(
+        manager.rebaseProjectCommands(
+          project.id,
+          [
+            {
+              type: "set-token",
+              name: "brand",
+              value: { type: "color", value: "#1428A0" },
+            },
+          ],
+          "00000000-0000-4000-8000-000000000998",
+          "rebase-rollback-123456",
+        ),
+      ).rejects.toThrow("receipt update failed");
+      expect(readSemanticDocument(active).tokens.brand).toBeUndefined();
+      const persisted = await repository.findProjectDocument(project.id);
+      if (!persisted) throw new Error("missing persisted document");
+      const restored = new Y.Doc();
+      try {
+        applyCollaborationState(restored, persisted.state);
+        expect(readSemanticDocument(restored).tokens.brand).toBeUndefined();
       } finally {
         restored.destroy();
       }

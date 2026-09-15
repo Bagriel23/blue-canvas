@@ -262,23 +262,84 @@ export class CollaborationManager {
     projectId: string,
     commands: unknown[],
     actorId: string,
+    idempotencyKey: string,
   ): Promise<{ revision: number; document: unknown }> {
     const document = this.hocuspocus.documents.get(projectId);
     if (!document)
       throw new ApiError("not_found", "Project document not found", 404);
 
-    let rebased;
+    const previous = structuredClone(readSemanticDocument(document));
+    let committed = false;
     try {
-      rebased = applyCommandBatch(
-        createCommandState(readSemanticDocument(document)),
-        {
-          id: randomUUID(),
-          actorId,
-          baseRevision: 0,
-          commands,
+      let rebased;
+      document.transact(
+        () => {
+          rebased = applyCommandBatch(
+            createCommandState(readSemanticDocument(document)),
+            {
+              id: randomUUID(),
+              actorId,
+              baseRevision: 0,
+              commands,
+            },
+          );
+          replaceSemanticDocument(document, rebased.document);
+        },
+        { source: "local", skipStoreHooks: true },
+      );
+      if (!rebased) throw new Error("Command rebase produced no document");
+      const encoded = encodeCollaborationState(document);
+      const updated = await this.dependencies.repository.transaction(
+        async (repository) => {
+          const persisted = await repository.findProjectDocument(projectId);
+          const result = await repository.upsertProjectDocument({
+            projectId,
+            ...encoded,
+            expectedRevision: persisted?.revision ?? 0,
+            now: this.dependencies.now(),
+          });
+          const receipt = await repository.updateCommandReceipt({
+            projectId,
+            idempotencyKey,
+            revision: result.revision,
+            document: readSemanticDocument(document),
+          });
+          if (!receipt)
+            throw new ApiError("not_found", "Command receipt not found", 404);
+          return result;
         },
       );
+      committed = true;
+      const currentStateVector = encodeCollaborationState(document).stateVector;
+      if (!bytesEqual(encoded.stateVector, currentStateVector)) {
+        await this.flushProject(projectId);
+        const latest =
+          await this.dependencies.repository.findProjectDocument(projectId);
+        if (latest) {
+          await this.dependencies.repository.updateCommandReceipt({
+            projectId,
+            idempotencyKey,
+            revision: latest.revision,
+            document: readSemanticDocument(document),
+          });
+          return {
+            revision: latest.revision,
+            document: readSemanticDocument(document),
+          };
+        }
+      }
+      return {
+        revision: updated.revision,
+        document: readSemanticDocument(document),
+      };
     } catch (error) {
+      if (!committed)
+        document.transact(
+          () => {
+            replaceSemanticDocument(document, previous);
+          },
+          { source: "local", skipStoreHooks: true },
+        );
       if (!(error instanceof CommandError)) throw error;
       const invalid = new Set([
         "INVALID_BATCH",
@@ -292,41 +353,6 @@ export class CollaborationManager {
         { code: error.code },
       );
     }
-    document.transact(
-      () => {
-        replaceSemanticDocument(document, rebased.document);
-      },
-      { source: "local", skipStoreHooks: true },
-    );
-
-    for (let attempt = 0; attempt < 3; attempt += 1) {
-      const encoded = encodeCollaborationState(document);
-      const persisted =
-        await this.dependencies.repository.findProjectDocument(projectId);
-      const currentStateVector = encodeCollaborationState(document).stateVector;
-      if (!bytesEqual(encoded.stateVector, currentStateVector)) continue;
-      try {
-        const updated =
-          await this.dependencies.repository.upsertProjectDocument({
-            projectId,
-            ...encoded,
-            expectedRevision: persisted?.revision ?? 0,
-            now: this.dependencies.now(),
-          });
-        return {
-          revision: updated.revision,
-          document: readSemanticDocument(document),
-        };
-      } catch (error) {
-        if (!(error instanceof ApiError) || error.code !== "revision_conflict")
-          throw error;
-      }
-    }
-    throw new ApiError(
-      "revision_conflict",
-      "Document changed while applying command",
-      409,
-    );
   }
 
   async close(): Promise<void> {
