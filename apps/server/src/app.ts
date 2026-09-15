@@ -299,14 +299,17 @@ function assetsForExportScope(
   if (scope.type === "page" && document && typeof document === "object") {
     const pages = (document as { pages?: unknown }).pages;
     if (Array.isArray(pages))
-      return (
-        pages.find(
-          (page) =>
-            page &&
-            typeof page === "object" &&
-            (page as { id?: unknown }).id === scope.pageId,
-        ) ?? document
-      );
+      return {
+        pages: [
+          pages.find(
+            (page) =>
+              page &&
+              typeof page === "object" &&
+              (page as { id?: unknown }).id === scope.pageId,
+          ) ?? document,
+        ],
+        components: (document as { components?: unknown }).components,
+      };
   }
   if (scope.type === "selection" && Array.isArray(scope.nodeIds)) {
     const wanted = new Set(scope.nodeIds);
@@ -320,7 +323,10 @@ function assetsForExportScope(
       Object.values(record).forEach(visit);
     };
     visit(document);
-    return selected;
+    return {
+      nodes: selected,
+      components: (document as { components?: unknown }).components,
+    };
   }
   return document;
 }
