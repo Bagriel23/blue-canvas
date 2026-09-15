@@ -16,7 +16,7 @@ function normalizePath(path: string): string {
   if (
     normalized.length === 0 ||
     normalized.startsWith("/") ||
-    /^[A-Za-z]:\//u.test(normalized) ||
+    /^[A-Za-z]:/u.test(normalized) ||
     normalized
       .split("/")
       .some((part) => part.length === 0 || part === "." || part === "..")

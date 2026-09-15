@@ -276,6 +276,21 @@ function exportFileResponse(file: GeneratedFile) {
   };
 }
 
+function referencedAssetIds(
+  value: unknown,
+  result = new Set<string>(),
+): Set<string> {
+  if (Array.isArray(value)) {
+    for (const item of value) referencedAssetIds(item, result);
+  } else if (value !== null && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    if (record.type === "asset" && typeof record.assetId === "string")
+      result.add(record.assetId);
+    for (const item of Object.values(record)) referencedAssetIds(item, result);
+  }
+  return result;
+}
+
 export function buildApp(dependencies: ServerDependencies): FastifyInstance {
   const app = Fastify({
     logger: {
@@ -658,6 +673,12 @@ export function buildApp(dependencies: ServerDependencies): FastifyInstance {
 
   app.post("/api/v1/projects/:projectId/exports", async (request) => {
     const principal = await authenticate(request, { scope: "projects:read" });
+    if (
+      principal.kind === "pat" &&
+      !principal.token.scopes.includes("assets:read")
+    ) {
+      throw new ApiError("forbidden", "Asset export requires assets:read", 403);
+    }
     const projectId = identifier(request, "projectId");
     const input = parse(exportRequestSchema, request.body);
     const documentResponse = await collaboration.withProjectLock(
@@ -676,7 +697,9 @@ export function buildApp(dependencies: ServerDependencies): FastifyInstance {
       { fileName: string; mimeType: string; bytes: Uint8Array }
     > = {};
     let exportBytes = 0;
-    for (const asset of assets.slice(0, MAX_EXPORT_ASSETS)) {
+    const referenced = referencedAssetIds(documentResponse.document);
+    const selectedAssets = assets.filter((asset) => referenced.has(asset.id));
+    for (const asset of selectedAssets.slice(0, MAX_EXPORT_ASSETS)) {
       if (exportBytes + asset.size > MAX_EXPORT_ASSET_BYTES) break;
       try {
         const bytes = await dependencies.storage.read(asset.storageKey);
