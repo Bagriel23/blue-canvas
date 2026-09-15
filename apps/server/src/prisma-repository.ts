@@ -6,6 +6,12 @@ import {
   type PersonalAccessTokenScope,
 } from "@blue-canvas/contracts";
 import { z } from "zod";
+import {
+  parseKitManifest,
+  parseTemplateManifest,
+  type KitRecord,
+  type TemplateRecord,
+} from "@blue-canvas/library";
 
 import type {
   Asset,
@@ -15,6 +21,8 @@ import type {
   Project,
   ProjectComment,
   ProjectTemplate,
+  StoredKitRecord,
+  StoredTemplateRecord,
   ProjectDocument,
   CommandReceipt,
   ProjectMember,
@@ -136,6 +144,46 @@ function projectComment(value: {
   return {
     ...value,
     mentionUserIds: value.mentions.map(({ userId }) => userId).sort(),
+  };
+}
+
+function storedKit(value: {
+  manifest: unknown;
+  status: string;
+  authorId: string;
+  publishedAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+}): StoredKitRecord {
+  return {
+    manifest: parseKitManifest(value.manifest),
+    status: z.enum(["draft", "published", "deprecated"]).parse(value.status),
+    authorId: value.authorId,
+    ...(value.publishedAt
+      ? { publishedAt: value.publishedAt.toISOString() }
+      : {}),
+    createdAt: value.createdAt.toISOString(),
+    updatedAt: value.updatedAt.toISOString(),
+  };
+}
+
+function storedTemplate(value: {
+  manifest: unknown;
+  status: string;
+  authorId: string;
+  publishedAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+}): StoredTemplateRecord {
+  return {
+    manifest: parseTemplateManifest(value.manifest),
+    status: z.enum(["draft", "published", "deprecated"]).parse(value.status),
+    authorId: value.authorId,
+    ...(value.publishedAt
+      ? { publishedAt: value.publishedAt.toISOString() }
+      : {}),
+    createdAt: value.createdAt.toISOString(),
+    updatedAt: value.updatedAt.toISOString(),
   };
 }
 
@@ -460,6 +508,106 @@ export class PrismaRepository implements RepositoryPort {
       (await this.client.projectTemplate.findUnique({ where: { id } })) ??
       undefined
     );
+  }
+
+  async createLibraryKit(record: KitRecord): Promise<KitRecord> {
+    const value = await this.client.libraryKit.create({
+      data: {
+        id: record.manifest.id,
+        manifest: record.manifest as unknown as Prisma.InputJsonValue,
+        status: record.status,
+        authorId: record.authorId,
+        publishedAt: record.publishedAt ? new Date(record.publishedAt) : null,
+        createdAt: new Date(record.createdAt),
+        updatedAt: new Date(record.updatedAt),
+      },
+    });
+    return storedKit(value);
+  }
+
+  async listLibraryKits(): Promise<KitRecord[]> {
+    return (
+      await this.client.libraryKit.findMany({
+        orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
+      })
+    ).map(storedKit);
+  }
+
+  async updateLibraryKit(record: KitRecord): Promise<KitRecord | undefined> {
+    const result = await this.client.libraryKit.updateMany({
+      where: { id: record.manifest.id },
+      data: {
+        manifest: record.manifest as unknown as Prisma.InputJsonValue,
+        status: record.status,
+        authorId: record.authorId,
+        publishedAt: record.publishedAt ? new Date(record.publishedAt) : null,
+        createdAt: new Date(record.createdAt),
+        updatedAt: new Date(record.updatedAt),
+      },
+    });
+    if (result.count !== 1) return undefined;
+    return storedKit(
+      await this.client.libraryKit.findUniqueOrThrow({
+        where: { id: record.manifest.id },
+      }),
+    );
+  }
+
+  async deleteLibraryKit(id: string): Promise<boolean> {
+    const result = await this.client.libraryKit.deleteMany({ where: { id } });
+    return result.count === 1;
+  }
+
+  async createLibraryTemplate(record: TemplateRecord): Promise<TemplateRecord> {
+    const value = await this.client.libraryTemplate.create({
+      data: {
+        id: record.manifest.id,
+        manifest: record.manifest as unknown as Prisma.InputJsonValue,
+        status: record.status,
+        authorId: record.authorId,
+        publishedAt: record.publishedAt ? new Date(record.publishedAt) : null,
+        createdAt: new Date(record.createdAt),
+        updatedAt: new Date(record.updatedAt),
+      },
+    });
+    return storedTemplate(value);
+  }
+
+  async listLibraryTemplates(): Promise<TemplateRecord[]> {
+    return (
+      await this.client.libraryTemplate.findMany({
+        orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
+      })
+    ).map(storedTemplate);
+  }
+
+  async updateLibraryTemplate(
+    record: TemplateRecord,
+  ): Promise<TemplateRecord | undefined> {
+    const result = await this.client.libraryTemplate.updateMany({
+      where: { id: record.manifest.id },
+      data: {
+        manifest: record.manifest as unknown as Prisma.InputJsonValue,
+        status: record.status,
+        authorId: record.authorId,
+        publishedAt: record.publishedAt ? new Date(record.publishedAt) : null,
+        createdAt: new Date(record.createdAt),
+        updatedAt: new Date(record.updatedAt),
+      },
+    });
+    if (result.count !== 1) return undefined;
+    return storedTemplate(
+      await this.client.libraryTemplate.findUniqueOrThrow({
+        where: { id: record.manifest.id },
+      }),
+    );
+  }
+
+  async deleteLibraryTemplate(id: string): Promise<boolean> {
+    const result = await this.client.libraryTemplate.deleteMany({
+      where: { id },
+    });
+    return result.count === 1;
   }
 
   async updateProject(

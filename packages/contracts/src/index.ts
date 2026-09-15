@@ -139,8 +139,23 @@ export const createLibraryDraftRequestSchema = z.strictObject({
   manifest: z.unknown(),
 });
 
+export const createProjectTemplateRequestSchema = z.strictObject({
+  name: z.string().trim().min(1).max(120),
+  description: z.string().trim().max(1000).default(""),
+});
+
+export const instantiateProjectTemplateRequestSchema = z.strictObject({
+  name: z.string().trim().min(1).max(120),
+});
+
 export type CreateLibraryDraftRequest = z.infer<
   typeof createLibraryDraftRequestSchema
+>;
+export type CreateProjectTemplateRequest = z.infer<
+  typeof createProjectTemplateRequestSchema
+>;
+export type InstantiateProjectTemplateRequest = z.infer<
+  typeof instantiateProjectTemplateRequestSchema
 >;
 export type LibraryEntityKind = z.infer<typeof libraryEntityKindSchema>;
 export type LibraryStatus = z.infer<typeof libraryStatusSchema>;

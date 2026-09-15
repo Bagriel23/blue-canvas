@@ -3,6 +3,7 @@ import type {
   ProjectRole,
   TeamRole,
 } from "@blue-canvas/contracts";
+import type { KitRecord, TemplateRecord } from "@blue-canvas/library";
 
 export type UserStatus = "active" | "disabled";
 
@@ -169,6 +170,9 @@ export interface ProjectTemplate {
   updatedAt: Date;
 }
 
+export type StoredKitRecord = KitRecord;
+export type StoredTemplateRecord = TemplateRecord;
+
 export interface RepositoryPort {
   transaction<T>(
     operation: (repository: RepositoryPort) => Promise<T>,
@@ -238,6 +242,20 @@ export interface RepositoryPort {
   }): Promise<ProjectTemplate>;
   listProjectTemplatesForUser(userId: string): Promise<ProjectTemplate[]>;
   findProjectTemplateById(id: string): Promise<ProjectTemplate | undefined>;
+  createLibraryKit(record: StoredKitRecord): Promise<StoredKitRecord>;
+  listLibraryKits(): Promise<StoredKitRecord[]>;
+  updateLibraryKit(
+    record: StoredKitRecord,
+  ): Promise<StoredKitRecord | undefined>;
+  deleteLibraryKit(id: string): Promise<boolean>;
+  createLibraryTemplate(
+    record: StoredTemplateRecord,
+  ): Promise<StoredTemplateRecord>;
+  listLibraryTemplates(): Promise<StoredTemplateRecord[]>;
+  updateLibraryTemplate(
+    record: StoredTemplateRecord,
+  ): Promise<StoredTemplateRecord | undefined>;
+  deleteLibraryTemplate(id: string): Promise<boolean>;
   updateProject(
     id: string,
     input: { name?: string; archivedAt?: Date | null; now: Date },

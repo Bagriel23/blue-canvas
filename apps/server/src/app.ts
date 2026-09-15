@@ -22,6 +22,8 @@ import {
   addTeamMemberRequestSchema,
   updateTeamMemberRequestSchema,
   updateCommentRequestSchema,
+  createProjectTemplateRequestSchema,
+  instantiateProjectTemplateRequestSchema,
   type PersonalAccessTokenScope,
 } from "@blue-canvas/contracts";
 import { z } from "zod";
@@ -56,13 +58,6 @@ const applyCommandsRequestSchema = z.strictObject({
   baseRevision: z.number().int().nonnegative(),
   idempotencyKey: z.string().trim().min(8).max(128),
   commands: z.array(z.unknown()).min(1).max(50),
-});
-const createProjectTemplateRequestSchema = z.strictObject({
-  name: z.string().trim().min(1).max(120),
-  description: z.string().trim().max(1000).default(""),
-});
-const instantiateProjectTemplateRequestSchema = z.strictObject({
-  name: z.string().trim().min(1).max(120),
 });
 
 export interface ServerDependencies {
@@ -298,7 +293,10 @@ export function buildApp(dependencies: ServerDependencies): FastifyInstance {
     service,
     now: dependencies.now ?? (() => new Date()),
   });
-  const library = new LibraryService(dependencies.now ?? (() => new Date()));
+  const library = new LibraryService(
+    dependencies.now ?? (() => new Date()),
+    dependencies.repository,
+  );
 
   void app.register(websocket, {
     options: { maxPayload: 1024 * 1024 + 64 * 1024 },
@@ -1079,7 +1077,7 @@ export function buildApp(dependencies: ServerDependencies): FastifyInstance {
   app.get("/api/v1/library/kits", async (request) => {
     const principal = await authenticate(request);
     return {
-      kits: library.listKits(libraryActor(principal)).map(publicKit),
+      kits: (await library.listKits(libraryActor(principal))).map(publicKit),
     };
   });
 
@@ -1090,7 +1088,7 @@ export function buildApp(dependencies: ServerDependencies): FastifyInstance {
         scope: "admin",
       }),
     );
-    const record = library.createKitDraft(
+    const record = await library.createKitDraft(
       libraryActor(principal),
       libraryManifest(request),
     );
@@ -1104,7 +1102,7 @@ export function buildApp(dependencies: ServerDependencies): FastifyInstance {
         scope: "admin",
       }),
     );
-    const record = library.publishKit(
+    const record = await library.publishKit(
       libraryActor(principal),
       identifier(request, "kitId"),
     );
@@ -1118,7 +1116,7 @@ export function buildApp(dependencies: ServerDependencies): FastifyInstance {
         scope: "admin",
       }),
     );
-    const record = library.duplicateKit(
+    const record = await library.duplicateKit(
       libraryActor(principal),
       identifier(request, "kitId"),
     );
@@ -1132,21 +1130,42 @@ export function buildApp(dependencies: ServerDependencies): FastifyInstance {
         scope: "admin",
       }),
     );
-    const record = library.deprecateKit(
+    const record = await library.deprecateKit(
       libraryActor(principal),
       identifier(request, "kitId"),
     );
     return { kit: publicKit(record) };
   });
 
+  app.patch("/api/v1/library/kits/:kitId", async (request) => {
+    const principal = libraryAdmin(
+      await authenticate(request, { mutating: true, scope: "admin" }),
+    );
+    const record = await library.updateKitDraft(
+      libraryActor(principal),
+      identifier(request, "kitId"),
+      libraryManifest(request),
+    );
+    return { kit: publicKit(record) };
+  });
+
+  app.delete("/api/v1/library/kits/:kitId", async (request, reply) => {
+    const principal = libraryAdmin(
+      await authenticate(request, { mutating: true, scope: "admin" }),
+    );
+    await library.deleteKit(
+      libraryActor(principal),
+      identifier(request, "kitId"),
+    );
+    return reply.code(204).send();
+  });
+
   app.get("/api/v1/library/templates", async (request) => {
     const principal = await authenticate(request);
     return {
-      templates: library
-        .listTemplates(libraryActor(principal))
-        .map((entry) =>
-          publicTemplate(entry.record, entry.compatible, entry.reason),
-        ),
+      templates: (await library.listTemplates(libraryActor(principal))).map(
+        (entry) => publicTemplate(entry.record, entry.compatible, entry.reason),
+      ),
     };
   });
 
@@ -1157,7 +1176,7 @@ export function buildApp(dependencies: ServerDependencies): FastifyInstance {
         scope: "admin",
       }),
     );
-    const record = library.createTemplateDraft(
+    const record = await library.createTemplateDraft(
       libraryActor(principal),
       libraryManifest(request),
     );
@@ -1171,7 +1190,7 @@ export function buildApp(dependencies: ServerDependencies): FastifyInstance {
         scope: "admin",
       }),
     );
-    const record = library.publishTemplate(
+    const record = await library.publishTemplate(
       libraryActor(principal),
       identifier(request, "templateId"),
     );
@@ -1187,11 +1206,37 @@ export function buildApp(dependencies: ServerDependencies): FastifyInstance {
           scope: "admin",
         }),
       );
-      const record = library.duplicateTemplate(
+      const record = await library.duplicateTemplate(
         libraryActor(principal),
         identifier(request, "templateId"),
       );
       return reply.code(201).send({ template: publicTemplate(record, true) });
+    },
+  );
+
+  app.patch("/api/v1/library/templates/:templateId", async (request) => {
+    const principal = libraryAdmin(
+      await authenticate(request, { mutating: true, scope: "admin" }),
+    );
+    const record = await library.updateTemplateDraft(
+      libraryActor(principal),
+      identifier(request, "templateId"),
+      libraryManifest(request),
+    );
+    return { template: publicTemplate(record, true) };
+  });
+
+  app.delete(
+    "/api/v1/library/templates/:templateId",
+    async (request, reply) => {
+      const principal = libraryAdmin(
+        await authenticate(request, { mutating: true, scope: "admin" }),
+      );
+      await library.deleteTemplate(
+        libraryActor(principal),
+        identifier(request, "templateId"),
+      );
+      return reply.code(204).send();
     },
   );
 

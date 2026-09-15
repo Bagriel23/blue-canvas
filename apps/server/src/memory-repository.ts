@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import { ApiError } from "./core.js";
+import type { KitRecord, TemplateRecord } from "@blue-canvas/library";
 import type {
   Asset,
   AuditEvent,
@@ -26,6 +27,8 @@ export class InMemoryRepository implements RepositoryPort {
   private invitations = new Map<string, Invitation>();
   private projects = new Map<string, Project>();
   private projectTemplates = new Map<string, ProjectTemplate>();
+  private libraryKits = new Map<string, KitRecord>();
+  private libraryTemplates = new Map<string, TemplateRecord>();
   private members = new Map<string, ProjectMember>();
   private teams = new Map<string, Team>();
   private teamMembers = new Map<string, TeamMember>();
@@ -267,6 +270,46 @@ export class InMemoryRepository implements RepositoryPort {
   ): Promise<ProjectTemplate | undefined> {
     const template = this.projectTemplates.get(id);
     return template ? structuredClone(template) : undefined;
+  }
+
+  async createLibraryKit(record: KitRecord): Promise<KitRecord> {
+    this.libraryKits.set(record.manifest.id, structuredClone(record));
+    return structuredClone(record);
+  }
+
+  async listLibraryKits(): Promise<KitRecord[]> {
+    return structuredClone([...this.libraryKits.values()]);
+  }
+
+  async updateLibraryKit(record: KitRecord): Promise<KitRecord | undefined> {
+    if (!this.libraryKits.has(record.manifest.id)) return undefined;
+    this.libraryKits.set(record.manifest.id, structuredClone(record));
+    return structuredClone(record);
+  }
+
+  async deleteLibraryKit(id: string): Promise<boolean> {
+    return this.libraryKits.delete(id);
+  }
+
+  async createLibraryTemplate(record: TemplateRecord): Promise<TemplateRecord> {
+    this.libraryTemplates.set(record.manifest.id, structuredClone(record));
+    return structuredClone(record);
+  }
+
+  async listLibraryTemplates(): Promise<TemplateRecord[]> {
+    return structuredClone([...this.libraryTemplates.values()]);
+  }
+
+  async updateLibraryTemplate(
+    record: TemplateRecord,
+  ): Promise<TemplateRecord | undefined> {
+    if (!this.libraryTemplates.has(record.manifest.id)) return undefined;
+    this.libraryTemplates.set(record.manifest.id, structuredClone(record));
+    return structuredClone(record);
+  }
+
+  async deleteLibraryTemplate(id: string): Promise<boolean> {
+    return this.libraryTemplates.delete(id);
   }
 
   async updateProject(
@@ -724,6 +767,8 @@ export class InMemoryRepository implements RepositoryPort {
       invitations: [...this.invitations.values()],
       projects: [...this.projects.values()],
       projectTemplates: [...this.projectTemplates.values()],
+      libraryKits: [...this.libraryKits.values()],
+      libraryTemplates: [...this.libraryTemplates.values()],
       members: [...this.members.values()],
       teams: [...this.teams.values()],
       teamMembers: [...this.teamMembers.values()],
@@ -770,6 +815,8 @@ export class InMemoryRepository implements RepositoryPort {
       invitations: this.invitations,
       projects: this.projects,
       projectTemplates: this.projectTemplates,
+      libraryKits: this.libraryKits,
+      libraryTemplates: this.libraryTemplates,
       members: this.members,
       teams: this.teams,
       teamMembers: this.teamMembers,
@@ -789,6 +836,8 @@ export class InMemoryRepository implements RepositoryPort {
     this.invitations = snapshot.invitations;
     this.projects = snapshot.projects;
     this.projectTemplates = snapshot.projectTemplates;
+    this.libraryKits = snapshot.libraryKits;
+    this.libraryTemplates = snapshot.libraryTemplates;
     this.members = snapshot.members;
     this.teams = snapshot.teams;
     this.teamMembers = snapshot.teamMembers;

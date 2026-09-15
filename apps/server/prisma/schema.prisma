@@ -123,6 +123,34 @@ model ProjectTemplate {
   @@map("project_templates")
 }
 
+model LibraryKit {
+  id          String   @id @db.VarChar(36)
+  manifest    Json
+  status      String   @db.VarChar(16)
+  authorId    String   @db.VarChar(36)
+  publishedAt DateTime? @db.DateTime(3)
+  createdAt   DateTime @db.DateTime(3)
+  updatedAt   DateTime @db.DateTime(3)
+
+  @@index([status, updatedAt], map: "library_kits_status_updated_idx")
+  @@index([authorId], map: "library_kits_author_idx")
+  @@map("library_kits")
+}
+
+model LibraryTemplate {
+  id          String   @id @db.VarChar(36)
+  manifest    Json
+  status      String   @db.VarChar(16)
+  authorId    String   @db.VarChar(36)
+  publishedAt DateTime? @db.DateTime(3)
+  createdAt   DateTime @db.DateTime(3)
+  updatedAt   DateTime @db.DateTime(3)
+
+  @@index([status, updatedAt], map: "library_templates_status_updated_idx")
+  @@index([authorId], map: "library_templates_author_idx")
+  @@map("library_templates")
+}
+
 model ProjectMember {
   id        String      @id @db.VarChar(36)
   projectId String      @db.VarChar(36)

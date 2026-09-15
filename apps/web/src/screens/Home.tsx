@@ -168,16 +168,19 @@ export function Home({ onOpen }: HomeProps) {
                 <ArrowUpRight size={15} aria-hidden="true" />
                 {messages.home.open}
               </a>
-              <button
-                type="button"
-                className="bc-btn"
-                onClick={() => void handleSaveTemplate(project)}
-                disabled={savingTemplate === project.id}
-              >
-                {savedTemplate === project.id
-                  ? messages.home.templateSaved
-                  : messages.home.saveTemplate}
-              </button>
+              {!project.archived &&
+              (project.role === "owner" || project.role === "editor") ? (
+                <button
+                  type="button"
+                  className="bc-btn"
+                  onClick={() => void handleSaveTemplate(project)}
+                  disabled={savingTemplate === project.id}
+                >
+                  {savedTemplate === project.id
+                    ? messages.home.templateSaved
+                    : messages.home.saveTemplate}
+                </button>
+              ) : null}
             </li>
           ))}
         </ul>

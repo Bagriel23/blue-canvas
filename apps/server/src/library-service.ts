@@ -16,7 +16,10 @@ import {
   NotAdminError,
   type KitRecord,
   type TemplateRecord,
+  parseKitManifest,
+  parseTemplateManifest,
 } from "@blue-canvas/library";
+import type { RepositoryPort } from "./domain.js";
 
 export interface LibraryActor {
   id: string;
@@ -69,20 +72,38 @@ function createSeededStore(now: () => Date): LibraryStore {
 
 export class LibraryService {
   private readonly store: LibraryStore;
+  private readonly initialized: Promise<void>;
 
-  constructor(private readonly now: () => Date = () => new Date()) {
-    this.store = createSeededStore(now);
+  constructor(
+    private readonly now: () => Date = () => new Date(),
+    private readonly repository?: RepositoryPort,
+  ) {
+    this.store = { kits: new Map(), templates: new Map() };
+    this.initialized = repository ? this.hydrate() : Promise.resolve();
+    if (!repository) {
+      const seeded = createSeededStore(now);
+      this.store.kits = seeded.kits;
+      this.store.templates = seeded.templates;
+    }
   }
 
-  listKits(actor: LibraryActor): KitRecord[] {
+  async ready(): Promise<void> {
+    await this.initialized;
+  }
+
+  async listKits(actor: LibraryActor): Promise<KitRecord[]> {
+    await this.initialized;
     return [...this.store.kits.values()].filter((entry) =>
       this.canSee(entry, actor),
     );
   }
 
-  listTemplates(
+  async listTemplates(
     actor: LibraryActor,
-  ): { record: TemplateRecord; compatible: boolean; reason?: string }[] {
+  ): Promise<
+    { record: TemplateRecord; compatible: boolean; reason?: string }[]
+  > {
+    await this.initialized;
     const kits = [...this.store.kits.values()];
     return [...this.store.templates.values()]
       .filter((entry) => this.canSee(entry, actor))
@@ -94,20 +115,29 @@ export class LibraryService {
       });
   }
 
-  createKitDraft(actor: LibraryActor, manifest: unknown): KitRecord {
+  async createKitDraft(
+    actor: LibraryActor,
+    manifest: unknown,
+  ): Promise<KitRecord> {
+    await this.initialized;
     try {
       const draft = createKitDraft(manifest, {
         authorId: actor.id,
         now: this.now,
       });
       this.store.kits.set(draft.manifest.id, draft);
+      await this.repository?.createLibraryKit(draft);
       return draft;
     } catch (raw) {
       throw this.translate(raw);
     }
   }
 
-  createTemplateDraft(actor: LibraryActor, manifest: unknown): TemplateRecord {
+  async createTemplateDraft(
+    actor: LibraryActor,
+    manifest: unknown,
+  ): Promise<TemplateRecord> {
+    await this.initialized;
     try {
       const draft = createTemplateDraft(
         manifest,
@@ -115,13 +145,15 @@ export class LibraryService {
         [...this.store.kits.values()],
       );
       this.store.templates.set(draft.manifest.id, draft);
+      await this.repository?.createLibraryTemplate(draft);
       return draft;
     } catch (raw) {
       throw this.translate(raw);
     }
   }
 
-  publishKit(actor: LibraryActor, id: string): KitRecord {
+  async publishKit(actor: LibraryActor, id: string): Promise<KitRecord> {
+    await this.initialized;
     const record = this.requireKit(id);
     try {
       const published = publishKit(record, {
@@ -130,13 +162,18 @@ export class LibraryService {
         isAdmin: actor.isAdmin,
       });
       this.store.kits.set(id, published);
+      await this.repository?.updateLibraryKit(published);
       return published;
     } catch (raw) {
       throw this.translate(raw);
     }
   }
 
-  publishTemplate(actor: LibraryActor, id: string): TemplateRecord {
+  async publishTemplate(
+    actor: LibraryActor,
+    id: string,
+  ): Promise<TemplateRecord> {
+    await this.initialized;
     const record = this.requireTemplate(id);
     try {
       const published = publishTemplate(
@@ -145,13 +182,15 @@ export class LibraryService {
         [...this.store.kits.values()],
       );
       this.store.templates.set(id, published);
+      await this.repository?.updateLibraryTemplate(published);
       return published;
     } catch (raw) {
       throw this.translate(raw);
     }
   }
 
-  duplicateKit(actor: LibraryActor, id: string): KitRecord {
+  async duplicateKit(actor: LibraryActor, id: string): Promise<KitRecord> {
+    await this.initialized;
     const record = this.requireKit(id);
     const clone = duplicateKit(record, {
       authorId: actor.id,
@@ -159,10 +198,15 @@ export class LibraryService {
       newId: randomUUID(),
     });
     this.store.kits.set(clone.manifest.id, clone);
+    await this.repository?.createLibraryKit(clone);
     return clone;
   }
 
-  duplicateTemplate(actor: LibraryActor, id: string): TemplateRecord {
+  async duplicateTemplate(
+    actor: LibraryActor,
+    id: string,
+  ): Promise<TemplateRecord> {
+    await this.initialized;
     const record = this.requireTemplate(id);
     const clone = duplicateTemplate(record, {
       authorId: actor.id,
@@ -170,10 +214,12 @@ export class LibraryService {
       newId: randomUUID(),
     });
     this.store.templates.set(clone.manifest.id, clone);
+    await this.repository?.createLibraryTemplate(clone);
     return clone;
   }
 
-  deprecateKit(actor: LibraryActor, id: string): KitRecord {
+  async deprecateKit(actor: LibraryActor, id: string): Promise<KitRecord> {
+    await this.initialized;
     if (!actor.isAdmin) throw new LibraryError("not_admin", "Admin only", 403);
     const record = this.requireKit(id);
     if (record.status !== "published") {
@@ -185,7 +231,121 @@ export class LibraryService {
     }
     const next = deprecate(record, this.now);
     this.store.kits.set(id, next);
+    await this.repository?.updateLibraryKit(next);
     return next;
+  }
+
+  async updateKitDraft(
+    actor: LibraryActor,
+    id: string,
+    manifest: unknown,
+  ): Promise<KitRecord> {
+    await this.initialized;
+    if (!actor.isAdmin) throw new LibraryError("not_admin", "Admin only", 403);
+    const current = this.requireKit(id);
+    if (current.status !== "draft")
+      throw new LibraryError("not_draft", "Only drafts can be edited", 409);
+    try {
+      const parsed = parseKitManifest(manifest);
+      if (parsed.id !== id)
+        throw new LibraryError(
+          "invalid_manifest",
+          "Manifest id must match draft",
+          400,
+        );
+      const next: KitRecord = {
+        ...current,
+        manifest: parsed,
+        updatedAt: this.now().toISOString(),
+      };
+      this.store.kits.set(id, next);
+      await this.repository?.updateLibraryKit(next);
+      return next;
+    } catch (raw) {
+      throw this.translate(raw);
+    }
+  }
+
+  async deleteKit(actor: LibraryActor, id: string): Promise<void> {
+    await this.initialized;
+    if (!actor.isAdmin) throw new LibraryError("not_admin", "Admin only", 403);
+    const current = this.requireKit(id);
+    if (current.status !== "draft")
+      throw new LibraryError("not_draft", "Only drafts can be deleted", 409);
+    if (!((await this.repository?.deleteLibraryKit(id)) ?? true))
+      throw new LibraryError("kit_not_found", "Kit not found", 404);
+    this.store.kits.delete(id);
+  }
+
+  async updateTemplateDraft(
+    actor: LibraryActor,
+    id: string,
+    manifest: unknown,
+  ): Promise<TemplateRecord> {
+    await this.initialized;
+    if (!actor.isAdmin) throw new LibraryError("not_admin", "Admin only", 403);
+    const current = this.requireTemplate(id);
+    if (current.status !== "draft")
+      throw new LibraryError("not_draft", "Only drafts can be edited", 409);
+    try {
+      const parsed = parseTemplateManifest(manifest);
+      if (parsed.id !== id)
+        throw new LibraryError(
+          "invalid_manifest",
+          "Manifest id must match draft",
+          400,
+        );
+      const next: TemplateRecord = {
+        ...current,
+        manifest: parsed,
+        updatedAt: this.now().toISOString(),
+      };
+      this.store.templates.set(id, next);
+      await this.repository?.updateLibraryTemplate(next);
+      return next;
+    } catch (raw) {
+      throw this.translate(raw);
+    }
+  }
+
+  async deleteTemplate(actor: LibraryActor, id: string): Promise<void> {
+    await this.initialized;
+    if (!actor.isAdmin) throw new LibraryError("not_admin", "Admin only", 403);
+    const current = this.requireTemplate(id);
+    if (current.status !== "draft")
+      throw new LibraryError("not_draft", "Only drafts can be deleted", 409);
+    if (!((await this.repository?.deleteLibraryTemplate(id)) ?? true))
+      throw new LibraryError("template_not_found", "Template not found", 404);
+    this.store.templates.delete(id);
+  }
+
+  private async hydrate(): Promise<void> {
+    const repository = this.repository;
+    if (!repository) return;
+    const [kits, templates] = await Promise.all([
+      repository.listLibraryKits(),
+      repository.listLibraryTemplates(),
+    ]);
+    if (kits.length === 0 && templates.length === 0) {
+      const seeded = createSeededStore(this.now);
+      await Promise.all([
+        ...[...seeded.kits.values()].map((record) =>
+          repository.createLibraryKit(record),
+        ),
+        ...[...seeded.templates.values()].map((record) =>
+          repository.createLibraryTemplate(record),
+        ),
+      ]);
+      this.store.kits = seeded.kits;
+      this.store.templates = seeded.templates;
+      return;
+    }
+    this.store.kits = new Map(
+      kits.map((record) => [record.manifest.id, record]),
+    );
+    this.store.templates = new Map(
+      templates.map((record) => [record.manifest.id, record]),
+    );
   }
 
   private requireKit(id: string): KitRecord {

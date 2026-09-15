@@ -86,10 +86,10 @@ do documento original. A implementação usa `InMemoryRepository` nos testes e
 
 ## Limitações atuais
 
-- O `LibraryService` administrativo mantém o inventário de manifestos em memória
-  — seus drafts ainda são perdidos ao reiniciar o servidor. Templates pessoais
-  de projetos não têm ainda edição ou exclusão na UI.
-- Não há endpoint para excluir rascunhos ou renomear releases; use
-  `POST /duplicate` seguido de `POST /publish` para promover um rascunho.
+- O `LibraryService` administrativo persiste seus manifestos em MariaDB/Prisma
+  (ou no repositório em memória em testes). A UI ainda não oferece edição ou
+  exclusão de templates pessoais de projetos.
+- Releases publicados continuam imutáveis; drafts administrativos podem ser
+  editados por `PATCH` e excluídos por `DELETE` usando as rotas do manifest.
 - A UI web lê kits/templates administrativos; criação, publicação e duplicação
   desses manifestos ainda precisam ser feitas por chamadas diretas à API.

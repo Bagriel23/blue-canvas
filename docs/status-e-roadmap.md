@@ -71,9 +71,9 @@ Windows.
 
 ## Limitações atuais importantes
 
-- Os manifestos administrativos de kits e templates continuam em memória; os
-  templates pessoais de projetos já são persistidos na tabela
-  `project_templates`.
+- Os manifestos administrativos de kits e templates e os templates pessoais de
+  projetos são persistidos em MariaDB/Prisma; o modo de memória permanece
+  disponível para testes e desenvolvimento sem banco.
 - O workspace web ainda não integra o cliente Hocuspocus/Yjs; a colaboração
   simultânea e a presença permanecem na próxima etapa.
 - O endpoint HTTP de exportação e o empacotamento ZIP ainda estão pendentes; a

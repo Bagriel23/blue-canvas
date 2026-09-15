@@ -927,6 +927,48 @@ describe("application server", () => {
     expect(patAllowed.statusCode).toBe(200);
   });
 
+  it("persists administrative library drafts across app instances and supports draft deletion", async () => {
+    const admin = await bootstrap();
+    const kits = await admin.app.inject({
+      method: "GET",
+      url: "/api/v1/library/kits",
+      headers: { cookie: admin.cookie },
+    });
+    const kitId = kits.json().kits[0].id as string;
+    const duplicate = await admin.app.inject({
+      method: "POST",
+      url: `/api/v1/library/kits/${kitId}/duplicate`,
+      headers: { cookie: admin.cookie, "x-csrf-token": admin.csrf },
+    });
+    expect(duplicate.statusCode).toBe(201);
+    const draftId = duplicate.json().kit.id as string;
+
+    const restarted = buildApp(dependencies);
+    const persisted = await restarted.inject({
+      method: "GET",
+      url: "/api/v1/library/kits",
+      headers: { cookie: admin.cookie },
+    });
+    expect(
+      persisted.json().kits.some((kit: { id: string }) => kit.id === draftId),
+    ).toBe(true);
+
+    const deleted = await restarted.inject({
+      method: "DELETE",
+      url: `/api/v1/library/kits/${draftId}`,
+      headers: { cookie: admin.cookie, "x-csrf-token": admin.csrf },
+    });
+    expect(deleted.statusCode).toBe(204);
+    const afterDelete = await restarted.inject({
+      method: "GET",
+      url: "/api/v1/library/kits",
+      headers: { cookie: admin.cookie },
+    });
+    expect(
+      afterDelete.json().kits.some((kit: { id: string }) => kit.id === draftId),
+    ).toBe(false);
+  });
+
   it("applies MCP command batches through the document engine with revision idempotency", async () => {
     const admin = await bootstrap();
     const projectResponse = await admin.app.inject({

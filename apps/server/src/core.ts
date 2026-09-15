@@ -997,6 +997,12 @@ export class ApplicationService {
     await this.requireCollaborationRole(principal, projectId, true);
     const snapshot = await this.getProjectDocument(principal, projectId);
     return this.dependencies.repository.transaction(async (repository) => {
+      await this.requireCollaborationRole(
+        principal,
+        projectId,
+        true,
+        repository,
+      );
       const template = await repository.createProjectTemplate({
         ownerId: principal.user.id,
         sourceProjectId: projectId,

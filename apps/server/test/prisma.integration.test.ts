@@ -9,6 +9,10 @@ import {
 } from "@blue-canvas/collaboration";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import * as Y from "yjs";
+import {
+  shippedKitManifests,
+  shippedTemplateManifests,
+} from "@blue-canvas/library";
 
 import { buildApp } from "../src/app.js";
 import { ApiError } from "../src/core.js";
@@ -37,6 +41,8 @@ beforeEach(async () => {
   await prisma.namedVersion.deleteMany();
   await prisma.projectDocument.deleteMany();
   await prisma.projectTemplate.deleteMany();
+  await prisma.libraryTemplate.deleteMany();
+  await prisma.libraryKit.deleteMany();
   await prisma.auditEvent.deleteMany();
   await prisma.asset.deleteMany();
   await prisma.personalAccessToken.deleteMany();
@@ -321,6 +327,44 @@ describe("Prisma repository", () => {
         name: "Launch starter",
         document: { id: project.id, name: "Template source", schemaVersion: 1 },
       },
+    ]);
+  });
+
+  it("persists administrative kits and templates across repository instances", async () => {
+    const owner = await repository.createUser({
+      email: "library-owner@example.com",
+      displayName: "Library owner",
+      passwordHash: "$argon2id$test",
+      locale: "en-US",
+      isAdmin: true,
+      now,
+    });
+    const kitManifest = shippedKitManifests[0];
+    const templateManifest = shippedTemplateManifests[0];
+    if (!kitManifest || !templateManifest)
+      throw new Error("Missing library seed");
+    await repository.createLibraryKit({
+      manifest: kitManifest,
+      status: "published",
+      authorId: owner.id,
+      publishedAt: now.toISOString(),
+      createdAt: now.toISOString(),
+      updatedAt: now.toISOString(),
+    });
+    await repository.createLibraryTemplate({
+      manifest: templateManifest,
+      status: "published",
+      authorId: owner.id,
+      publishedAt: now.toISOString(),
+      createdAt: now.toISOString(),
+      updatedAt: now.toISOString(),
+    });
+    const restarted = new PrismaRepository(prisma);
+    await expect(restarted.listLibraryKits()).resolves.toMatchObject([
+      { manifest: { slug: kitManifest.slug }, status: "published" },
+    ]);
+    await expect(restarted.listLibraryTemplates()).resolves.toMatchObject([
+      { manifest: { slug: templateManifest.slug }, status: "published" },
     ]);
   });
 
