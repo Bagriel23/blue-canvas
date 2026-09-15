@@ -219,18 +219,35 @@ export class CollaborationManager {
     if (document) await this.storeActiveDocument(document);
   }
 
+  captureProjectStateVector(projectId: string): Uint8Array | undefined {
+    const document = this.hocuspocus.documents.get(projectId);
+    return document
+      ? encodeCollaborationState(document).stateVector
+      : undefined;
+  }
+
   async applyProjectSnapshot(
     projectId: string,
     snapshot: unknown,
-  ): Promise<void> {
+    expectedStateVector?: Uint8Array,
+  ): Promise<boolean> {
     const document = this.hocuspocus.documents.get(projectId);
-    if (!document) return;
+    if (!document) return true;
+    if (
+      expectedStateVector &&
+      !bytesEqual(
+        expectedStateVector,
+        encodeCollaborationState(document).stateVector,
+      )
+    )
+      return false;
     document.transact(
       () => {
         replaceSemanticDocument(document, snapshot);
       },
       { source: "local", skipStoreHooks: true },
     );
+    return true;
   }
 
   async close(): Promise<void> {

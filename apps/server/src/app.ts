@@ -673,14 +673,22 @@ export function buildApp(dependencies: ServerDependencies): FastifyInstance {
     });
     const projectId = identifier(request, "projectId");
     await collaboration.flushProject(projectId);
+    const expectedStateVector =
+      collaboration.captureProjectStateVector(projectId);
     const result = await service.applyCommands(
       principal,
       projectId,
       parse(applyCommandsRequestSchema, request.body),
       request.id,
     );
-    if (!result.idempotent)
-      await collaboration.applyProjectSnapshot(projectId, result.document);
+    if (!result.idempotent) {
+      const applied = await collaboration.applyProjectSnapshot(
+        projectId,
+        result.document,
+        expectedStateVector,
+      );
+      if (!applied) await collaboration.flushProject(projectId);
+    }
     return reply.code(result.idempotent ? 200 : 201).send(result);
   });
 

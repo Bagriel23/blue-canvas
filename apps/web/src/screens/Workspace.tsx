@@ -201,6 +201,14 @@ export function Workspace({ projectId, editable = true }: WorkspaceProps) {
           });
           if (editorRef.current.generation !== generation) break;
           editor.pending.shift();
+          if (result.data.idempotent) {
+            editor.revision = Math.max(editor.revision, result.data.revision);
+            updateDocument(
+              editor.document,
+              editor.pending.length ? "saving" : "saved",
+            );
+            continue;
+          }
           editor.revision = result.data.revision;
           let nextDocument = result.data.document;
           for (const queued of editor.pending) {

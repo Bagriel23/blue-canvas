@@ -16,6 +16,7 @@ import {
 } from "@blue-canvas/collaboration";
 
 import { buildApp, type ServerDependencies } from "./app.js";
+import { CollaborationManager } from "./collaboration.js";
 import { InMemoryRepository } from "./memory-repository.js";
 import { ArgonPasswordHasher, sha256 } from "./security.js";
 import { LocalAssetStorage } from "./storage.js";
@@ -363,6 +364,97 @@ describe("Hocuspocus collaboration", () => {
     active.destroy();
     document.destroy();
     await app.close();
+  }, 15_000);
+
+  it("does not overwrite an active Yjs edit between command flush and snapshot apply", async () => {
+    const app = buildApp(dependencies);
+    await app.listen({ host: "127.0.0.1", port: 0 });
+    const bootstrap = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/bootstrap-admin",
+      payload: {
+        email: "admin@example.com",
+        displayName: "Admin",
+        password: PASSWORD,
+        setupSecret: "development setup secret",
+      },
+    });
+    const cookie = cookieFrom(bootstrap);
+    const csrf = bootstrap.json().csrfToken as string;
+    const project = await app.inject({
+      method: "POST",
+      url: "/api/v1/projects",
+      headers: { cookie, "x-csrf-token": csrf },
+      payload: { name: "Command race" },
+    });
+    const projectId = project.json().project.id as string;
+    const address = app.server.address();
+    if (!address || typeof address === "string")
+      throw new Error("missing address");
+    const document = new Y.Doc();
+    const active = provider({
+      url: `ws://127.0.0.1:${address.port}/api/v1/collaboration`,
+      name: projectId,
+      document,
+      token: csrf,
+      WebSocketPolyfill: webSocketWithCookie(cookie),
+    });
+    await waitForProvider(active);
+    const current = await repository.findProjectDocument(projectId);
+    if (!current) throw new Error("missing persisted document");
+
+    type SnapshotApplier = (
+      this: CollaborationManager,
+      projectId: string,
+      snapshot: unknown,
+      expectedStateVector?: Uint8Array,
+    ) => Promise<void>;
+    const collaborationPrototype =
+      CollaborationManager.prototype as unknown as {
+        applyProjectSnapshot: SnapshotApplier;
+      };
+    const originalApply = collaborationPrototype.applyProjectSnapshot;
+    collaborationPrototype.applyProjectSnapshot = async function (
+      projectId,
+      snapshot,
+      expectedStateVector,
+    ) {
+      const activeDocument = this.hocuspocus.documents.get(projectId);
+      if (!activeDocument) throw new Error("missing active document");
+      const concurrent = readSemanticDocument(activeDocument);
+      concurrent.name = "Concurrent edit";
+      replaceSemanticDocument(activeDocument, concurrent);
+      return originalApply.call(this, projectId, snapshot, expectedStateVector);
+    };
+
+    try {
+      const commands = await app.inject({
+        method: "POST",
+        url: `/api/v1/projects/${projectId}/commands`,
+        headers: { cookie, "x-csrf-token": csrf },
+        payload: {
+          baseRevision: current.revision,
+          idempotencyKey: "http-command-race-123456",
+          commands: [
+            {
+              type: "set-token",
+              name: "brand",
+              value: { type: "color", value: "#1428A0" },
+            },
+          ],
+        },
+      });
+      expect(commands.statusCode).toBe(201);
+      await waitUntil(
+        () => readSemanticDocument(document).name === "Concurrent edit",
+      );
+      expect(readSemanticDocument(document).name).toBe("Concurrent edit");
+    } finally {
+      collaborationPrototype.applyProjectSnapshot = originalApply;
+      active.destroy();
+      document.destroy();
+      await app.close();
+    }
   }, 15_000);
 
   it("rejects nonmembers and revalidates a downgraded editor before mutation", async () => {

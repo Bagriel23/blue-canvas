@@ -164,6 +164,47 @@ describe("Workspace persistence", () => {
     ]);
   });
 
+  it("preserves the optimistic document for a stale idempotent receipt", async () => {
+    const persisted = loadDemoDocument();
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        jsonResponse({
+          project: {
+            id: "project-1",
+            name: "Persisted project",
+            archived: false,
+            role: "owner",
+          },
+          revision: 2,
+          document: persisted,
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          revision: 2,
+          document: persisted,
+          idempotent: true,
+        }),
+      );
+
+    renderWorkspace(fetcher);
+    await waitFor(() =>
+      expect(screen.getByText("Persisted project")).toBeTruthy(),
+    );
+    fireEvent.click(
+      screen.getByText("Design internal tools together, offline."),
+    );
+    fireEvent.change(await screen.findByLabelText("Name"), {
+      target: { value: "Optimistic heading" },
+    });
+
+    await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2));
+    await waitFor(() =>
+      expect(screen.getByDisplayValue("Optimistic heading")).toBeTruthy(),
+    );
+  });
+
   it("keeps viewer projects read-only even when the workspace is editable", async () => {
     const persisted = loadDemoDocument();
     const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(
