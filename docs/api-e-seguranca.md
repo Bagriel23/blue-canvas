@@ -57,7 +57,7 @@ Todas as rotas abaixo são relativas a `/api/v1`.
 | `PATCH`  | `/projects/:projectId`                      | Owner/editor para nome; somente owner para arquivar | `projects:write`         |
 | `POST`   | `/projects/:projectId/archive`              | Somente owner                                       | `projects:write`         |
 | `POST`   | `/projects/:projectId/members`              | Somente owner                                       | `projects:write`         |
-| `GET`    | `/projects/:projectId/members`              | Owner/editor                                        | `projects:read`          |
+| `GET`    | `/projects/:projectId/members`              | Somente owner                                       | `projects:read`          |
 | `POST`   | `/projects/:projectId/invitations`          | Somente owner                                       | `projects:write`         |
 | `PATCH`  | `/projects/:projectId/members/:userId`      | Somente owner                                       | `projects:write`         |
 | `DELETE` | `/projects/:projectId/members/:userId`      | Somente owner; owner não pode ser removido          | `projects:write`         |
