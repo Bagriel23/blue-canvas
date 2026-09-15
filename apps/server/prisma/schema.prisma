@@ -48,6 +48,7 @@ model User {
   authoredComments     ProjectComment[]       @relation("CommentAuthor")
   resolvedComments     ProjectComment[]       @relation("CommentResolver")
   commentMentions      CommentMention[]
+  projectTemplates     ProjectTemplate[]
 
   @@map("users")
 }
@@ -104,6 +105,22 @@ model Project {
 
   @@index([ownerId], map: "projects_owner_idx")
   @@map("projects")
+}
+
+model ProjectTemplate {
+  id              String   @id @db.VarChar(36)
+  ownerId         String   @db.VarChar(36)
+  sourceProjectId  String   @db.VarChar(36)
+  name            String   @db.VarChar(120)
+  description     String   @db.Text
+  document        Json
+  createdAt       DateTime @db.DateTime(3)
+  updatedAt       DateTime @db.DateTime(3)
+  owner           User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@index([ownerId, updatedAt], map: "project_templates_owner_updated_idx")
+  @@index([sourceProjectId], map: "project_templates_source_project_idx")
+  @@map("project_templates")
 }
 
 model ProjectMember {

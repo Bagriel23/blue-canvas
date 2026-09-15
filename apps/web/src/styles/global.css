@@ -468,6 +468,18 @@ button:disabled {
   padding-top: 20px;
   border-top: 1px solid var(--bc-color-divider);
 }
+.bc-template-card {
+  min-height: 185px;
+}
+.bc-template-form {
+  max-width: none;
+  margin-top: auto;
+}
+.bc-template-form__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
 .bc-section-heading {
   display: flex;
   align-items: center;

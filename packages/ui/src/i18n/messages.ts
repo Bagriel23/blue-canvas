@@ -35,6 +35,8 @@ export interface UiMessages {
     lede: string;
     studioStatus: string;
     createDescription: string;
+    saveTemplate: string;
+    templateSaved: string;
   };
   library: {
     heading: string;
@@ -43,6 +45,12 @@ export interface UiMessages {
     templates: string;
     kicker: string;
     lede: string;
+    myTemplates: string;
+    useTemplate: string;
+    projectName: string;
+    createProject: string;
+    cancel: string;
+    templateUsed: string;
   };
   teams: {
     heading: string;
@@ -163,6 +171,8 @@ const enUs: UiMessages = {
     lede: "Build interfaces with a clear visual system.",
     studioStatus: "Local studio",
     createDescription: "Start from a focused canvas and keep your flow close.",
+    saveTemplate: "Save as template",
+    templateSaved: "Template saved",
   },
   library: {
     heading: "Library",
@@ -171,6 +181,12 @@ const enUs: UiMessages = {
     templates: "Templates",
     kicker: "Resources / 02",
     lede: "Reusable building blocks for your next canvas.",
+    myTemplates: "My templates",
+    useTemplate: "Use template",
+    projectName: "New project name",
+    createProject: "Create project",
+    cancel: "Cancel",
+    templateUsed: "Project created",
   },
   teams: {
     heading: "Teams",
@@ -294,6 +310,8 @@ const ptBr: UiMessages = {
     studioStatus: "Estúdio local",
     createDescription:
       "Comece em um canvas focado e mantenha seu fluxo por perto.",
+    saveTemplate: "Salvar como template",
+    templateSaved: "Template salvo",
   },
   library: {
     heading: "Biblioteca",
@@ -302,6 +320,12 @@ const ptBr: UiMessages = {
     templates: "Templates",
     kicker: "Recursos / 02",
     lede: "Blocos reutilizáveis para seu próximo canvas.",
+    myTemplates: "Meus templates",
+    useTemplate: "Usar template",
+    projectName: "Nome do novo projeto",
+    createProject: "Criar projeto",
+    cancel: "Cancelar",
+    templateUsed: "Projeto criado",
   },
   teams: {
     heading: "Times",
@@ -424,6 +448,8 @@ const koKr: UiMessages = {
     lede: "명확한 시각 시스템으로 인터페이스를 만드세요.",
     studioStatus: "로컬 스튜디오",
     createDescription: "집중된 캔버스에서 시작하고 흐름을 가까이 유지하세요.",
+    saveTemplate: "템플릿으로 저장",
+    templateSaved: "템플릿이 저장되었습니다",
   },
   library: {
     heading: "라이브러리",
@@ -432,6 +458,12 @@ const koKr: UiMessages = {
     templates: "템플릿",
     kicker: "리소스 / 02",
     lede: "다음 캔버스를 위한 재사용 가능한 블록입니다.",
+    myTemplates: "내 템플릿",
+    useTemplate: "템플릿 사용",
+    projectName: "새 프로젝트 이름",
+    createProject: "프로젝트 만들기",
+    cancel: "취소",
+    templateUsed: "프로젝트가 생성되었습니다",
   },
   teams: {
     heading: "팀",

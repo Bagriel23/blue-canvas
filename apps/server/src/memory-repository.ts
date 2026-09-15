@@ -8,6 +8,7 @@ import type {
   PersonalAccessToken,
   Project,
   ProjectComment,
+  ProjectTemplate,
   ProjectDocument,
   CommandReceipt,
   ProjectMember,
@@ -24,6 +25,7 @@ export class InMemoryRepository implements RepositoryPort {
   private sessions = new Map<string, Session>();
   private invitations = new Map<string, Invitation>();
   private projects = new Map<string, Project>();
+  private projectTemplates = new Map<string, ProjectTemplate>();
   private members = new Map<string, ProjectMember>();
   private teams = new Map<string, Team>();
   private teamMembers = new Map<string, TeamMember>();
@@ -233,6 +235,38 @@ export class InMemoryRepository implements RepositoryPort {
     return [...this.projects.values()].filter((project) =>
       projectIds.has(project.id),
     );
+  }
+
+  async createProjectTemplate(
+    input: Parameters<RepositoryPort["createProjectTemplate"]>[0],
+  ): Promise<ProjectTemplate> {
+    const template: ProjectTemplate = {
+      id: randomUUID(),
+      ownerId: input.ownerId,
+      sourceProjectId: input.sourceProjectId,
+      name: input.name,
+      description: input.description,
+      document: structuredClone(input.document),
+      createdAt: input.now,
+      updatedAt: input.now,
+    };
+    this.projectTemplates.set(template.id, template);
+    return template;
+  }
+
+  async listProjectTemplatesForUser(
+    userId: string,
+  ): Promise<ProjectTemplate[]> {
+    return [...this.projectTemplates.values()]
+      .filter((template) => template.ownerId === userId)
+      .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
+  }
+
+  async findProjectTemplateById(
+    id: string,
+  ): Promise<ProjectTemplate | undefined> {
+    const template = this.projectTemplates.get(id);
+    return template ? structuredClone(template) : undefined;
   }
 
   async updateProject(
@@ -689,6 +723,7 @@ export class InMemoryRepository implements RepositoryPort {
       sessions: [...this.sessions.values()],
       invitations: [...this.invitations.values()],
       projects: [...this.projects.values()],
+      projectTemplates: [...this.projectTemplates.values()],
       members: [...this.members.values()],
       teams: [...this.teams.values()],
       teamMembers: [...this.teamMembers.values()],
@@ -734,6 +769,7 @@ export class InMemoryRepository implements RepositoryPort {
       sessions: this.sessions,
       invitations: this.invitations,
       projects: this.projects,
+      projectTemplates: this.projectTemplates,
       members: this.members,
       teams: this.teams,
       teamMembers: this.teamMembers,
@@ -752,6 +788,7 @@ export class InMemoryRepository implements RepositoryPort {
     this.sessions = snapshot.sessions;
     this.invitations = snapshot.invitations;
     this.projects = snapshot.projects;
+    this.projectTemplates = snapshot.projectTemplates;
     this.members = snapshot.members;
     this.teams = snapshot.teams;
     this.teamMembers = snapshot.teamMembers;

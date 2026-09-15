@@ -57,6 +57,13 @@ const applyCommandsRequestSchema = z.strictObject({
   idempotencyKey: z.string().trim().min(8).max(128),
   commands: z.array(z.unknown()).min(1).max(50),
 });
+const createProjectTemplateRequestSchema = z.strictObject({
+  name: z.string().trim().min(1).max(120),
+  description: z.string().trim().max(1000).default(""),
+});
+const instantiateProjectTemplateRequestSchema = z.strictObject({
+  name: z.string().trim().min(1).max(120),
+});
 
 export interface ServerDependencies {
   repository: RepositoryPort;
@@ -231,6 +238,26 @@ function commentResponse(comment: {
     resolvedById: comment.resolvedById,
     createdAt: comment.createdAt,
     updatedAt: comment.updatedAt,
+  };
+}
+
+function projectTemplateResponse(template: {
+  id: string;
+  ownerId: string;
+  sourceProjectId: string;
+  name: string;
+  description: string;
+  createdAt: Date;
+  updatedAt: Date;
+}) {
+  return {
+    id: template.id,
+    ownerId: template.ownerId,
+    sourceProjectId: template.sourceProjectId,
+    name: template.name,
+    description: template.description,
+    createdAt: template.createdAt.toISOString(),
+    updatedAt: template.updatedAt.toISOString(),
   };
 }
 
@@ -609,6 +636,54 @@ export function buildApp(dependencies: ServerDependencies): FastifyInstance {
         ...document,
       };
     });
+  });
+
+  app.post("/api/v1/projects/:projectId/templates", async (request, reply) => {
+    const principal = await authenticate(request, {
+      mutating: true,
+      scope: "projects:write",
+    });
+    const projectId = identifier(request, "projectId");
+    const template = await collaboration.withProjectLock(
+      projectId,
+      async () => {
+        await collaboration.flushProject(projectId);
+        return service.createProjectTemplate(
+          principal,
+          projectId,
+          parse(createProjectTemplateRequestSchema, request.body),
+          request.id,
+        );
+      },
+    );
+    return reply
+      .code(201)
+      .send({ template: projectTemplateResponse(template) });
+  });
+
+  app.get("/api/v1/templates", async (request) => {
+    const principal = await authenticate(request, { scope: "projects:read" });
+    return {
+      templates: (await service.listProjectTemplates(principal)).map(
+        projectTemplateResponse,
+      ),
+    };
+  });
+
+  app.post("/api/v1/templates/:templateId/projects", async (request, reply) => {
+    const principal = await authenticate(request, {
+      mutating: true,
+      scope: "projects:write",
+    });
+    const project = await service.createProjectFromTemplate(
+      principal,
+      identifier(request, "templateId"),
+      parse(instantiateProjectTemplateRequestSchema, request.body).name,
+      request.id,
+    );
+    return reply
+      .code(201)
+      .send({ project: projectSummaryResponse(project, "owner") });
   });
 
   app.patch("/api/v1/projects/:projectId", async (request) => {

@@ -14,6 +14,7 @@ import type {
   PersonalAccessToken,
   Project,
   ProjectComment,
+  ProjectTemplate,
   ProjectDocument,
   CommandReceipt,
   ProjectMember,
@@ -423,6 +424,42 @@ export class PrismaRepository implements RepositoryPort {
       where: { members: { some: { userId } } },
       orderBy: { updatedAt: "desc" },
     });
+  }
+
+  async createProjectTemplate(
+    input: Parameters<RepositoryPort["createProjectTemplate"]>[0],
+  ): Promise<ProjectTemplate> {
+    const value = await this.client.projectTemplate.create({
+      data: {
+        id: randomUUID(),
+        ownerId: input.ownerId,
+        sourceProjectId: input.sourceProjectId,
+        name: input.name,
+        description: input.description,
+        document: input.document as Prisma.InputJsonValue,
+        createdAt: input.now,
+        updatedAt: input.now,
+      },
+    });
+    return value;
+  }
+
+  async listProjectTemplatesForUser(
+    userId: string,
+  ): Promise<ProjectTemplate[]> {
+    return this.client.projectTemplate.findMany({
+      where: { ownerId: userId },
+      orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
+    });
+  }
+
+  async findProjectTemplateById(
+    id: string,
+  ): Promise<ProjectTemplate | undefined> {
+    return (
+      (await this.client.projectTemplate.findUnique({ where: { id } })) ??
+      undefined
+    );
   }
 
   async updateProject(

@@ -1284,6 +1284,117 @@ describe("application server", () => {
     expect(response.json().asset).not.toHaveProperty("storageKey");
   });
 
+  it("saves a project template and creates a project from its persisted snapshot", async () => {
+    const admin = await bootstrap();
+    const created = await admin.app.inject({
+      method: "POST",
+      url: "/api/v1/projects",
+      headers: { cookie: admin.cookie, "x-csrf-token": admin.csrf },
+      payload: { name: "Template source" },
+    });
+    const projectId = created.json().project.id as string;
+    const saved = await admin.app.inject({
+      method: "POST",
+      url: `/api/v1/projects/${projectId}/templates`,
+      headers: { cookie: admin.cookie, "x-csrf-token": admin.csrf },
+      payload: { name: "Marketing starter", description: "Reusable hero" },
+    });
+
+    expect(saved.statusCode).toBe(201);
+    expect(saved.json().template).toMatchObject({
+      name: "Marketing starter",
+      description: "Reusable hero",
+      sourceProjectId: projectId,
+      ownerId: admin.user.id,
+    });
+
+    const listed = await admin.app.inject({
+      method: "GET",
+      url: "/api/v1/templates",
+      headers: { cookie: admin.cookie },
+    });
+    expect(listed.statusCode).toBe(200);
+    expect(listed.json().templates).toHaveLength(1);
+
+    const materialized = await admin.app.inject({
+      method: "POST",
+      url: `/api/v1/templates/${saved.json().template.id}/projects`,
+      headers: { cookie: admin.cookie, "x-csrf-token": admin.csrf },
+      payload: { name: "Marketing copy" },
+    });
+    expect(materialized.statusCode).toBe(201);
+    const copiedProjectId = materialized.json().project.id as string;
+    expect(materialized.json().project.name).toBe("Marketing copy");
+
+    const copiedDocument = await admin.app.inject({
+      method: "GET",
+      url: `/api/v1/projects/${copiedProjectId}/document`,
+      headers: { cookie: admin.cookie },
+    });
+    expect(copiedDocument.statusCode).toBe(200);
+    expect(copiedDocument.json().document.name).toBe("Marketing copy");
+  });
+
+  it("allows project editors to save templates but keeps templates private to their owner", async () => {
+    const owner = await bootstrap();
+    const project = await owner.app.inject({
+      method: "POST",
+      url: "/api/v1/projects",
+      headers: { cookie: owner.cookie, "x-csrf-token": owner.csrf },
+      payload: { name: "Shared source" },
+    });
+    const projectId = project.json().project.id as string;
+    const invitation = await owner.app.inject({
+      method: "POST",
+      url: "/api/v1/invitations",
+      headers: { cookie: owner.cookie, "x-csrf-token": owner.csrf },
+      payload: { email: "template-editor@example.com" },
+    });
+    const accepted = await owner.app.inject({
+      method: "POST",
+      url: "/api/v1/auth/invitations/accept",
+      payload: {
+        token: invitation.json().token,
+        displayName: "Template Editor",
+        password: PASSWORD,
+      },
+    });
+    const context = {
+      app: owner.app,
+      invitedCookie: cookieFrom(accepted),
+      invitedCsrf: accepted.json().csrfToken as string,
+    };
+    await owner.app.inject({
+      method: "POST",
+      url: `/api/v1/projects/${projectId}/members`,
+      headers: { cookie: owner.cookie, "x-csrf-token": owner.csrf },
+      payload: { email: "template-editor@example.com", role: "editor" },
+    });
+    const editorSave = await context.app.inject({
+      method: "POST",
+      url: `/api/v1/projects/${projectId}/templates`,
+      headers: {
+        cookie: context.invitedCookie,
+        "x-csrf-token": context.invitedCsrf,
+      },
+      payload: { name: "Editor template" },
+    });
+    expect(editorSave.statusCode).toBe(201);
+
+    const ownerList = await owner.app.inject({
+      method: "GET",
+      url: "/api/v1/templates",
+      headers: { cookie: owner.cookie },
+    });
+    expect(ownerList.json().templates).toHaveLength(0);
+    const editorList = await context.app.inject({
+      method: "GET",
+      url: "/api/v1/templates",
+      headers: { cookie: context.invitedCookie },
+    });
+    expect(editorList.json().templates).toHaveLength(1);
+  });
+
   it("restricts audit logs and never records raw credentials", async () => {
     const context = await createInvitedUser("member@example.com");
     const denied = await context.app.inject({

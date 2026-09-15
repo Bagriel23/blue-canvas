@@ -18,6 +18,8 @@ export function Home({ onOpen }: HomeProps) {
   const [error, setError] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [creating, setCreating] = useState(false);
+  const [savingTemplate, setSavingTemplate] = useState<string | null>(null);
+  const [savedTemplate, setSavedTemplate] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     setError(null);
@@ -54,6 +56,24 @@ export function Home({ onOpen }: HomeProps) {
       setError(raw instanceof ApiError ? raw.message : "Network error");
     } finally {
       setCreating(false);
+    }
+  }
+
+  async function handleSaveTemplate(project: ProjectSummary) {
+    setSavingTemplate(project.id);
+    setSavedTemplate(null);
+    setError(null);
+    try {
+      await client.request({
+        method: "POST",
+        path: `/api/v1/projects/${project.id}/templates`,
+        body: { name: project.name, description: "" },
+      });
+      setSavedTemplate(project.id);
+    } catch (raw) {
+      setError(raw instanceof ApiError ? raw.message : "Network error");
+    } finally {
+      setSavingTemplate(null);
     }
   }
 
@@ -148,6 +168,16 @@ export function Home({ onOpen }: HomeProps) {
                 <ArrowUpRight size={15} aria-hidden="true" />
                 {messages.home.open}
               </a>
+              <button
+                type="button"
+                className="bc-btn"
+                onClick={() => void handleSaveTemplate(project)}
+                disabled={savingTemplate === project.id}
+              >
+                {savedTemplate === project.id
+                  ? messages.home.templateSaved
+                  : messages.home.saveTemplate}
+              </button>
             </li>
           ))}
         </ul>

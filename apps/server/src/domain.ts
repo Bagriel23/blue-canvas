@@ -158,6 +158,17 @@ export interface ProjectComment {
   updatedAt: Date;
 }
 
+export interface ProjectTemplate {
+  id: string;
+  ownerId: string;
+  sourceProjectId: string;
+  name: string;
+  description: string;
+  document: unknown;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 export interface RepositoryPort {
   transaction<T>(
     operation: (repository: RepositoryPort) => Promise<T>,
@@ -217,6 +228,16 @@ export interface RepositoryPort {
   }): Promise<Project>;
   findProjectById(id: string): Promise<Project | undefined>;
   listProjectsForUser(userId: string): Promise<Project[]>;
+  createProjectTemplate(input: {
+    ownerId: string;
+    sourceProjectId: string;
+    name: string;
+    description: string;
+    document: unknown;
+    now: Date;
+  }): Promise<ProjectTemplate>;
+  listProjectTemplatesForUser(userId: string): Promise<ProjectTemplate[]>;
+  findProjectTemplateById(id: string): Promise<ProjectTemplate | undefined>;
   updateProject(
     id: string,
     input: { name?: string; archivedAt?: Date | null; now: Date },

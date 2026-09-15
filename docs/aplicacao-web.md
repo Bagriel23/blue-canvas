@@ -101,6 +101,15 @@ rotas existentes de convites e remoção de membros. As tabelas `teams` e
 `team_members` usam apenas tipos compatíveis com MariaDB/MySQL, portanto a
 migração funciona em XAMPP e Laragon.
 
+## Templates pessoais
+
+Na Home, `Salvar como template` captura o snapshot semântico persistido do
+projeto. A Biblioteca mostra `Meus templates`; ao escolher `Usar template`, o
+usuário informa o nome do novo projeto e é levado ao workspace materializado. As
+rotas são `POST /api/v1/projects/:id/templates`, `GET /api/v1/templates` e
+`POST /api/v1/templates/:id/projects`. A gravação respeita a ACL do projeto
+(owner/editor); templates ficam privados ao owner que os criou.
+
 ## Dependências principais
 
 - `react` e `react-dom` 19.

@@ -85,7 +85,13 @@ function Shell() {
                 />
               );
             case "library":
-              return <Library />;
+              return (
+                <Library
+                  onOpen={(projectId) =>
+                    navigate({ name: "workspace", projectId })
+                  }
+                />
+              );
             case "teams":
               return <Teams />;
             case "workspace":

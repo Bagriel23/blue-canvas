@@ -40,6 +40,7 @@ import type {
   PersonalAccessToken,
   Project,
   ProjectComment,
+  ProjectTemplate,
   NamedVersion,
   ProjectMember,
   Team,
@@ -984,6 +985,96 @@ export class ApplicationService {
       } finally {
         yDocument.destroy();
       }
+    });
+  }
+
+  async createProjectTemplate(
+    principal: Principal,
+    projectId: string,
+    input: { name: string; description: string },
+    traceId: string,
+  ): Promise<ProjectTemplate> {
+    await this.requireCollaborationRole(principal, projectId, true);
+    const snapshot = await this.getProjectDocument(principal, projectId);
+    return this.dependencies.repository.transaction(async (repository) => {
+      const template = await repository.createProjectTemplate({
+        ownerId: principal.user.id,
+        sourceProjectId: projectId,
+        name: input.name,
+        description: input.description,
+        document: snapshot.document,
+        now: this.dependencies.now(),
+      });
+      await this.auditWith(
+        repository,
+        principal.user.id,
+        "project.template.create",
+        "template",
+        template.id,
+        projectId,
+        traceId,
+        { name: input.name },
+      );
+      return template;
+    });
+  }
+
+  async listProjectTemplates(principal: Principal): Promise<ProjectTemplate[]> {
+    return this.dependencies.repository.listProjectTemplatesForUser(
+      principal.user.id,
+    );
+  }
+
+  async createProjectFromTemplate(
+    principal: Principal,
+    templateId: string,
+    name: string,
+    traceId: string,
+  ): Promise<Project> {
+    const template =
+      await this.dependencies.repository.findProjectTemplateById(templateId);
+    if (!template || template.ownerId !== principal.user.id)
+      throw new ApiError("not_found", "Template not found", 404);
+    return this.dependencies.repository.transaction(async (repository) => {
+      const project = await repository.createProject({
+        name,
+        ownerId: principal.user.id,
+        now: this.dependencies.now(),
+      });
+      const yDocument = new Y.Doc();
+      try {
+        const document =
+          template.document !== null &&
+          typeof template.document === "object" &&
+          !Array.isArray(template.document)
+            ? {
+                ...(template.document as Record<string, unknown>),
+                id: project.id,
+                name,
+              }
+            : template.document;
+        replaceSemanticDocument(yDocument, document);
+        const encoded = encodeCollaborationState(yDocument);
+        await repository.upsertProjectDocument({
+          projectId: project.id,
+          ...encoded,
+          expectedRevision: 0,
+          now: this.dependencies.now(),
+        });
+      } finally {
+        yDocument.destroy();
+      }
+      await this.auditWith(
+        repository,
+        principal.user.id,
+        "project.template.instantiate",
+        "project",
+        project.id,
+        project.id,
+        traceId,
+        { templateId },
+      );
+      return project;
     });
   }
 

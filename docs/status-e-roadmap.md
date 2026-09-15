@@ -44,6 +44,10 @@ Este documento descreve o estado observado no código. O plano completo está em
   Product) e seis templates (dashboard, CRUD, formulário, auth, settings,
   mobile) já são publicados na inicialização. Detalhes em
   [Kits e templates](kits-e-templates.md).
+- Templates pessoais persistentes: owners e editores de projetos podem salvar um
+  snapshot do canvas; o owner pode listar seus templates e criar um novo projeto
+  a partir deles. O snapshot usa a mesma representação semântica do documento e
+  funciona tanto no repositório em memória quanto em MariaDB/Prisma.
 - Serviço MCP em `apps/mcp-server` com transporte JSON-RPC/HTTP, resources para
   projetos/kits/templates, tools `list_projects`, `get_project`,
   `create_project` e `apply_commands`, ponte stdio em `apps/mcp-stdio` e skill
@@ -67,9 +71,9 @@ Windows.
 
 ## Limitações atuais importantes
 
-- A biblioteca de kits e templates ainda armazena registros em memória; os
-  drafts criados por usuários somem quando o processo é reiniciado. A camada
-  Prisma para library ainda não existe.
+- Os manifestos administrativos de kits e templates continuam em memória; os
+  templates pessoais de projetos já são persistidos na tabela
+  `project_templates`.
 - O workspace web ainda não integra o cliente Hocuspocus/Yjs; a colaboração
   simultânea e a presença permanecem na próxima etapa.
 - O endpoint HTTP de exportação e o empacotamento ZIP ainda estão pendentes; a

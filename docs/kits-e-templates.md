@@ -68,11 +68,28 @@ depreciação) exige `user.isAdmin` e, quando a autenticação usa PAT, o escopo
 | `POST` | `/api/v1/library/templates/:id/publish`   | Publica o template (admin).                                              |
 | `POST` | `/api/v1/library/templates/:id/duplicate` | Clona o template num novo rascunho (admin).                              |
 
+## Templates pessoais de projetos
+
+Além dos manifestos administrativos acima, o produto mantém templates pessoais
+na tabela MariaDB `project_templates`. Eles armazenam nome, descrição, projeto
+de origem e snapshot `DesignDocument` do workspace.
+
+| Método | Rota                             | Descrição                                         |
+| ------ | -------------------------------- | ------------------------------------------------- |
+| `POST` | `/api/v1/projects/:id/templates` | Salva o snapshot atual (owner/editor).            |
+| `GET`  | `/api/v1/templates`              | Lista templates criados pelo usuário autenticado. |
+| `POST` | `/api/v1/templates/:id/projects` | Cria um projeto a partir do snapshot do owner.    |
+
+A cópia recebe novo id e nome de projeto, preservando páginas, nós e interações
+do documento original. A implementação usa `InMemoryRepository` nos testes e
+`PrismaRepository` com MariaDB/MySQL em produção, sem dependência de Docker.
+
 ## Limitações atuais
 
-- O `LibraryService` mantém o inventário em memória — os rascunhos criados por
-  usuários são perdidos ao reiniciar o servidor.
+- O `LibraryService` administrativo mantém o inventário de manifestos em memória
+  — seus drafts ainda são perdidos ao reiniciar o servidor. Templates pessoais
+  de projetos não têm ainda edição ou exclusão na UI.
 - Não há endpoint para excluir rascunhos ou renomear releases; use
   `POST /duplicate` seguido de `POST /publish` para promover um rascunho.
-- A UI web só lê a biblioteca — a criação, publicação e duplicação ainda
-  precisam ser feitas por chamadas diretas à API.
+- A UI web lê kits/templates administrativos; criação, publicação e duplicação
+  desses manifestos ainda precisam ser feitas por chamadas diretas à API.

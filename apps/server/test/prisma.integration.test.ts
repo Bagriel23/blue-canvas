@@ -36,6 +36,7 @@ beforeEach(async () => {
   await prisma.projectComment.deleteMany();
   await prisma.namedVersion.deleteMany();
   await prisma.projectDocument.deleteMany();
+  await prisma.projectTemplate.deleteMany();
   await prisma.auditEvent.deleteMany();
   await prisma.asset.deleteMany();
   await prisma.personalAccessToken.deleteMany();
@@ -286,6 +287,41 @@ describe("Prisma repository", () => {
     expect(
       await repository.listAuditEvents({ projectId: project.id, limit: 10 }),
     ).toMatchObject([{ traceId: "integration-trace" }]);
+  });
+
+  it("persists project templates and keeps their document snapshot intact", async () => {
+    const owner = await repository.createUser({
+      email: "template-owner@example.com",
+      displayName: "Template owner",
+      passwordHash: "$argon2id$test",
+      locale: "en-US",
+      isAdmin: false,
+      now,
+    });
+    const project = await repository.createProject({
+      name: "Template source",
+      ownerId: owner.id,
+      now,
+    });
+    const template = await repository.createProjectTemplate({
+      ownerId: owner.id,
+      sourceProjectId: project.id,
+      name: "Launch starter",
+      description: "Reusable canvas",
+      document: { id: project.id, name: project.name, schemaVersion: 1 },
+      now,
+    });
+
+    const restarted = new PrismaRepository(prisma);
+    await expect(
+      restarted.listProjectTemplatesForUser(owner.id),
+    ).resolves.toMatchObject([
+      {
+        id: template.id,
+        name: "Launch starter",
+        document: { id: project.id, name: "Template source", schemaVersion: 1 },
+      },
+    ]);
   });
 
   it("maps normalized-email and project-member conflicts to stable errors", async () => {
