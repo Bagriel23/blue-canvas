@@ -982,6 +982,33 @@ describe("application server", () => {
     expect(conflict.json().error.code).toBe("idempotency_conflict");
   });
 
+  it("checks restore access before reserving the project", async () => {
+    const context = await createInvitedUser("restore-outsider@example.com");
+    const created = await context.app.inject({
+      method: "POST",
+      url: "/api/v1/projects",
+      headers: { cookie: context.cookie, "x-csrf-token": context.csrf },
+      payload: { name: "Restore ACL" },
+    });
+    const projectId = created.json().project.id as string;
+    const reserve = vi.spyOn(CollaborationManager.prototype, "reserveRestore");
+    try {
+      const response = await context.app.inject({
+        method: "POST",
+        url: `/api/v1/projects/${projectId}/versions/version-1/restore`,
+        headers: {
+          cookie: context.invitedCookie,
+          "x-csrf-token": context.invitedCsrf,
+        },
+        payload: { name: "Unauthorized restore" },
+      });
+      expect(response.statusCode).toBe(403);
+      expect(reserve).not.toHaveBeenCalled();
+    } finally {
+      reserve.mockRestore();
+    }
+  });
+
   it("enforces project membership and reserves member management for owners", async () => {
     const context = await createInvitedUser("viewer@example.com");
     const created = await context.app.inject({

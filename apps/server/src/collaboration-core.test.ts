@@ -317,17 +317,17 @@ describe("collaboration domain", () => {
       release = resolve;
     });
     const held = manager.withProjectLock(project.id, async () => gate);
+    manager.reserveRestore(project.id);
     const pending = beforeHandle({
       documentName: project.id,
       socketId: "socket-pending",
     } as never);
     await Promise.resolve();
-    manager.reserveRestore(project.id);
+    manager.cancelRestore(project.id);
     release();
 
     await expect(pending).rejects.toThrow("document-restoring");
     await held;
-    manager.cancelRestore(project.id);
   });
 
   it("keeps the project lock until a disconnecting message finishes", async () => {

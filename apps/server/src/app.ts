@@ -738,6 +738,7 @@ export function buildApp(dependencies: ServerDependencies): FastifyInstance {
         scope: "projects:write",
       });
       const projectId = identifier(request, "projectId");
+      await service.collaborationAccess(principal, projectId, true);
       collaboration.reserveRestore(projectId);
       return collaboration.withProjectLock(projectId, async () => {
         let finishRestore: (() => void) | undefined;

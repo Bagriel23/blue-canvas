@@ -277,6 +277,10 @@ export class CollaborationManager {
 
   cancelRestore(projectId: string): void {
     this.restoring.delete(projectId);
+    this.restoreGenerations.set(
+      projectId,
+      (this.restoreGenerations.get(projectId) ?? 0) + 1,
+    );
   }
 
   private async prepareRestoreUnlocked(projectId: string): Promise<() => void> {
@@ -289,10 +293,10 @@ export class CollaborationManager {
         await this.hocuspocus.unloadDocument(document);
       }
       return () => {
-        this.restoring.delete(projectId);
+        this.cancelRestore(projectId);
       };
     } catch (error) {
-      this.restoring.delete(projectId);
+      this.cancelRestore(projectId);
       throw error;
     }
   }
