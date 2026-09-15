@@ -273,6 +273,17 @@ export class InMemoryRepository implements RepositoryPort {
   }
 
   async createLibraryKit(record: KitRecord): Promise<KitRecord> {
+    if (this.libraryKits.has(record.manifest.id))
+      throw new ApiError(
+        "library_kit_exists",
+        "Library kit already exists",
+        409,
+      );
+    this.libraryKits.set(record.manifest.id, structuredClone(record));
+    return structuredClone(record);
+  }
+
+  async upsertLibraryKit(record: KitRecord): Promise<KitRecord> {
     this.libraryKits.set(record.manifest.id, structuredClone(record));
     return structuredClone(record);
   }
@@ -292,6 +303,17 @@ export class InMemoryRepository implements RepositoryPort {
   }
 
   async createLibraryTemplate(record: TemplateRecord): Promise<TemplateRecord> {
+    if (this.libraryTemplates.has(record.manifest.id))
+      throw new ApiError(
+        "library_template_exists",
+        "Library template already exists",
+        409,
+      );
+    this.libraryTemplates.set(record.manifest.id, structuredClone(record));
+    return structuredClone(record);
+  }
+
+  async upsertLibraryTemplate(record: TemplateRecord): Promise<TemplateRecord> {
     this.libraryTemplates.set(record.manifest.id, structuredClone(record));
     return structuredClone(record);
   }
@@ -329,6 +351,13 @@ export class InMemoryRepository implements RepositoryPort {
     userId: string,
   ): Promise<ProjectMember | undefined> {
     return this.members.get(`${projectId}:${userId}`);
+  }
+
+  async lockProjectForWrite(
+    projectId: string,
+    userId: string,
+  ): Promise<ProjectMember | undefined> {
+    return this.findProjectMember(projectId, userId);
   }
 
   async addProjectMember(

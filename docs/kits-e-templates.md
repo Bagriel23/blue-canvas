@@ -41,7 +41,9 @@ revisão). Se nenhum kit satisfizer a versão, o template é marcado como
 
 ## Entrega padrão
 
-O `LibraryService` popula três kits e seis templates ao iniciar:
+Na primeira inicialização, o `LibraryService` grava (via `upsert` idempotente)
+três kits e seis templates de referência. Os registros ficam persistidos no
+MariaDB/Prisma e são hidratados em memória nas inicializações seguintes:
 
 - Kits: **SEDA Enterprise** (Samsung Blue `#1428A0`), **Wireframe**
   (baixa-fidelidade) e **Neutral Product** (superfícies neutras).
@@ -52,21 +54,25 @@ O `LibraryService` popula três kits e seis templates ao iniciar:
 ## Endpoints
 
 Todas as rotas exigem autenticação. `GET` responde a qualquer usuário
-autenticado; toda mutação (`POST` de criação, publicação, duplicação ou
-depreciação) exige `user.isAdmin` e, quando a autenticação usa PAT, o escopo
-`admin`.
+autenticado; toda mutação (`POST` de criação, publicação, duplicação,
+depreciação, `PATCH` ou `DELETE`) exige `user.isAdmin` e, quando a autenticação
+usa PAT, o escopo `admin`.
 
-| Método | Rota                                      | Descrição                                                                |
-| ------ | ----------------------------------------- | ------------------------------------------------------------------------ |
-| `GET`  | `/api/v1/library/kits`                    | Lista kits publicados; rascunhos aparecem apenas para o autor ou admins. |
-| `POST` | `/api/v1/library/kits`                    | Registra um novo rascunho de kit (admin).                                |
-| `POST` | `/api/v1/library/kits/:id/publish`        | Publica o rascunho (admin).                                              |
-| `POST` | `/api/v1/library/kits/:id/duplicate`      | Clona o kit num novo rascunho (admin).                                   |
-| `POST` | `/api/v1/library/kits/:id/deprecate`      | Marca um kit publicado como deprecated (admin).                          |
-| `GET`  | `/api/v1/library/templates`               | Lista templates com diagnóstico de compatibilidade.                      |
-| `POST` | `/api/v1/library/templates`               | Registra um novo rascunho de template (admin).                           |
-| `POST` | `/api/v1/library/templates/:id/publish`   | Publica o template (admin).                                              |
-| `POST` | `/api/v1/library/templates/:id/duplicate` | Clona o template num novo rascunho (admin).                              |
+| Método   | Rota                                      | Descrição                                                                |
+| -------- | ----------------------------------------- | ------------------------------------------------------------------------ |
+| `GET`    | `/api/v1/library/kits`                    | Lista kits publicados; rascunhos aparecem apenas para o autor ou admins. |
+| `POST`   | `/api/v1/library/kits`                    | Registra um novo rascunho de kit (admin).                                |
+| `PATCH`  | `/api/v1/library/kits/:id`                | Atualiza o manifesto de um rascunho (admin).                             |
+| `DELETE` | `/api/v1/library/kits/:id`                | Exclui um rascunho (admin).                                              |
+| `POST`   | `/api/v1/library/kits/:id/publish`        | Publica o rascunho (admin).                                              |
+| `POST`   | `/api/v1/library/kits/:id/duplicate`      | Clona o kit num novo rascunho (admin).                                   |
+| `POST`   | `/api/v1/library/kits/:id/deprecate`      | Marca um kit publicado como deprecated (admin).                          |
+| `GET`    | `/api/v1/library/templates`               | Lista templates com diagnóstico de compatibilidade.                      |
+| `POST`   | `/api/v1/library/templates`               | Registra um novo rascunho de template (admin).                           |
+| `PATCH`  | `/api/v1/library/templates/:id`           | Atualiza o manifesto de um rascunho (admin).                             |
+| `DELETE` | `/api/v1/library/templates/:id`           | Exclui um rascunho (admin).                                              |
+| `POST`   | `/api/v1/library/templates/:id/publish`   | Publica o template (admin).                                              |
+| `POST`   | `/api/v1/library/templates/:id/duplicate` | Clona o template num novo rascunho (admin).                              |
 
 ## Templates pessoais de projetos
 
@@ -82,13 +88,17 @@ de origem e snapshot `DesignDocument` do workspace.
 
 A cópia recebe novo id e nome de projeto, preservando páginas, nós e interações
 do documento original. A implementação usa `InMemoryRepository` nos testes e
-`PrismaRepository` com MariaDB/MySQL em produção, sem dependência de Docker.
+`PrismaRepository` com MariaDB/MySQL em produção, sem dependência de Docker. O
+salvamento revalida a função `owner/editor` dentro da transação e bloqueia a
+linha do projeto (`SELECT ... FOR UPDATE` no MariaDB), evitando uma alteração de
+ACL entre a checagem e a criação do template.
 
 ## Limitações atuais
 
 - O `LibraryService` administrativo persiste seus manifestos em MariaDB/Prisma
-  (ou no repositório em memória em testes). A UI ainda não oferece edição ou
-  exclusão de templates pessoais de projetos.
+  (ou no repositório em memória em testes), incluindo os seeds e as operações de
+  criação, edição e exclusão de drafts.
+- A UI ainda não oferece edição ou exclusão de templates pessoais de projetos.
 - Releases publicados continuam imutáveis; drafts administrativos podem ser
   editados por `PATCH` e excluídos por `DELETE` usando as rotas do manifest.
 - A UI web lê kits/templates administrativos; criação, publicação e duplicação

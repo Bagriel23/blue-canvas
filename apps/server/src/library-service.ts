@@ -125,9 +125,9 @@ export class LibraryService {
         authorId: actor.id,
         now: this.now,
       });
-      this.store.kits.set(draft.manifest.id, draft);
-      await this.repository?.createLibraryKit(draft);
-      return draft;
+      const persisted = await this.persistKit(draft, "create");
+      this.store.kits.set(persisted.manifest.id, persisted);
+      return persisted;
     } catch (raw) {
       throw this.translate(raw);
     }
@@ -144,9 +144,9 @@ export class LibraryService {
         { authorId: actor.id, now: this.now },
         [...this.store.kits.values()],
       );
-      this.store.templates.set(draft.manifest.id, draft);
-      await this.repository?.createLibraryTemplate(draft);
-      return draft;
+      const persisted = await this.persistTemplate(draft, "create");
+      this.store.templates.set(persisted.manifest.id, persisted);
+      return persisted;
     } catch (raw) {
       throw this.translate(raw);
     }
@@ -161,9 +161,9 @@ export class LibraryService {
         now: this.now,
         isAdmin: actor.isAdmin,
       });
-      this.store.kits.set(id, published);
-      await this.repository?.updateLibraryKit(published);
-      return published;
+      const persisted = await this.persistKit(published, "update");
+      this.store.kits.set(id, persisted);
+      return persisted;
     } catch (raw) {
       throw this.translate(raw);
     }
@@ -181,9 +181,9 @@ export class LibraryService {
         { reviewerId: actor.id, now: this.now, isAdmin: actor.isAdmin },
         [...this.store.kits.values()],
       );
-      this.store.templates.set(id, published);
-      await this.repository?.updateLibraryTemplate(published);
-      return published;
+      const persisted = await this.persistTemplate(published, "update");
+      this.store.templates.set(id, persisted);
+      return persisted;
     } catch (raw) {
       throw this.translate(raw);
     }
@@ -197,9 +197,9 @@ export class LibraryService {
       now: this.now,
       newId: randomUUID(),
     });
-    this.store.kits.set(clone.manifest.id, clone);
-    await this.repository?.createLibraryKit(clone);
-    return clone;
+    const persisted = await this.persistKit(clone, "create");
+    this.store.kits.set(persisted.manifest.id, persisted);
+    return persisted;
   }
 
   async duplicateTemplate(
@@ -213,9 +213,9 @@ export class LibraryService {
       now: this.now,
       newId: randomUUID(),
     });
-    this.store.templates.set(clone.manifest.id, clone);
-    await this.repository?.createLibraryTemplate(clone);
-    return clone;
+    const persisted = await this.persistTemplate(clone, "create");
+    this.store.templates.set(persisted.manifest.id, persisted);
+    return persisted;
   }
 
   async deprecateKit(actor: LibraryActor, id: string): Promise<KitRecord> {
@@ -230,9 +230,9 @@ export class LibraryService {
       );
     }
     const next = deprecate(record, this.now);
-    this.store.kits.set(id, next);
-    await this.repository?.updateLibraryKit(next);
-    return next;
+    const persisted = await this.persistKit(next, "update");
+    this.store.kits.set(id, persisted);
+    return persisted;
   }
 
   async updateKitDraft(
@@ -258,9 +258,9 @@ export class LibraryService {
         manifest: parsed,
         updatedAt: this.now().toISOString(),
       };
-      this.store.kits.set(id, next);
-      await this.repository?.updateLibraryKit(next);
-      return next;
+      const persisted = await this.persistKit(next, "update");
+      this.store.kits.set(id, persisted);
+      return persisted;
     } catch (raw) {
       throw this.translate(raw);
     }
@@ -295,14 +295,21 @@ export class LibraryService {
           "Manifest id must match draft",
           400,
         );
+      const compatibility = ensureKitCompatible(parsed, [
+        ...this.store.kits.values(),
+      ]);
+      if (!compatibility.compatible)
+        throw new IncompatibleTemplateError(
+          compatibility.reason ?? "Template kit is incompatible",
+        );
       const next: TemplateRecord = {
         ...current,
         manifest: parsed,
         updatedAt: this.now().toISOString(),
       };
-      this.store.templates.set(id, next);
-      await this.repository?.updateLibraryTemplate(next);
-      return next;
+      const persisted = await this.persistTemplate(next, "update");
+      this.store.templates.set(id, persisted);
+      return persisted;
     } catch (raw) {
       throw this.translate(raw);
     }
@@ -319,6 +326,42 @@ export class LibraryService {
     this.store.templates.delete(id);
   }
 
+  private async persistKit(
+    record: KitRecord,
+    operation: "create" | "update",
+  ): Promise<KitRecord> {
+    if (!this.repository) return record;
+    const persisted =
+      operation === "create"
+        ? await this.repository.createLibraryKit(record)
+        : await this.repository.updateLibraryKit(record);
+    if (!persisted)
+      throw new LibraryError(
+        "kit_not_found",
+        "Kit persistence target not found",
+        404,
+      );
+    return persisted;
+  }
+
+  private async persistTemplate(
+    record: TemplateRecord,
+    operation: "create" | "update",
+  ): Promise<TemplateRecord> {
+    if (!this.repository) return record;
+    const persisted =
+      operation === "create"
+        ? await this.repository.createLibraryTemplate(record)
+        : await this.repository.updateLibraryTemplate(record);
+    if (!persisted)
+      throw new LibraryError(
+        "template_not_found",
+        "Template persistence target not found",
+        404,
+      );
+    return persisted;
+  }
+
   private async hydrate(): Promise<void> {
     const repository = this.repository;
     if (!repository) return;
@@ -326,26 +369,27 @@ export class LibraryService {
       repository.listLibraryKits(),
       repository.listLibraryTemplates(),
     ]);
-    if (kits.length === 0 && templates.length === 0) {
-      const seeded = createSeededStore(this.now);
-      await Promise.all([
-        ...[...seeded.kits.values()].map((record) =>
-          repository.createLibraryKit(record),
-        ),
-        ...[...seeded.templates.values()].map((record) =>
-          repository.createLibraryTemplate(record),
-        ),
-      ]);
-      this.store.kits = seeded.kits;
-      this.store.templates = seeded.templates;
-      return;
-    }
-    this.store.kits = new Map(
-      kits.map((record) => [record.manifest.id, record]),
-    );
-    this.store.templates = new Map(
+    const seeded = createSeededStore(this.now);
+    const kitMap = new Map(kits.map((record) => [record.manifest.id, record]));
+    const templateMap = new Map(
       templates.map((record) => [record.manifest.id, record]),
     );
+    await Promise.all([
+      ...[...seeded.kits.values()]
+        .filter((record) => !kitMap.has(record.manifest.id))
+        .map(async (record) => {
+          const persisted = await repository.upsertLibraryKit(record);
+          kitMap.set(persisted.manifest.id, persisted);
+        }),
+      ...[...seeded.templates.values()]
+        .filter((record) => !templateMap.has(record.manifest.id))
+        .map(async (record) => {
+          const persisted = await repository.upsertLibraryTemplate(record);
+          templateMap.set(persisted.manifest.id, persisted);
+        }),
+    ]);
+    this.store.kits = kitMap;
+    this.store.templates = templateMap;
   }
 
   private requireKit(id: string): KitRecord {

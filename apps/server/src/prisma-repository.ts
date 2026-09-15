@@ -525,6 +525,29 @@ export class PrismaRepository implements RepositoryPort {
     return storedKit(value);
   }
 
+  async upsertLibraryKit(record: KitRecord): Promise<KitRecord> {
+    const value = await this.client.libraryKit.upsert({
+      where: { id: record.manifest.id },
+      create: {
+        id: record.manifest.id,
+        manifest: record.manifest as unknown as Prisma.InputJsonValue,
+        status: record.status,
+        authorId: record.authorId,
+        publishedAt: record.publishedAt ? new Date(record.publishedAt) : null,
+        createdAt: new Date(record.createdAt),
+        updatedAt: new Date(record.updatedAt),
+      },
+      update: {
+        manifest: record.manifest as unknown as Prisma.InputJsonValue,
+        status: record.status,
+        authorId: record.authorId,
+        publishedAt: record.publishedAt ? new Date(record.publishedAt) : null,
+        updatedAt: new Date(record.updatedAt),
+      },
+    });
+    return storedKit(value);
+  }
+
   async listLibraryKits(): Promise<KitRecord[]> {
     return (
       await this.client.libraryKit.findMany({
@@ -567,6 +590,29 @@ export class PrismaRepository implements RepositoryPort {
         authorId: record.authorId,
         publishedAt: record.publishedAt ? new Date(record.publishedAt) : null,
         createdAt: new Date(record.createdAt),
+        updatedAt: new Date(record.updatedAt),
+      },
+    });
+    return storedTemplate(value);
+  }
+
+  async upsertLibraryTemplate(record: TemplateRecord): Promise<TemplateRecord> {
+    const value = await this.client.libraryTemplate.upsert({
+      where: { id: record.manifest.id },
+      create: {
+        id: record.manifest.id,
+        manifest: record.manifest as unknown as Prisma.InputJsonValue,
+        status: record.status,
+        authorId: record.authorId,
+        publishedAt: record.publishedAt ? new Date(record.publishedAt) : null,
+        createdAt: new Date(record.createdAt),
+        updatedAt: new Date(record.updatedAt),
+      },
+      update: {
+        manifest: record.manifest as unknown as Prisma.InputJsonValue,
+        status: record.status,
+        authorId: record.authorId,
+        publishedAt: record.publishedAt ? new Date(record.publishedAt) : null,
         updatedAt: new Date(record.updatedAt),
       },
     });
@@ -629,6 +675,15 @@ export class PrismaRepository implements RepositoryPort {
         where: { projectId_userId: { projectId, userId } },
       })) ?? undefined
     );
+  }
+
+  async lockProjectForWrite(
+    projectId: string,
+    userId: string,
+  ): Promise<ProjectMember | undefined> {
+    await this.client
+      .$queryRaw`SELECT id FROM projects WHERE id = ${projectId} FOR UPDATE`;
+    return this.findProjectMember(projectId, userId);
   }
 
   async addProjectMember(

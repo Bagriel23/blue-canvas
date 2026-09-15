@@ -243,12 +243,16 @@ export interface RepositoryPort {
   listProjectTemplatesForUser(userId: string): Promise<ProjectTemplate[]>;
   findProjectTemplateById(id: string): Promise<ProjectTemplate | undefined>;
   createLibraryKit(record: StoredKitRecord): Promise<StoredKitRecord>;
+  upsertLibraryKit(record: StoredKitRecord): Promise<StoredKitRecord>;
   listLibraryKits(): Promise<StoredKitRecord[]>;
   updateLibraryKit(
     record: StoredKitRecord,
   ): Promise<StoredKitRecord | undefined>;
   deleteLibraryKit(id: string): Promise<boolean>;
   createLibraryTemplate(
+    record: StoredTemplateRecord,
+  ): Promise<StoredTemplateRecord>;
+  upsertLibraryTemplate(
     record: StoredTemplateRecord,
   ): Promise<StoredTemplateRecord>;
   listLibraryTemplates(): Promise<StoredTemplateRecord[]>;
@@ -261,6 +265,10 @@ export interface RepositoryPort {
     input: { name?: string; archivedAt?: Date | null; now: Date },
   ): Promise<Project>;
   findProjectMember(
+    projectId: string,
+    userId: string,
+  ): Promise<ProjectMember | undefined>;
+  lockProjectForWrite(
     projectId: string,
     userId: string,
   ): Promise<ProjectMember | undefined>;

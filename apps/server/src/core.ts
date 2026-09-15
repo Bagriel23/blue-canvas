@@ -997,6 +997,7 @@ export class ApplicationService {
     await this.requireCollaborationRole(principal, projectId, true);
     const snapshot = await this.getProjectDocument(principal, projectId);
     return this.dependencies.repository.transaction(async (repository) => {
+      await repository.lockProjectForWrite(projectId, principal.user.id);
       await this.requireCollaborationRole(
         principal,
         projectId,

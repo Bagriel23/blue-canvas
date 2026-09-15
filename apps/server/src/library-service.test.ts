@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { InMemoryRepository } from "./memory-repository.js";
 
 import {
   LibraryError,
@@ -7,6 +8,7 @@ import {
   publicTemplate,
   type LibraryActor,
 } from "./library-service.js";
+import { shippedKitManifests } from "@blue-canvas/library";
 
 const admin: LibraryActor = {
   id: "aaaaaaaa-aaaa-7aaa-8aaa-aaaaaaaaaaaa",
@@ -16,6 +18,25 @@ const member: LibraryActor = {
   id: "bbbbbbbb-bbbb-7bbb-8bbb-bbbbbbbbbbbb",
   isAdmin: false,
 };
+
+class FailingLibraryRepository extends InMemoryRepository {
+  failCreate = false;
+  failUpdate = false;
+
+  override async createLibraryKit(
+    record: Parameters<InMemoryRepository["createLibraryKit"]>[0],
+  ) {
+    if (this.failCreate) throw new Error("injected library create failure");
+    return super.createLibraryKit(record);
+  }
+
+  override async updateLibraryKit(
+    record: Parameters<InMemoryRepository["updateLibraryKit"]>[0],
+  ) {
+    if (this.failUpdate) throw new Error("injected library update failure");
+    return super.updateLibraryKit(record);
+  }
+}
 
 function service() {
   const clock = () => new Date("2026-08-24T15:00:00Z");
@@ -129,5 +150,93 @@ describe("LibraryService", () => {
         (entry) => entry.record.manifest.id === draft.manifest.id,
       ),
     ).toBe(false);
+  });
+
+  it("rejects an edited template when its kit reference is no longer compatible", async () => {
+    const lib = service();
+    const draft = await lib.duplicateTemplate(
+      member,
+      await firstTemplateId(lib),
+    );
+    await expect(
+      lib.updateTemplateDraft(admin, draft.manifest.id, {
+        ...draft.manifest,
+        kit: { kitSlug: "missing-kit", kitVersion: "1.0.0" },
+      }),
+    ).rejects.toMatchObject({ code: "incompatible_kit" });
+  });
+
+  it("keeps memory library uniqueness aligned with database adapters", async () => {
+    const repository = new InMemoryRepository();
+    const [seedKit] = shippedKitManifests;
+    if (!seedKit) throw new Error("missing kit seed");
+    const record = {
+      manifest: seedKit,
+      status: "published" as const,
+      authorId: "seed",
+      publishedAt: "2026-08-24T15:00:00.000Z",
+      createdAt: "2026-08-24T15:00:00.000Z",
+      updatedAt: "2026-08-24T15:00:00.000Z",
+    };
+    await repository.createLibraryKit(record);
+    await expect(repository.createLibraryKit(record)).rejects.toMatchObject({
+      code: "library_kit_exists",
+    });
+  });
+
+  it("does not mutate its cache when library persistence fails", async () => {
+    const repository = new FailingLibraryRepository();
+    const lib = new LibraryService(
+      () => new Date("2026-08-24T15:00:00Z"),
+      repository,
+    );
+    await lib.ready();
+    const original = await lib.listKits(admin);
+    const first = original.find((entry) => entry.status === "published");
+    if (!first) throw new Error("missing seeded kit");
+
+    repository.failUpdate = true;
+    await expect(lib.deprecateKit(admin, first.manifest.id)).rejects.toThrow(
+      "injected library update failure",
+    );
+    expect(
+      (await lib.listKits(admin)).find(
+        (entry) => entry.manifest.id === first.manifest.id,
+      )?.status,
+    ).toBe("published");
+
+    repository.failUpdate = false;
+    const draft = await lib.duplicateKit(admin, first.manifest.id);
+    repository.failUpdate = true;
+    await expect(lib.publishKit(admin, draft.manifest.id)).rejects.toThrow(
+      "injected library update failure",
+    );
+    expect(
+      (await lib.listKits(admin)).find(
+        (entry) => entry.manifest.id === draft.manifest.id,
+      )?.status,
+    ).toBe("draft");
+  });
+
+  it("seeds missing entities independently and concurrent services converge", async () => {
+    const repository = new InMemoryRepository();
+    const [seedKit] = shippedKitManifests;
+    if (!seedKit) throw new Error("missing kit seed");
+    await repository.createLibraryKit({
+      manifest: seedKit,
+      status: "published",
+      authorId: "seed",
+      publishedAt: "2026-08-24T15:00:00.000Z",
+      createdAt: "2026-08-24T15:00:00.000Z",
+      updatedAt: "2026-08-24T15:00:00.000Z",
+    });
+    const clock = () => new Date("2026-08-24T15:00:00Z");
+    const services = [
+      new LibraryService(clock, repository),
+      new LibraryService(clock, repository),
+    ];
+    await Promise.all(services.map((service) => service.ready()));
+    expect(await repository.listLibraryKits()).toHaveLength(3);
+    expect(await repository.listLibraryTemplates()).toHaveLength(6);
   });
 });
