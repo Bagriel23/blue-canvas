@@ -88,8 +88,10 @@ backups fora da máquina de produção.
 - Nenhum serviço faz chamadas externas por padrão — sem AI provider, CDN,
   telemetria ou tokens de terceiros. Auditorias devem confirmar que o firewall
   do host bloqueia egress fora dos IPs internos (banco, storage e clientes).
-- A prévia sandboxed do canvas roda em `bc-preview` do bundle Vite, isolada da
-  camada de dados; nenhuma execução de JavaScript arbitrária é permitida.
+- A prévia do canvas roda em `bc-preview` do bundle Vite, isolada da camada de
+  dados e com estado efêmero. O runtime interpreta somente as ações declaradas
+  no documento e valida esquemas de URL; nenhuma execução de JavaScript
+  arbitrária é permitida.
 
 ## Aceite
 

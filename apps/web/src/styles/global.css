@@ -653,6 +653,47 @@ button:disabled {
   padding: 24px;
   background: var(--bc-color-surface);
 }
+.bc-preview__toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 42px;
+  margin-bottom: 16px;
+  padding: 8px 10px;
+  background: color-mix(
+    in srgb,
+    var(--bc-color-surface-elevated) 92%,
+    transparent
+  );
+  border: 1px solid var(--bc-color-border);
+  border-radius: var(--bc-radius-sm);
+  backdrop-filter: blur(10px);
+}
+.bc-preview__location,
+.bc-preview__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.bc-preview__location {
+  min-width: 0;
+  color: var(--bc-color-text-muted);
+  font-size: 0.75rem;
+}
+.bc-preview__location > :last-child {
+  overflow: hidden;
+  color: var(--bc-color-text);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bc-preview__actions .bc-btn {
+  min-height: 32px;
+}
 .bc-visually-hidden {
   position: absolute;
   width: 1px;
@@ -718,6 +759,16 @@ button:disabled {
   }
   .bc-screen {
     padding: 28px 18px 44px;
+  }
+  .bc-preview {
+    padding: 12px;
+  }
+  .bc-preview__toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .bc-preview__actions {
+    justify-content: flex-end;
   }
   .bc-screen__intro {
     margin-bottom: 22px;

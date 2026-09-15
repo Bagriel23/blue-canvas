@@ -64,6 +64,15 @@ gerenciada por estado local: clique aplica seleção sem propagar até o pai;
 selecionados recebem `data-selected="true"` para o outline azul definido em
 `global.css`.
 
+O modo de prévia usa o mesmo DOM semântico em modo somente leitura, mas com um
+runtime isolado para as interações declaradas no documento. Ações `navigate`
+trocam de página e mantêm histórico para voltar; `set-variable` e
+`filter-collection` atualizam o estado efêmero da sessão; condicionais escolhem
+seu ramo em tempo real; e `open-overlay`/`close-overlay` controlam overlays
+fechados por padrão. O botão de reset restaura a página e as variáveis iniciais.
+URLs externas são aceitas somente para os esquemas `http`, `https`, `mailto` e
+`tel`; nenhum código do documento é executado.
+
 O inspetor edita o nome do nó, o conteúdo de nós de texto e mostra propriedades
 principais de estilo e layout. Ao abrir um projeto, o `Workspace` busca
 `GET /api/v1/projects/:id/document`, exibe estados de carregamento/erro/retry e

@@ -23,7 +23,20 @@ interface CanvasProps {
   selectedId: string | null;
   onSelect: (nodeId: string | null) => void;
   editable: boolean;
+  previewState?: PreviewState | undefined;
+  onInteraction?: PreviewInteractionHandler | undefined;
 }
+
+export interface PreviewState {
+  variables: Readonly<Record<string, string | number | boolean | null>>;
+  openOverlayIds: ReadonlySet<string>;
+}
+
+export type PreviewInteractionHandler = (
+  nodeId: string,
+  trigger: "click" | "submit" | "change",
+  value?: string,
+) => void;
 
 export function Canvas({
   document,
@@ -32,6 +45,8 @@ export function Canvas({
   selectedId,
   onSelect,
   editable,
+  previewState,
+  onInteraction,
 }: CanvasProps) {
   const { messages } = useLocale();
   const [zoom, setZoom] = useState(100);
@@ -124,9 +139,12 @@ export function Canvas({
       <ArtboardFrame artboard={artboard} zoom={zoom / 100}>
         <NodeView
           node={root}
+          document={document}
           selectedId={selectedId}
           onSelect={onSelect}
           editable={editable}
+          previewState={previewState}
+          onInteraction={onInteraction}
         />
       </ArtboardFrame>
     </div>
@@ -162,18 +180,50 @@ function ArtboardFrame({
 
 interface NodeViewProps {
   node: DesignNode;
+  document: DesignDocument;
   selectedId: string | null;
   onSelect: (nodeId: string | null) => void;
   editable: boolean;
+  previewState?: PreviewState | undefined;
+  onInteraction?: PreviewInteractionHandler | undefined;
+  componentDepth?: number | undefined;
 }
 
-function NodeView({ node, selectedId, onSelect, editable }: NodeViewProps) {
+function NodeView({
+  node,
+  document,
+  selectedId,
+  onSelect,
+  editable,
+  previewState,
+  onInteraction,
+  componentDepth = 0,
+}: NodeViewProps) {
+  const previewing = !editable && onInteraction !== undefined;
+  if (previewing) {
+    if (
+      node.kind === "overlay" &&
+      !(previewState?.openOverlayIds.has(node.id) ?? false)
+    ) {
+      return null;
+    }
+    if (node.kind !== "overlay" && !node.visible) return null;
+  }
   const selected = selectedId === node.id;
+  const hasInteraction = (trigger: "click" | "submit" | "change") =>
+    node.interactions?.some((interaction) => interaction.trigger === trigger) ??
+    false;
 
   const handleClick = (event: MouseEvent) => {
-    if (!editable) return;
-    event.stopPropagation();
-    onSelect(node.id);
+    if (editable) {
+      event.stopPropagation();
+      onSelect(node.id);
+      return;
+    }
+    if (previewing && hasInteraction("click")) {
+      event.stopPropagation();
+      onInteraction(node.id, "click");
+    }
   };
 
   const commonProps = {
@@ -182,7 +232,7 @@ function NodeView({ node, selectedId, onSelect, editable }: NodeViewProps) {
     "data-node-kind": node.kind,
     "data-node-name": node.name,
     "data-selected": selected ? "true" : "false",
-    tabIndex: editable ? 0 : -1,
+    tabIndex: editable ? 0 : undefined,
     onClick: handleClick,
     style: { ...styleToCss(node.style), ...layoutToCss(node) },
   } as const;
@@ -192,9 +242,13 @@ function NodeView({ node, selectedId, onSelect, editable }: NodeViewProps) {
       <NodeView
         key={child.id}
         node={child}
+        document={document}
         selectedId={selectedId}
         onSelect={onSelect}
         editable={editable}
+        previewState={previewState}
+        onInteraction={onInteraction}
+        componentDepth={componentDepth}
       />
     ));
 
@@ -229,7 +283,16 @@ function NodeView({ node, selectedId, onSelect, editable }: NodeViewProps) {
       );
     case "link":
       return (
-        <a {...commonProps} href={node.href}>
+        <a
+          {...commonProps}
+          href={node.href}
+          onClick={(event) => {
+            if (previewing && hasInteraction("click")) {
+              event.preventDefault();
+            }
+            handleClick(event);
+          }}
+        >
           {renderChildren(node.children)}
         </a>
       );
@@ -239,7 +302,6 @@ function NodeView({ node, selectedId, onSelect, editable }: NodeViewProps) {
           {...commonProps}
           type={node.buttonType}
           onClick={(event) => {
-            if (!editable) return;
             handleClick(event);
           }}
         >
@@ -252,12 +314,31 @@ function NodeView({ node, selectedId, onSelect, editable }: NodeViewProps) {
           {...commonProps}
           type={node.inputType}
           placeholder={node.placeholder}
-          readOnly
+          readOnly={!previewing}
+          value={
+            previewing && node.variable
+              ? String(previewState?.variables[node.variable] ?? "")
+              : undefined
+          }
+          onChange={(event) => {
+            if (previewing) {
+              onInteraction(node.id, "change", event.currentTarget.value);
+            }
+          }}
         />
       );
     case "form":
       return (
-        <form {...commonProps} onSubmit={(event) => event.preventDefault()}>
+        <form
+          {...commonProps}
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (previewing && hasInteraction("submit")) {
+              event.stopPropagation();
+              onInteraction(node.id, "submit");
+            }
+          }}
+        >
           {renderChildren(node.children)}
         </form>
       );
@@ -267,12 +348,17 @@ function NodeView({ node, selectedId, onSelect, editable }: NodeViewProps) {
           {renderChildren(node.children)}
         </div>
       );
-    case "conditional":
+    case "conditional": {
+      const matches =
+        previewing && previewState
+          ? previewState.variables[node.variable] === node.equals
+          : true;
       return (
         <div {...commonProps} data-variable={node.variable}>
-          {renderChildren(node.whenTrue)}
+          {renderChildren(matches ? node.whenTrue : node.whenFalse)}
         </div>
       );
+    }
     case "overlay":
       return (
         <div {...commonProps} role="dialog">
@@ -280,8 +366,31 @@ function NodeView({ node, selectedId, onSelect, editable }: NodeViewProps) {
         </div>
       );
     case "component-instance":
-      return (
-        <div {...commonProps} data-component-instance={node.componentId} />
-      );
+      if (!previewing) {
+        return (
+          <div {...commonProps} data-component-instance={node.componentId} />
+        );
+      }
+      if (componentDepth >= 8) return null;
+      {
+        const component = document.components.find(
+          (entry) => entry.id === node.componentId,
+        );
+        if (!component) return null;
+        return (
+          <div {...commonProps} data-component-instance={node.componentId}>
+            <NodeView
+              node={component.root}
+              document={document}
+              selectedId={selectedId}
+              onSelect={onSelect}
+              editable={editable}
+              previewState={previewState}
+              onInteraction={onInteraction}
+              componentDepth={componentDepth + 1}
+            />
+          </div>
+        );
+      }
   }
 }

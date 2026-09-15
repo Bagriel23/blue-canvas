@@ -30,6 +30,10 @@ Este documento descreve o estado observado no código. O plano completo está em
   `GET /api/v1/projects/:id/document`, com loading/error/retry, título do
   projeto, comandos `update-node` otimistas, fila HTTP serializada, idempotência
   e rebase local em conflitos de revisão.
+- Prévia navegável baseada no documento: ações de clique/submit/change executam
+  navegação entre páginas, histórico voltar, reset, variáveis condicionais e
+  abertura/fechamento de overlays; nós invisíveis permanecem ocultos e links
+  externos passam por validação de esquema.
 - Biblioteca de kits e templates com manifestos versionados, ciclo draft →
   published → deprecated, revisão administrativa, duplicação com bump de patch e
   diagnóstico de compatibilidade. Três kits (SEDA Enterprise, Wireframe, Neutral

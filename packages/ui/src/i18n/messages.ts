@@ -53,6 +53,8 @@ export interface UiMessages {
     share: string;
     export: string;
     exitPreview: string;
+    previewBack: string;
+    previewReset: string;
     noSelection: string;
     style: string;
     layout: string;
@@ -147,6 +149,8 @@ const enUs: UiMessages = {
     share: "Share",
     export: "Export",
     exitPreview: "Exit preview",
+    previewBack: "Back",
+    previewReset: "Reset preview",
     noSelection: "Select a node to see its properties.",
     style: "Style",
     layout: "Layout",
@@ -244,6 +248,8 @@ const ptBr: UiMessages = {
     share: "Compartilhar",
     export: "Exportar",
     exitPreview: "Sair da prévia",
+    previewBack: "Voltar",
+    previewReset: "Reiniciar prévia",
     noSelection: "Selecione um nó para ver suas propriedades.",
     style: "Estilo",
     layout: "Layout",
@@ -340,6 +346,8 @@ const koKr: UiMessages = {
     share: "공유",
     export: "내보내기",
     exitPreview: "미리보기 종료",
+    previewBack: "뒤로",
+    previewReset: "미리보기 초기화",
     noSelection: "속성을 보려면 노드를 선택하세요.",
     style: "스타일",
     layout: "레이아웃",
