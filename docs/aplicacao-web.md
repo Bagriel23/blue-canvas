@@ -141,3 +141,9 @@ atrás do mesmo reverse proxy que expõe a API.
   teclado; arrastar para mover ainda não está implementado.
 - Exportações são geradas por `POST /api/v1/projects/:id/exports`; o diálogo
   empacota os arquivos retornados em ZIP determinístico para download local.
+
+## Colaboracao em tempo real
+
+O workspace React usa Hocuspocus/Yjs para sincronizar edicoes. O snapshot HTTP
+permanece como bootstrap e fallback; alteracoes `update-node` sao indexadas por
+entidade e propriedades, enquanto comandos estruturais usam a API HTTP.

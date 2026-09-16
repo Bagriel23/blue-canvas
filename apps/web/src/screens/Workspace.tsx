@@ -24,6 +24,10 @@ import {
   type CollaborationClient,
   type CollaborationStatus,
 } from "../collaboration/provider.js";
+import {
+  createPendingChangesGuard,
+  type PendingChangesGuard,
+} from "@blue-canvas/collaboration";
 import { useLocale } from "../state/locale.js";
 import { useSession } from "../state/session.js";
 
@@ -87,6 +91,7 @@ export function Workspace({ projectId, editable = true }: WorkspaceProps) {
   });
   const requestGeneration = useRef(0);
   const collaborationRef = useRef<CollaborationClient | null>(null);
+  const pendingGuardRef = useRef<PendingChangesGuard | null>(null);
   const [collaborationStatus, setCollaborationStatus] =
     useState<CollaborationStatus>("connecting");
   const [presence, setPresence] = useState<unknown[]>([]);
@@ -136,6 +141,16 @@ export function Workspace({ projectId, editable = true }: WorkspaceProps) {
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const guard = createPendingChangesGuard(window);
+    pendingGuardRef.current = guard;
+    return () => {
+      guard.dispose();
+      pendingGuardRef.current = null;
+    };
+  }, []);
 
   const selectedNode =
     resource.status === "ready"
@@ -292,6 +307,7 @@ export function Workspace({ projectId, editable = true }: WorkspaceProps) {
       }
     } finally {
       editor.processing = false;
+      if (editor.pending.length === 0) pendingGuardRef.current?.markSynced();
     }
   }, [applyLocalCommand, client, loadDocument, projectId, updateDocument]);
 
@@ -360,9 +376,11 @@ export function Workspace({ projectId, editable = true }: WorkspaceProps) {
         command.nodeId,
       );
       updateDocument(editor.document, "saving");
+      pendingGuardRef.current?.markPending();
       return;
     }
     editor.pending.push({ command, idempotencyKey: randomId() });
+    pendingGuardRef.current?.markPending();
     updateDocument(editor.document, "saving");
     void syncQueue();
   };

@@ -92,3 +92,8 @@ Windows.
 Uma capacidade só deve migrar para “Implementado” quando código, testes e
 integração correspondente existirem no branch. Decisões da especificação não são
 evidência de implementação.
+
+### Concluido: colaboracao web Yjs
+
+O editor possui provider Hocuspocus, presenca, reconexao, modo somente leitura e
+protecao de alteracoes pendentes.

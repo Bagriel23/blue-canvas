@@ -88,3 +88,9 @@ const provider = new HocuspocusProvider({
 
 O cookie de sessão é enviado pelo navegador. Não concatene CSRF, sessão ou PAT à
 URL e não registre o payload de autenticação.
+
+## Cliente web
+
+O cliente React conecta em `/api/v1/collaboration` com cookie de sessao e token
+CSRF. Entidades sao armazenadas granularmente em `blueCanvas.entities`, com
+compatibilidade para snapshots legados.
