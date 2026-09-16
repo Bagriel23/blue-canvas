@@ -36,8 +36,15 @@ export function readSemanticDocument(document: Y.Doc): DesignDocument {
     const id = "id" in node && typeof node.id === "string" ? node.id : null;
     if (id) {
       const value = entities.get(id);
-      if (value && typeof value === "object")
+      if (value && typeof value === "object") {
+        const children =
+          "children" in node
+            ? (node as { children?: unknown }).children
+            : undefined;
         Object.assign(node, JSON.parse(JSON.stringify(value)));
+        if (children !== undefined)
+          (node as { children?: unknown }).children = children;
+      }
     }
     for (const child of getNodeChildren(node as never)) apply(child);
   };
@@ -60,15 +67,17 @@ export function replaceSemanticDocument(
       : new Y.Map<unknown>();
   if (!(root.get(ENTITIES_KEY) instanceof Y.Map))
     root.set(ENTITIES_KEY, entities);
+  const ids = new Set<string>();
   const collect = (node: unknown): void => {
     if (!node || typeof node !== "object") return;
-    if ("id" in node && typeof node.id === "string")
-      entities.set(node.id, JSON.parse(JSON.stringify(node)));
+    if ("id" in node && typeof node.id === "string") ids.add(node.id);
+    entities.set((node as { id: string }).id, entityProperties(node));
     for (const child of getNodeChildren(node as never)) collect(child);
   };
   for (const page of parsed.pages)
     for (const artboard of page.artboards) collect(artboard.root);
   for (const component of parsed.components) collect(component.root);
+  for (const id of entities.keys()) if (!ids.has(id)) entities.delete(id);
   return parsed;
 }
 
@@ -85,10 +94,7 @@ export function replaceSemanticNode(
     const collect = (node: unknown): void => {
       if (!node || typeof node !== "object") return;
       if ("id" in node && typeof node.id === "string")
-        (entities as Y.Map<unknown>).set(
-          node.id,
-          JSON.parse(JSON.stringify(node)),
-        );
+        (entities as Y.Map<unknown>).set(node.id, entityProperties(node));
       for (const child of getNodeChildren(node as never)) collect(child);
     };
     for (const page of parsed.pages)
@@ -96,8 +102,16 @@ export function replaceSemanticNode(
     for (const component of parsed.components) collect(component.root);
     root.set(ENTITIES_KEY, entities);
   }
-  const valid = JSON.parse(JSON.stringify(value));
+  const valid = entityProperties(value as object);
   (entities as Y.Map<unknown>).set(nodeId, valid);
+}
+
+function entityProperties(node: object): Record<string, unknown> {
+  const value = JSON.parse(JSON.stringify(node)) as Record<string, unknown>;
+  delete value.children;
+  delete value.whenTrue;
+  delete value.whenFalse;
+  return value;
 }
 
 export function encodeCollaborationState(document: Y.Doc): {
