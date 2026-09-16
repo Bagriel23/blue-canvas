@@ -41,7 +41,9 @@ export function readSemanticDocument(document: Y.Doc): DesignDocument {
           "children" in node
             ? (node as { children?: unknown }).children
             : undefined;
-        Object.assign(node, JSON.parse(JSON.stringify(value)));
+        const properties =
+          value instanceof Y.Map ? Object.fromEntries(value.entries()) : value;
+        Object.assign(node, JSON.parse(JSON.stringify(properties)));
         if (children !== undefined)
           (node as { children?: unknown }).children = children;
       }
@@ -71,7 +73,8 @@ export function replaceSemanticDocument(
   const collect = (node: unknown): void => {
     if (!node || typeof node !== "object") return;
     if ("id" in node && typeof node.id === "string") ids.add(node.id);
-    entities.set((node as { id: string }).id, entityProperties(node));
+    if ("id" in node && typeof node.id === "string")
+      entities.set(node.id, createEntityMap(node));
     for (const child of getNodeChildren(node as never)) collect(child);
   };
   for (const page of parsed.pages)
@@ -94,7 +97,7 @@ export function replaceSemanticNode(
     const collect = (node: unknown): void => {
       if (!node || typeof node !== "object") return;
       if ("id" in node && typeof node.id === "string")
-        (entities as Y.Map<unknown>).set(node.id, entityProperties(node));
+        (entities as Y.Map<unknown>).set(node.id, createEntityMap(node));
       for (const child of getNodeChildren(node as never)) collect(child);
     };
     for (const page of parsed.pages)
@@ -103,7 +106,11 @@ export function replaceSemanticNode(
     root.set(ENTITIES_KEY, entities);
   }
   const valid = entityProperties(value as object);
-  (entities as Y.Map<unknown>).set(nodeId, valid);
+  const current = (entities as Y.Map<unknown>).get(nodeId);
+  const properties = current instanceof Y.Map ? current : new Y.Map<unknown>();
+  for (const [key, property] of Object.entries(valid))
+    (properties as Y.Map<unknown>).set(key, property);
+  (entities as Y.Map<unknown>).set(nodeId, properties);
 }
 
 function entityProperties(node: object): Record<string, unknown> {
@@ -112,6 +119,13 @@ function entityProperties(node: object): Record<string, unknown> {
   delete value.whenTrue;
   delete value.whenFalse;
   return value;
+}
+
+function createEntityMap(node: object): Y.Map<unknown> {
+  const map = new Y.Map<unknown>();
+  for (const [key, value] of Object.entries(entityProperties(node)))
+    map.set(key, value);
+  return map;
 }
 
 export function encodeCollaborationState(document: Y.Doc): {
