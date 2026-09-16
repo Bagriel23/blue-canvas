@@ -87,6 +87,7 @@ export function applySemanticNode(
   document: Y.Doc,
   next: DesignDocument,
   nodeId: string,
+  patch?: object,
 ): void {
   const find = (node: unknown): unknown => {
     if (!node || typeof node !== "object") return undefined;
@@ -100,10 +101,10 @@ export function applySemanticNode(
   for (const page of next.pages)
     for (const artboard of page.artboards) {
       const found = find(artboard.root);
-      if (found) return replaceSemanticNode(document, nodeId, found);
+      if (found) return replaceSemanticNode(document, nodeId, found, patch);
     }
   for (const component of next.components) {
     const found = find(component.root);
-    if (found) return replaceSemanticNode(document, nodeId, found);
+    if (found) return replaceSemanticNode(document, nodeId, found, patch);
   }
 }

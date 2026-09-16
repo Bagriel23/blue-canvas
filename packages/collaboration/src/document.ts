@@ -88,6 +88,7 @@ export function replaceSemanticNode(
   document: Y.Doc,
   nodeId: string,
   value: unknown,
+  patch?: object,
 ): void {
   const root = document.getMap(ROOT_MAP);
   let entities = root.get(ENTITIES_KEY);
@@ -105,12 +106,32 @@ export function replaceSemanticNode(
     for (const component of parsed.components) collect(component.root);
     root.set(ENTITIES_KEY, entities);
   }
-  const valid = entityProperties(value as object);
+  const valid = patch
+    ? (JSON.parse(JSON.stringify(patch)) as Record<string, unknown>)
+    : entityProperties(value as object);
   const current = (entities as Y.Map<unknown>).get(nodeId);
   const properties = current instanceof Y.Map ? current : new Y.Map<unknown>();
   for (const [key, property] of Object.entries(valid))
     (properties as Y.Map<unknown>).set(key, property);
-  (entities as Y.Map<unknown>).set(nodeId, properties);
+  if (!(current instanceof Y.Map))
+    (entities as Y.Map<unknown>).set(nodeId, properties);
+}
+
+export function ensureSemanticEntityIndex(document: Y.Doc): void {
+  const root = document.getMap(ROOT_MAP);
+  if (root.get(ENTITIES_KEY) instanceof Y.Map) return;
+  const parsed = parseDesignDocument(root.get(DOCUMENT_KEY));
+  const entities = new Y.Map<unknown>();
+  const collect = (node: unknown): void => {
+    if (!node || typeof node !== "object") return;
+    if ("id" in node && typeof node.id === "string")
+      entities.set(node.id, createEntityMap(node));
+    for (const child of getNodeChildren(node as never)) collect(child);
+  };
+  for (const page of parsed.pages)
+    for (const artboard of page.artboards) collect(artboard.root);
+  for (const component of parsed.components) collect(component.root);
+  root.set(ENTITIES_KEY, entities);
 }
 
 function entityProperties(node: object): Record<string, unknown> {

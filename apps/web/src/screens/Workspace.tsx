@@ -199,7 +199,10 @@ export function Workspace({ projectId, editable = true }: WorkspaceProps) {
         editorRef.current.document = document;
         updateDocument(document, "saved");
       },
-      onStatus: setCollaborationStatus,
+      onStatus: (status) => {
+        setCollaborationStatus(status);
+        if (status === "synced") pendingGuardRef.current?.markSynced();
+      },
       onPresence: setPresence,
     });
     collaborationRef.current = connection;
@@ -374,6 +377,7 @@ export function Workspace({ projectId, editable = true }: WorkspaceProps) {
         collaborationRef.current.document,
         editor.document,
         command.nodeId,
+        command.patch,
       );
       updateDocument(editor.document, "saving");
       pendingGuardRef.current?.markPending();

@@ -7,6 +7,7 @@ export {
   readSemanticDocument,
   replaceSemanticDocument,
   replaceSemanticNode,
+  ensureSemanticEntityIndex,
   validateProspectiveUpdate,
 } from "./document.js";
 export {
