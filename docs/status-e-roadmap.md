@@ -74,8 +74,8 @@ Windows.
 - Os manifestos administrativos de kits e templates e os templates pessoais de
   projetos são persistidos em MariaDB/Prisma; o modo de memória permanece
   disponível para testes e desenvolvimento sem banco.
-- O workspace web ainda não integra o cliente Hocuspocus/Yjs; a colaboração
-  simultânea e a presença permanecem na próxima etapa.
+- O workspace web integra Hocuspocus/Yjs para conteúdo, presença, reconexão e
+  permissões. Testes E2E com dois navegadores ainda permanecem na próxima etapa.
 - O endpoint HTTP de exportação e o empacotamento ZIP estão disponíveis para
   HTML, React e Preact; assets prontos do projeto são incluídos com limites.
 - Não há transformações estilo Moveable/Selecto no canvas — a seleção é por

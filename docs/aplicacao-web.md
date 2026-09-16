@@ -134,8 +134,8 @@ atrás do mesmo reverse proxy que expõe a API.
 
 ## Limitações atuais
 
-- Sem integração com o cliente Hocuspocus/Yjs; a fila HTTP é a sincronização
-  usada nesta etapa.
+- O cliente Hocuspocus/Yjs sincroniza alterações `update-node` em tempo real;
+  comandos estruturais permanecem na fila HTTP transacional.
 - Sem Playwright, screenshots de referência ou testes visuais automatizados.
 - Sem transformações estilo Moveable/Selecto no canvas. A seleção é por clique e
   teclado; arrastar para mover ainda não está implementado.

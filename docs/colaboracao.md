@@ -37,11 +37,11 @@ snapshot é validado antes de ser persistido.
 
 ## Presença, desconexão e offline
 
-Awareness do Yjs transporta presença e não é persistido. Em uma desconexão
-curta, a futura aplicação web pode usar `createPendingChangesGuard`: alterações
-pendentes permanecem apenas na memória e ativam `beforeunload` até a
-sincronização. O pacote não acessa IndexedDB nem `localStorage` para documentos.
-Fechar ou recarregar a página antes da sincronização perde essas alterações.
+Awareness do Yjs transporta presença e não é persistido. A aplicação web usa
+`createPendingChangesGuard`: alterações pendentes permanecem apenas na memória e
+ativam `beforeunload` até a sincronização. O pacote não acessa IndexedDB nem
+`localStorage` para documentos. Fechar ou recarregar a página antes da
+sincronização perde essas alterações.
 
 ## Versões nomeadas
 
