@@ -77,11 +77,27 @@ export function replaceSemanticNode(
   nodeId: string,
   value: unknown,
 ): void {
-  const entities = document.getMap(ROOT_MAP).get(ENTITIES_KEY);
-  if (!(entities instanceof Y.Map))
-    throw new Error("Collaboration entities are unavailable");
+  const root = document.getMap(ROOT_MAP);
+  let entities = root.get(ENTITIES_KEY);
+  if (!(entities instanceof Y.Map)) {
+    const parsed = parseDesignDocument(root.get(DOCUMENT_KEY));
+    entities = new Y.Map<unknown>();
+    const collect = (node: unknown): void => {
+      if (!node || typeof node !== "object") return;
+      if ("id" in node && typeof node.id === "string")
+        (entities as Y.Map<unknown>).set(
+          node.id,
+          JSON.parse(JSON.stringify(node)),
+        );
+      for (const child of getNodeChildren(node as never)) collect(child);
+    };
+    for (const page of parsed.pages)
+      for (const artboard of page.artboards) collect(artboard.root);
+    for (const component of parsed.components) collect(component.root);
+    root.set(ENTITIES_KEY, entities);
+  }
   const valid = JSON.parse(JSON.stringify(value));
-  entities.set(nodeId, valid);
+  (entities as Y.Map<unknown>).set(nodeId, valid);
 }
 
 export function encodeCollaborationState(document: Y.Doc): {

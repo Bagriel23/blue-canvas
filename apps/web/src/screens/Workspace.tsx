@@ -19,7 +19,6 @@ import { InspectorPanel } from "../panels/InspectorPanel.js";
 import { PagesPanel } from "../panels/PagesPanel.js";
 import { PreviewMode } from "../preview/PreviewMode.js";
 import {
-  applySemanticDocument,
   applySemanticNode,
   createCollaborationClient,
   type CollaborationClient,
@@ -351,25 +350,21 @@ export function Workspace({ projectId, editable = true }: WorkspaceProps) {
       updateDocument(editor.document, "conflict", messages.workspace.conflict);
       return;
     }
-    if (collaborationRef.current?.provider.isSynced) {
-      if (command.type === "update-node") {
-        applySemanticNode(
-          collaborationRef.current.document,
-          editor.document,
-          command.nodeId,
-        );
-      } else {
-        applySemanticDocument(
-          collaborationRef.current.document,
-          editor.document,
-        );
-      }
+    if (
+      collaborationRef.current?.provider.isSynced &&
+      command.type === "update-node"
+    ) {
+      applySemanticNode(
+        collaborationRef.current.document,
+        editor.document,
+        command.nodeId,
+      );
       updateDocument(editor.document, "saving");
-    } else {
-      editor.pending.push({ command, idempotencyKey: randomId() });
-      updateDocument(editor.document, "saving");
-      void syncQueue();
+      return;
     }
+    editor.pending.push({ command, idempotencyKey: randomId() });
+    updateDocument(editor.document, "saving");
+    void syncQueue();
   };
 
   const handleSelectArtboard = (nextPageId: string, nextArtboardId: string) => {
