@@ -489,8 +489,9 @@ export function createHandlers(client: ApiClient): Handlers {
         return { content: [{ type: "text", text: asText(result.body) }] };
       }
       case "restore_version": {
-        const { projectId, versionId, ...body } =
-          restoreVersionSchema.parse(input);
+        const parsed = restoreVersionSchema.parse(input);
+        const { projectId, versionId } = parsed;
+        const body = { name: parsed.name };
         const result = await client.request(
           "POST",
           `/api/v1/projects/${encodeURIComponent(projectId)}/versions/${encodeURIComponent(versionId)}/restore`,
