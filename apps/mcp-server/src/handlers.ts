@@ -82,6 +82,7 @@ const restoreVersionSchema = z.strictObject({
   projectId: z.uuid(),
   versionId: z.uuid(),
   name: restoreNamedVersionRequestSchema.shape.name,
+  confirmed: z.literal(true),
 });
 const listCommentsSchema = z.strictObject({ projectId: z.uuid() });
 const createCommentSchema = z
@@ -234,8 +235,9 @@ export const toolDescriptors = [
         projectId: { type: "string", format: "uuid" },
         versionId: { type: "string", format: "uuid" },
         name: { type: "string", minLength: 1, maxLength: 120 },
+        confirmed: { type: "boolean", const: true },
       },
-      required: ["projectId", "versionId", "name"],
+      required: ["projectId", "versionId", "name", "confirmed"],
       additionalProperties: false,
     },
     scopes: ["projects:write"],
@@ -323,7 +325,7 @@ export const toolDescriptors = [
       required: ["projectId", "target", "scope"],
       additionalProperties: false,
     },
-    scopes: ["projects:read"],
+    scopes: ["projects:read", "assets:read"],
     resultKind: "json" as const,
   },
 ] as const;
@@ -487,8 +489,12 @@ export function createHandlers(client: ApiClient): Handlers {
         return { content: [{ type: "text", text: asText(result.body) }] };
       }
       case "restore_version": {
-        const { projectId, versionId, ...body } =
-          restoreVersionSchema.parse(input);
+        const {
+          projectId,
+          versionId,
+          confirmed: _confirmed,
+          ...body
+        } = restoreVersionSchema.parse(input);
         const result = await client.request(
           "POST",
           `/api/v1/projects/${encodeURIComponent(projectId)}/versions/${encodeURIComponent(versionId)}/restore`,

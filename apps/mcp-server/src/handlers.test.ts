@@ -61,6 +61,22 @@ describe("MCP handlers", () => {
       "resolve_comment",
       "export_project",
     ]);
+    expect(
+      handlers.listTools().tools.find((tool) => tool.name === "export_project")
+        ?.scopes,
+    ).toEqual(["projects:read", "assets:read"]);
+  });
+
+  it("requires explicit confirmation before restoring a version", async () => {
+    const handlers = createHandlers(stubClient());
+    await expect(
+      handlers.callTool(identity, "restore_version", {
+        projectId: "aaaaaaaa-aaaa-7aaa-8aaa-aaaaaaaaaaaa",
+        versionId: "bbbbbbbb-bbbb-7bbb-8bbb-bbbbbbbbbbbb",
+        name: "restored",
+        confirmed: false,
+      }),
+    ).rejects.toThrow();
   });
 
   it("routes version, comment, and export tools through the API", async () => {
