@@ -102,6 +102,12 @@ export interface UiMessages {
     saving: string;
     saved: string;
     conflict: string;
+    collaborationLive: string;
+    collaborationConnecting: string;
+    collaborationReconnecting: string;
+    collaborationReadonly: string;
+    collaborationError: string;
+    collaborators: string;
   };
   share: {
     heading: string;
@@ -251,6 +257,12 @@ const enUs: UiMessages = {
     saved: "Saved",
     conflict:
       "Your changes were kept locally while the document was updated elsewhere.",
+    collaborationLive: "Live",
+    collaborationConnecting: "Connecting",
+    collaborationReconnecting: "Reconnecting",
+    collaborationReadonly: "Read-only",
+    collaborationError: "Offline",
+    collaborators: "collaborators",
   },
   share: {
     heading: "Share project",
@@ -401,6 +413,12 @@ const ptBr: UiMessages = {
     saved: "Salvo",
     conflict:
       "Suas alterações foram mantidas localmente enquanto o documento era atualizado em outro lugar.",
+    collaborationLive: "Ao vivo",
+    collaborationConnecting: "Conectando",
+    collaborationReconnecting: "Reconectando",
+    collaborationReadonly: "Somente leitura",
+    collaborationError: "Offline",
+    collaborators: "colaboradores",
   },
   share: {
     heading: "Compartilhar projeto",
@@ -549,6 +567,12 @@ const koKr: UiMessages = {
     saved: "저장됨",
     conflict:
       "문서가 다른 곳에서 업데이트되는 동안 변경 사항을 로컬에 유지했습니다.",
+    collaborationLive: "실시간",
+    collaborationConnecting: "연결 중",
+    collaborationReconnecting: "재연결 중",
+    collaborationReadonly: "읽기 전용",
+    collaborationError: "오프라인",
+    collaborators: "협업자",
   },
   share: {
     heading: "프로젝트 공유",

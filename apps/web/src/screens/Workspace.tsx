@@ -321,6 +321,16 @@ export function Workspace({ projectId, editable = true }: WorkspaceProps) {
     !project.archived &&
     (project.role === "owner" || project.role === "editor");
   const canManageSharing = project.role === "owner";
+  const collaborationLabel =
+    collaborationStatus === "synced"
+      ? messages.workspace.collaborationLive
+      : collaborationStatus === "connecting"
+        ? messages.workspace.collaborationConnecting
+        : collaborationStatus === "reconnecting"
+          ? messages.workspace.collaborationReconnecting
+          : collaborationStatus === "readonly"
+            ? messages.workspace.collaborationReadonly
+            : messages.workspace.collaborationError;
   const activePage =
     doc.pages.find((page) => page.id === activePageId) ?? doc.pages[0];
   const pageId = activePage?.id ?? "";
@@ -399,13 +409,11 @@ export function Workspace({ projectId, editable = true }: WorkspaceProps) {
                   className="bc-workspace__presence-dot"
                   data-status={collaborationStatus}
                 />
-                <span>
-                  {collaborationStatus === "synced"
-                    ? "Live"
-                    : collaborationStatus}
-                </span>
+                <span>{collaborationLabel}</span>
                 {presence.length > 1 ? (
-                  <span>{presence.length} collaborators</span>
+                  <span>
+                    {presence.length} {messages.workspace.collaborators}
+                  </span>
                 ) : null}
               </div>
               <p
