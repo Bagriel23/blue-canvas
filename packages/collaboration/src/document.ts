@@ -37,15 +37,20 @@ export function readSemanticDocument(document: Y.Doc): DesignDocument {
     if (id) {
       const value = entities.get(id);
       if (value && typeof value === "object") {
-        const children =
-          "children" in node
-            ? (node as { children?: unknown }).children
-            : undefined;
+        const structural = node as {
+          children?: unknown;
+          whenTrue?: unknown;
+          whenFalse?: unknown;
+        };
+        const children = structural.children;
+        const whenTrue = structural.whenTrue;
+        const whenFalse = structural.whenFalse;
         const properties =
           value instanceof Y.Map ? Object.fromEntries(value.entries()) : value;
         Object.assign(node, JSON.parse(JSON.stringify(properties)));
-        if (children !== undefined)
-          (node as { children?: unknown }).children = children;
+        if (children !== undefined) structural.children = children;
+        if (whenTrue !== undefined) structural.whenTrue = whenTrue;
+        if (whenFalse !== undefined) structural.whenFalse = whenFalse;
       }
     }
     for (const child of getNodeChildren(node as never)) apply(child);

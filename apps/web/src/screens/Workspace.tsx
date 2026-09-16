@@ -204,6 +204,10 @@ export function Workspace({ projectId, editable = true }: WorkspaceProps) {
         if (status === "synced") pendingGuardRef.current?.markSynced();
       },
       onPresence: setPresence,
+      onUnsyncedChanges: (count) => {
+        if (count > 0) pendingGuardRef.current?.markPending();
+        else pendingGuardRef.current?.markSynced();
+      },
     });
     collaborationRef.current = connection;
     return () => {

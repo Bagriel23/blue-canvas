@@ -29,6 +29,7 @@ export function createCollaborationClient(options: {
   onDocument: (document: DesignDocument) => void;
   onStatus: (status: CollaborationStatus) => void;
   onPresence: (states: unknown[]) => void;
+  onUnsyncedChanges?: (count: number) => void;
 }): CollaborationClient | null {
   if (typeof WebSocket === "undefined" || !options.token) return null;
   const document = new Y.Doc();
@@ -52,6 +53,7 @@ export function createCollaborationClient(options: {
     onAuthenticationFailed: () => options.onStatus("error"),
     onClose: () => options.onStatus("reconnecting"),
     onAwarenessChange: ({ states }) => options.onPresence(states),
+    onUnsyncedChanges: ({ number }) => options.onUnsyncedChanges?.(number),
   });
   const onUpdate = () => {
     try {
