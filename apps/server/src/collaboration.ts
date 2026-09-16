@@ -5,6 +5,7 @@ import {
   applyCollaborationState,
   createInitialCollaborationDocument,
   encodeCollaborationState,
+  ensureSemanticEntityIndex,
   MAX_COLLABORATION_UPDATE_BYTES,
   readSemanticDocument,
   replaceSemanticDocument,
@@ -109,6 +110,7 @@ export class CollaborationManager {
             await dependencies.repository.findProjectDocument(documentName);
           if (persisted) {
             applyCollaborationState(document, persisted.state);
+            ensureSemanticEntityIndex(document);
             encodeCollaborationState(document);
             return document;
           }
