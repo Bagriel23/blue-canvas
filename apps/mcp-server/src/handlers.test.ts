@@ -51,6 +51,58 @@ describe("MCP handlers", () => {
       "get_project",
       "create_project",
       "apply_commands",
+      "list_versions",
+      "get_version",
+      "create_version",
+      "restore_version",
+      "list_comments",
+      "create_comment",
+      "update_comment",
+      "resolve_comment",
+      "export_project",
+    ]);
+  });
+
+  it("routes version, comment, and export tools through the API", async () => {
+    const client = stubClient();
+    const handlers = createHandlers(client);
+    const projectId = "aaaaaaaa-aaaa-7aaa-8aaa-aaaaaaaaaaaa";
+    const versionId = "bbbbbbbb-bbbb-7bbb-8bbb-bbbbbbbbbbbb";
+    await handlers.callTool(identity, "list_versions", { projectId });
+    await handlers.callTool(identity, "get_version", { projectId, versionId });
+    await handlers.callTool(identity, "create_version", {
+      projectId,
+      name: "checkpoint",
+    });
+    await handlers.callTool(identity, "list_comments", { projectId });
+    await handlers.callTool(identity, "create_comment", {
+      projectId,
+      body: "Review this",
+    });
+    await handlers.callTool(identity, "update_comment", {
+      projectId,
+      commentId: versionId,
+      body: "Updated",
+    });
+    await handlers.callTool(identity, "resolve_comment", {
+      projectId,
+      commentId: versionId,
+      resolved: true,
+    });
+    await handlers.callTool(identity, "export_project", {
+      projectId,
+      target: "html",
+      scope: { type: "project" },
+    });
+    expect(client.calls.map((call) => `${call[0]} ${call[1]}`)).toEqual([
+      `GET /api/v1/projects/${projectId}/versions`,
+      `GET /api/v1/projects/${projectId}/versions/${versionId}`,
+      `POST /api/v1/projects/${projectId}/versions`,
+      `GET /api/v1/projects/${projectId}/comments`,
+      `POST /api/v1/projects/${projectId}/comments`,
+      `PATCH /api/v1/projects/${projectId}/comments/${versionId}`,
+      `POST /api/v1/projects/${projectId}/comments/${versionId}/resolve`,
+      `POST /api/v1/projects/${projectId}/exports`,
     ]);
   });
 

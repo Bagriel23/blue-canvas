@@ -1,4 +1,12 @@
 import { z } from "zod";
+import {
+  createCommentRequestSchema,
+  createNamedVersionRequestSchema,
+  exportRequestSchema,
+  resolveCommentRequestSchema,
+  restoreNamedVersionRequestSchema,
+  updateCommentRequestSchema,
+} from "@blue-canvas/contracts";
 
 export const PROTOCOL_VERSION = "2025-06-18";
 export const SERVER_NAME = "blue-canvas-mcp";
@@ -61,6 +69,33 @@ const listProjectsSchema = z.strictObject({}).optional();
 const getProjectSchema = z.strictObject({
   projectId: z.uuid(),
 });
+
+const versionSchema = z.strictObject({
+  projectId: z.uuid(),
+  versionId: z.uuid(),
+});
+const createVersionSchema = z.strictObject({
+  projectId: z.uuid(),
+  name: createNamedVersionRequestSchema.shape.name,
+});
+const restoreVersionSchema = z.strictObject({
+  projectId: z.uuid(),
+  versionId: z.uuid(),
+  name: restoreNamedVersionRequestSchema.shape.name,
+});
+const listCommentsSchema = z.strictObject({ projectId: z.uuid() });
+const createCommentSchema = z
+  .strictObject({ projectId: z.uuid() })
+  .merge(createCommentRequestSchema);
+const updateCommentSchema = z
+  .strictObject({ projectId: z.uuid(), commentId: z.uuid() })
+  .merge(updateCommentRequestSchema);
+const resolveCommentSchema = z
+  .strictObject({ projectId: z.uuid(), commentId: z.uuid() })
+  .merge(resolveCommentRequestSchema);
+const exportProjectSchema = z
+  .strictObject({ projectId: z.uuid() })
+  .merge(exportRequestSchema);
 
 export const resourceDescriptors = [
   {
@@ -146,6 +181,149 @@ export const toolDescriptors = [
       additionalProperties: false,
     },
     scopes: ["projects:write"],
+    resultKind: "json" as const,
+  },
+  {
+    name: "list_versions",
+    description: "List named versions for a project.",
+    inputSchema: {
+      type: "object",
+      properties: { projectId: { type: "string", format: "uuid" } },
+      required: ["projectId"],
+      additionalProperties: false,
+    },
+    scopes: ["projects:read"],
+    resultKind: "json" as const,
+  },
+  {
+    name: "get_version",
+    description: "Retrieve one named version and its snapshot.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        projectId: { type: "string", format: "uuid" },
+        versionId: { type: "string", format: "uuid" },
+      },
+      required: ["projectId", "versionId"],
+      additionalProperties: false,
+    },
+    scopes: ["projects:read"],
+    resultKind: "json" as const,
+  },
+  {
+    name: "create_version",
+    description: "Create a named snapshot of the current project.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        projectId: { type: "string", format: "uuid" },
+        name: { type: "string", minLength: 1, maxLength: 120 },
+      },
+      required: ["projectId", "name"],
+      additionalProperties: false,
+    },
+    scopes: ["projects:write"],
+    resultKind: "json" as const,
+  },
+  {
+    name: "restore_version",
+    description: "Restore a named version and create a new snapshot.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        projectId: { type: "string", format: "uuid" },
+        versionId: { type: "string", format: "uuid" },
+        name: { type: "string", minLength: 1, maxLength: 120 },
+      },
+      required: ["projectId", "versionId", "name"],
+      additionalProperties: false,
+    },
+    scopes: ["projects:write"],
+    resultKind: "json" as const,
+  },
+  {
+    name: "list_comments",
+    description: "List comments for a project.",
+    inputSchema: {
+      type: "object",
+      properties: { projectId: { type: "string", format: "uuid" } },
+      required: ["projectId"],
+      additionalProperties: false,
+    },
+    scopes: ["projects:read"],
+    resultKind: "json" as const,
+  },
+  {
+    name: "create_comment",
+    description: "Create a comment, optionally anchored to a node.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        projectId: { type: "string", format: "uuid" },
+        body: { type: "string", minLength: 1, maxLength: 5000 },
+        nodeId: { type: "string", format: "uuid" },
+        position: { type: "object" },
+        mentionUserIds: {
+          type: "array",
+          items: { type: "string", format: "uuid" },
+        },
+      },
+      required: ["projectId", "body"],
+      additionalProperties: false,
+    },
+    scopes: ["projects:write"],
+    resultKind: "json" as const,
+  },
+  {
+    name: "update_comment",
+    description: "Update a comment body or mentions.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        projectId: { type: "string", format: "uuid" },
+        commentId: { type: "string", format: "uuid" },
+        body: { type: "string", minLength: 1, maxLength: 5000 },
+        mentionUserIds: {
+          type: "array",
+          items: { type: "string", format: "uuid" },
+        },
+      },
+      required: ["projectId", "commentId"],
+      additionalProperties: false,
+    },
+    scopes: ["projects:write"],
+    resultKind: "json" as const,
+  },
+  {
+    name: "resolve_comment",
+    description: "Resolve or reopen a comment.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        projectId: { type: "string", format: "uuid" },
+        commentId: { type: "string", format: "uuid" },
+        resolved: { type: "boolean" },
+      },
+      required: ["projectId", "commentId", "resolved"],
+      additionalProperties: false,
+    },
+    scopes: ["projects:write"],
+    resultKind: "json" as const,
+  },
+  {
+    name: "export_project",
+    description: "Generate a deterministic HTML, React, or Preact export.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        projectId: { type: "string", format: "uuid" },
+        target: { type: "string", enum: ["html", "react", "preact"] },
+        scope: { type: "object" },
+      },
+      required: ["projectId", "target", "scope"],
+      additionalProperties: false,
+    },
+    scopes: ["projects:read"],
     resultKind: "json" as const,
   },
 ] as const;
@@ -278,6 +456,94 @@ export function createHandlers(client: ApiClient): Handlers {
             body: rest,
             idempotencyKey: rest.idempotencyKey,
           },
+        );
+        return { content: [{ type: "text", text: asText(result.body) }] };
+      }
+      case "list_versions": {
+        const { projectId } = getProjectSchema.parse(input);
+        const result = await client.request(
+          "GET",
+          `/api/v1/projects/${encodeURIComponent(projectId)}/versions`,
+          { identity: bearer },
+        );
+        return { content: [{ type: "text", text: asText(result.body) }] };
+      }
+      case "get_version": {
+        const { projectId, versionId } = versionSchema.parse(input);
+        const result = await client.request(
+          "GET",
+          `/api/v1/projects/${encodeURIComponent(projectId)}/versions/${encodeURIComponent(versionId)}`,
+          { identity: bearer },
+        );
+        return { content: [{ type: "text", text: asText(result.body) }] };
+      }
+      case "create_version": {
+        const { projectId, ...body } = createVersionSchema.parse(input);
+        const result = await client.request(
+          "POST",
+          `/api/v1/projects/${encodeURIComponent(projectId)}/versions`,
+          { identity: bearer, body },
+        );
+        return { content: [{ type: "text", text: asText(result.body) }] };
+      }
+      case "restore_version": {
+        const { projectId, versionId, ...body } =
+          restoreVersionSchema.parse(input);
+        const result = await client.request(
+          "POST",
+          `/api/v1/projects/${encodeURIComponent(projectId)}/versions/${encodeURIComponent(versionId)}/restore`,
+          {
+            identity: bearer,
+            body,
+            idempotencyKey: `mcp-restore-${projectId}-${versionId}-${body.name}`,
+          },
+        );
+        return { content: [{ type: "text", text: asText(result.body) }] };
+      }
+      case "list_comments": {
+        const { projectId } = listCommentsSchema.parse(input);
+        const result = await client.request(
+          "GET",
+          `/api/v1/projects/${encodeURIComponent(projectId)}/comments`,
+          { identity: bearer },
+        );
+        return { content: [{ type: "text", text: asText(result.body) }] };
+      }
+      case "create_comment": {
+        const { projectId, ...body } = createCommentSchema.parse(input);
+        const result = await client.request(
+          "POST",
+          `/api/v1/projects/${encodeURIComponent(projectId)}/comments`,
+          { identity: bearer, body },
+        );
+        return { content: [{ type: "text", text: asText(result.body) }] };
+      }
+      case "update_comment": {
+        const { projectId, commentId, ...body } =
+          updateCommentSchema.parse(input);
+        const result = await client.request(
+          "PATCH",
+          `/api/v1/projects/${encodeURIComponent(projectId)}/comments/${encodeURIComponent(commentId)}`,
+          { identity: bearer, body },
+        );
+        return { content: [{ type: "text", text: asText(result.body) }] };
+      }
+      case "resolve_comment": {
+        const { projectId, commentId, ...body } =
+          resolveCommentSchema.parse(input);
+        const result = await client.request(
+          "POST",
+          `/api/v1/projects/${encodeURIComponent(projectId)}/comments/${encodeURIComponent(commentId)}/resolve`,
+          { identity: bearer, body },
+        );
+        return { content: [{ type: "text", text: asText(result.body) }] };
+      }
+      case "export_project": {
+        const { projectId, ...body } = exportProjectSchema.parse(input);
+        const result = await client.request(
+          "POST",
+          `/api/v1/projects/${encodeURIComponent(projectId)}/exports`,
+          { identity: bearer, body },
         );
         return { content: [{ type: "text", text: asText(result.body) }] };
       }

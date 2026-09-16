@@ -1,8 +1,8 @@
 ---
 name: blue-canvas
 description:
-  Read Blue Canvas projects, kits, and templates and apply validated command
-  batches — on-premise, PAT-authenticated, no external network calls.
+  Operate Blue Canvas projects through its on-premise MCP server: inspect,
+  edit, review, version, comment, and export designs without external tokens.
 ---
 
 # Blue Canvas
@@ -12,7 +12,8 @@ Blue Canvas Model Context Protocol (MCP) server so an agent can list a user's
 projects, inspect the library of kits and templates, create new projects, and
 apply command batches against the same versioned API used by the web
 application. All requests use a delegated personal access token (PAT) issued by
-the Blue Canvas application server; no ambient credentials are stored.
+the Blue Canvas application server; no ambient credentials are stored. The MCP
+server is the only interface an agent should use.
 
 ## When to use this skill
 
@@ -21,6 +22,8 @@ the Blue Canvas application server; no ambient credentials are stored.
 - The user wants a new project scaffolded in Blue Canvas.
 - The user has already agreed on a change to a project and wants it applied
   through the command engine (no free-form file edits, no shell commands).
+- The user asks to create or restore a named version, manage comments, or
+  generate an HTML, React, or Preact export.
 
 If none of the above apply, do not call any tools from this skill.
 
@@ -28,7 +31,7 @@ If none of the above apply, do not call any tools from this skill.
 
 - The user has a Blue Canvas account with an active PAT that carries the scopes
   needed for the intended operation (`projects:read` for reads, `projects:write`
-  for command batches and project creation).
+  for mutations; `assets:read` is additionally required for asset exports).
 - A Blue Canvas MCP server is running locally. The recommended layout is:
   `apps/mcp-server` on `http://127.0.0.1:5011` connected to the Blue Canvas
   application at `BLUE_CANVAS_API_URL`. Use `apps/mcp-stdio` when the client
@@ -67,6 +70,12 @@ Tools:
 - `apply_commands` — apply a validated command batch to a project. Requires the
   caller's current `baseRevision` and an `idempotencyKey` of at least eight
   characters; retries with the same key are safe.
+- `list_versions`, `get_version`, `create_version`, `restore_version` — inspect
+  or create named snapshots. Restore is destructive and must be confirmed.
+- `list_comments`, `create_comment`, `update_comment`, `resolve_comment` —
+  collaborate through anchored comments and mentions.
+- `export_project` — generate a deterministic archive for `html`, `react`, or
+  `preact`, scoped to a project, page, or selection.
 
 ## Guardrails
 
@@ -78,3 +87,44 @@ Tools:
   `401`, tell the user which scope the PAT needs, do not retry with a different
   action.
 - Do not open network connections outside the configured MCP URL.
+
+## Recommended agent workflow
+
+1. Read `blue-canvas://projects`, then call `get_project` before editing.
+2. Record the returned revision and inspect page/component IDs; never invent
+   IDs.
+3. Apply a small validated batch with the current `baseRevision` and a fresh
+   `idempotencyKey` (8–128 characters).
+4. Re-read the project and verify the result after every mutation.
+5. On `revision_conflict`, refresh context and rebase; never retry stale data.
+6. Use comments for review and named versions for checkpoints. Confirm before
+   `restore_version`.
+7. Export only after verification, using the narrowest scope and reporting
+   diagnostics.
+
+## ClineSR configuration
+
+```json
+{
+  "mcpServers": {
+    "blue-canvas": {
+      "command": "node",
+      "args": ["apps/mcp-stdio/dist/index.js"],
+      "env": {
+        "BLUE_CANVAS_MCP_URL": "http://127.0.0.1:5011/mcp",
+        "BLUE_CANVAS_PAT": "${BLUE_CANVAS_PAT}"
+      }
+    }
+  }
+}
+```
+
+The same workflow works with any MCP client. Keep the PAT in the process
+environment, never in prompts, source files, logs, or generated exports.
+
+## Error recovery
+
+Errors include a stable `code`, HTTP `status`, and optional `details`. Stop on
+`401`/`403` and request the missing scope. Fix the reported field for validation
+errors. For network failures retry reads; retry mutations only with the exact
+original idempotency key.
