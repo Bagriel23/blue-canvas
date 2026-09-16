@@ -1,5 +1,6 @@
 import {
   createDesignDocument,
+  getNodeChildren,
   parseDesignDocument,
   type DesignDocument,
 } from "@blue-canvas/document";
@@ -10,6 +11,7 @@ export const MAX_COLLABORATION_UPDATE_BYTES = 1024 * 1024;
 
 const ROOT_MAP = "blueCanvas";
 const DOCUMENT_KEY = "document";
+const ENTITIES_KEY = "entities";
 
 export function createInitialCollaborationDocument(
   projectId: string,
@@ -24,7 +26,25 @@ export function createInitialCollaborationDocument(
 }
 
 export function readSemanticDocument(document: Y.Doc): DesignDocument {
-  return parseDesignDocument(document.getMap(ROOT_MAP).get(DOCUMENT_KEY));
+  const root = document.getMap(ROOT_MAP);
+  const parsed = parseDesignDocument(root.get(DOCUMENT_KEY));
+  const entities = root.get(ENTITIES_KEY);
+  if (!(entities instanceof Y.Map)) return parsed;
+  const copy = JSON.parse(JSON.stringify(parsed)) as DesignDocument;
+  const apply = (node: unknown): void => {
+    if (!node || typeof node !== "object") return;
+    const id = "id" in node && typeof node.id === "string" ? node.id : null;
+    if (id) {
+      const value = entities.get(id);
+      if (value && typeof value === "object")
+        Object.assign(node, JSON.parse(JSON.stringify(value)));
+    }
+    for (const child of getNodeChildren(node as never)) apply(child);
+  };
+  for (const page of copy.pages)
+    for (const artboard of page.artboards) apply(artboard.root);
+  for (const component of copy.components) apply(component.root);
+  return parseDesignDocument(copy);
 }
 
 export function replaceSemanticDocument(
@@ -32,8 +52,36 @@ export function replaceSemanticDocument(
   value: unknown,
 ): DesignDocument {
   const parsed = parseDesignDocument(value);
-  document.getMap(ROOT_MAP).set(DOCUMENT_KEY, parsed);
+  const root = document.getMap(ROOT_MAP);
+  root.set(DOCUMENT_KEY, parsed);
+  const entities =
+    root.get(ENTITIES_KEY) instanceof Y.Map
+      ? (root.get(ENTITIES_KEY) as Y.Map<unknown>)
+      : new Y.Map<unknown>();
+  if (!(root.get(ENTITIES_KEY) instanceof Y.Map))
+    root.set(ENTITIES_KEY, entities);
+  const collect = (node: unknown): void => {
+    if (!node || typeof node !== "object") return;
+    if ("id" in node && typeof node.id === "string")
+      entities.set(node.id, JSON.parse(JSON.stringify(node)));
+    for (const child of getNodeChildren(node as never)) collect(child);
+  };
+  for (const page of parsed.pages)
+    for (const artboard of page.artboards) collect(artboard.root);
+  for (const component of parsed.components) collect(component.root);
   return parsed;
+}
+
+export function replaceSemanticNode(
+  document: Y.Doc,
+  nodeId: string,
+  value: unknown,
+): void {
+  const entities = document.getMap(ROOT_MAP).get(ENTITIES_KEY);
+  if (!(entities instanceof Y.Map))
+    throw new Error("Collaboration entities are unavailable");
+  const valid = JSON.parse(JSON.stringify(value));
+  entities.set(nodeId, valid);
 }
 
 export function encodeCollaborationState(document: Y.Doc): {

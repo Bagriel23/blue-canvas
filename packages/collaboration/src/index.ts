@@ -6,6 +6,7 @@ export {
   MAX_COLLABORATION_UPDATE_BYTES,
   readSemanticDocument,
   replaceSemanticDocument,
+  replaceSemanticNode,
   validateProspectiveUpdate,
 } from "./document.js";
 export {
