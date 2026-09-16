@@ -179,7 +179,6 @@ export function Workspace({ projectId, editable = true }: WorkspaceProps) {
     if (resource.status !== "ready" || collaborationRef.current) return;
     const connection = createCollaborationClient({
       projectId,
-      initialDocument: resource.document,
       token: client.getCsrfToken(),
       onDocument: (document) => {
         editorRef.current.document = document;

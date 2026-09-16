@@ -24,7 +24,6 @@ export function collaborationUrl(): string {
 
 export function createCollaborationClient(options: {
   projectId: string;
-  initialDocument: DesignDocument;
   token: string | null;
   onDocument: (document: DesignDocument) => void;
   onStatus: (status: CollaborationStatus) => void;
@@ -32,7 +31,6 @@ export function createCollaborationClient(options: {
 }): CollaborationClient | null {
   if (typeof WebSocket === "undefined" || !options.token) return null;
   const document = new Y.Doc();
-  replaceSemanticDocument(document, options.initialDocument);
   const provider = new HocuspocusProvider({
     url: collaborationUrl(),
     name: options.projectId,
