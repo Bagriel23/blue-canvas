@@ -18,6 +18,12 @@ import { LayersPanel } from "../panels/LayersPanel.js";
 import { InspectorPanel } from "../panels/InspectorPanel.js";
 import { PagesPanel } from "../panels/PagesPanel.js";
 import { PreviewMode } from "../preview/PreviewMode.js";
+import {
+  applySemanticDocument,
+  createCollaborationClient,
+  type CollaborationClient,
+  type CollaborationStatus,
+} from "../collaboration/provider.js";
 import { useLocale } from "../state/locale.js";
 import { useSession } from "../state/session.js";
 
@@ -80,6 +86,10 @@ export function Workspace({ projectId, editable = true }: WorkspaceProps) {
     processing: false,
   });
   const requestGeneration = useRef(0);
+  const collaborationRef = useRef<CollaborationClient | null>(null);
+  const [collaborationStatus, setCollaborationStatus] =
+    useState<CollaborationStatus>("connecting");
+  const [presence, setPresence] = useState<unknown[]>([]);
 
   const loadDocument =
     useCallback(async (): Promise<ProjectDocumentResponse> => {
@@ -164,6 +174,26 @@ export function Workspace({ projectId, editable = true }: WorkspaceProps) {
     },
     [],
   );
+
+  useEffect(() => {
+    if (resource.status !== "ready" || collaborationRef.current) return;
+    const connection = createCollaborationClient({
+      projectId,
+      initialDocument: resource.document,
+      token: client.getCsrfToken(),
+      onDocument: (document) => {
+        editorRef.current.document = document;
+        updateDocument(document, "saved");
+      },
+      onStatus: setCollaborationStatus,
+      onPresence: setPresence,
+    });
+    collaborationRef.current = connection;
+    return () => {
+      connection?.destroy();
+      collaborationRef.current = null;
+    };
+  }, [client, projectId, resource.status, updateDocument]);
 
   const applyLocalCommand = useCallback(
     (document: DesignDocument, command: DesignCommand): DesignDocument => {
@@ -311,9 +341,14 @@ export function Workspace({ projectId, editable = true }: WorkspaceProps) {
       updateDocument(editor.document, "conflict", messages.workspace.conflict);
       return;
     }
-    editor.pending.push({ command, idempotencyKey: randomId() });
-    updateDocument(editor.document, "saving");
-    void syncQueue();
+    if (collaborationRef.current?.provider.isSynced) {
+      applySemanticDocument(collaborationRef.current.document, editor.document);
+      updateDocument(editor.document, "saving");
+    } else {
+      editor.pending.push({ command, idempotencyKey: randomId() });
+      updateDocument(editor.document, "saving");
+      void syncQueue();
+    }
   };
 
   const handleSelectArtboard = (nextPageId: string, nextArtboardId: string) => {
@@ -357,6 +392,23 @@ export function Workspace({ projectId, editable = true }: WorkspaceProps) {
               <h1>{project.name}</h1>
             </div>
             <div className="bc-workspace__sync-wrap">
+              <div
+                className="bc-workspace__presence"
+                aria-label="Realtime collaboration"
+              >
+                <span
+                  className="bc-workspace__presence-dot"
+                  data-status={collaborationStatus}
+                />
+                <span>
+                  {collaborationStatus === "synced"
+                    ? "Live"
+                    : collaborationStatus}
+                </span>
+                {presence.length > 1 ? (
+                  <span>{presence.length} collaborators</span>
+                ) : null}
+              </div>
               <p
                 className="bc-workspace__sync"
                 data-sync={resource.sync}

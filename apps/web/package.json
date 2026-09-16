@@ -15,9 +15,11 @@
     "@blue-canvas/contracts": "0.0.0",
     "@blue-canvas/document": "0.0.0",
     "@blue-canvas/ui": "0.0.0",
+    "@hocuspocus/provider": "^4.6.0",
     "lucide-react": "0.468.0",
     "react": "19.2.8",
     "react-dom": "19.2.8",
+    "yjs": "^13.6.32",
     "zod": "4.1.5"
   },
   "devDependencies": {

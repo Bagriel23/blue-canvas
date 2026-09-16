@@ -60,6 +60,36 @@ button:disabled {
   background: var(--bc-color-surface);
   color: var(--bc-color-text);
 }
+
+.bc-workspace__sync-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.bc-workspace__presence {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--bc-color-text-muted);
+  font-size: 0.72rem;
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+.bc-workspace__presence-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--bc-color-text-muted);
+}
+.bc-workspace__presence-dot[data-status="synced"] {
+  background: #1f9d67;
+}
+.bc-workspace__presence-dot[data-status="error"] {
+  background: #d56b5d;
+}
+.bc-workspace__presence-dot[data-status="readonly"] {
+  background: #cc9a2b;
+}
 .bc-app > main {
   min-height: 0;
 }
