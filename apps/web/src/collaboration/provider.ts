@@ -2,8 +2,9 @@ import { HocuspocusProvider } from "@hocuspocus/provider";
 import {
   readSemanticDocument,
   replaceSemanticDocument,
+  replaceSemanticNode,
 } from "@blue-canvas/collaboration";
-import type { DesignDocument } from "@blue-canvas/document";
+import { getNodeChildren, type DesignDocument } from "@blue-canvas/document";
 import * as Y from "yjs";
 
 export type CollaborationStatus =
@@ -80,4 +81,29 @@ export function applySemanticDocument(
   next: DesignDocument,
 ): void {
   document.transact(() => replaceSemanticDocument(document, next), "local");
+}
+
+export function applySemanticNode(
+  document: Y.Doc,
+  next: DesignDocument,
+  nodeId: string,
+): void {
+  const find = (node: unknown): unknown => {
+    if (!node || typeof node !== "object") return undefined;
+    if ("id" in node && node.id === nodeId) return node;
+    for (const child of getNodeChildren(node as never)) {
+      const found = find(child);
+      if (found) return found;
+    }
+    return undefined;
+  };
+  for (const page of next.pages)
+    for (const artboard of page.artboards) {
+      const found = find(artboard.root);
+      if (found) return replaceSemanticNode(document, nodeId, found);
+    }
+  for (const component of next.components) {
+    const found = find(component.root);
+    if (found) return replaceSemanticNode(document, nodeId, found);
+  }
 }

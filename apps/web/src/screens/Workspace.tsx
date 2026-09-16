@@ -20,6 +20,7 @@ import { PagesPanel } from "../panels/PagesPanel.js";
 import { PreviewMode } from "../preview/PreviewMode.js";
 import {
   applySemanticDocument,
+  applySemanticNode,
   createCollaborationClient,
   type CollaborationClient,
   type CollaborationStatus,
@@ -351,7 +352,18 @@ export function Workspace({ projectId, editable = true }: WorkspaceProps) {
       return;
     }
     if (collaborationRef.current?.provider.isSynced) {
-      applySemanticDocument(collaborationRef.current.document, editor.document);
+      if (command.type === "update-node") {
+        applySemanticNode(
+          collaborationRef.current.document,
+          editor.document,
+          command.nodeId,
+        );
+      } else {
+        applySemanticDocument(
+          collaborationRef.current.document,
+          editor.document,
+        );
+      }
       updateDocument(editor.document, "saving");
     } else {
       editor.pending.push({ command, idempotencyKey: randomId() });
