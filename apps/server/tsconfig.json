@@ -11,7 +11,8 @@
     { "path": "../../packages/contracts" },
     { "path": "../../packages/document" },
     { "path": "../../packages/collaboration" },
-    { "path": "../../packages/library" }
+    { "path": "../../packages/library" },
+    { "path": "../../packages/exporters" }
   ],
   "include": ["src/**/*.ts"]
 }
